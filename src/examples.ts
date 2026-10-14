@@ -23,9 +23,8 @@ export const examples: Example[] = [
     src: `% X-bar mode completes XP → X′ → X
 [TP [DP [D the] [NP student]]
     [T will]
-    [VP [AdvP carefully]
-        [V read]
-        [DP [D an] [NP [AP old] [N book]]]]]`,
+    [VP [V read]
+        [DP [D a] [NP book]]]]`,
     build: { mode: 'xbar' },
   },
   {
