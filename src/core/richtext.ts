@@ -115,9 +115,12 @@ const SC_RE = /^[A-Z0-9]*[A-Z][A-Z0-9]*$/;
 /** Split a gloss string into runs, putting ALL-CAPS abbreviations (3SG, NOM) in small caps. */
 function smallCapsSplit(runs: Runs, text: string, style: Omit<Run, 'text'>) {
   const parts = text.split(/([A-Z0-9]+)/);
+  let prev = '';
   for (const p of parts) {
     if (!p) continue;
-    if (SC_RE.test(p) && /[A-Z]{2,}|^[0-9][A-Z]/.test(p)) {
+    const afterSep = /[.\-=:>]$/.test(prev);
+    prev = p;
+    if (SC_RE.test(p) && (/[A-Z]{2,}|^[0-9][A-Z]/.test(p) || afterSep)) {
       push(runs, p.toLowerCase(), { ...style, sc: true });
     } else {
       push(runs, p, style);
