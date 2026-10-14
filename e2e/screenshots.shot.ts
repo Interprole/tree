@@ -58,3 +58,32 @@ test('interactions', async ({ page }) => {
   await page.locator('.arrow-hit').first().click({ force: true });
   await page.screenshot({ path: `${OUT}/ui-arrow-selected.png` });
 });
+
+test('presets and modes', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('./');
+  await page.getByTestId('examples-button').click();
+  await page.locator('[data-example="wh"]').click();
+  await page.getByTestId('settings-toggle').click();
+  for (const p of ['Slides', 'Board', 'Paper']) {
+    await page.locator('.preset', { hasText: p }).click();
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: `${OUT}/preset-${p.toLowerCase()}.png` });
+  }
+  await page.getByTestId('examples-button').click();
+  await page.locator('[data-example="xbar"]').click();
+  await page.locator('.settings button', { hasText: 'Overline' }).click();
+  await page.locator('.settings button', { hasText: 'X⁰' }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/xbar-overline.png` });
+  await page.getByTestId('examples-button').click();
+  await page.locator('[data-example="bps"]').click();
+  await page.locator('.settings button', { hasText: 'Set {the' }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/bps-set.png` });
+  await page.getByTestId('examples-button').click();
+  await page.locator('[data-example="atb"]').click();
+  await page.locator('.settings button', { hasText: 'Copies instead' }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/atb-copies.png` });
+});

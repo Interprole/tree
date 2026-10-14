@@ -9,7 +9,7 @@ import type { NodeHit, Scene } from '../core/scene';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
 import {
-  arrowSource, bendOverride, bindingCheck, build, editable, fitRequest, relationOf, scene, selection, showToast, tool, tree,
+  arrowSource, bendOverride, bindingCheck, build, editable, fitRequest, fontEpoch, relationOf, scene, selection, showToast, tool, tree,
 } from '../state';
 import type { Tool } from '../state';
 import {
@@ -65,6 +65,7 @@ export function Canvas() {
 
   useSignalEffect(() => {
     void fitRequest.value;
+    void fontEpoch.value;
     // after the new scene is computed
     requestAnimationFrame(() => fit());
   });

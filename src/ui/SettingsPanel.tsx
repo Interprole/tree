@@ -1,7 +1,7 @@
 import { defaultStyle, FONT_FAMILIES, presets } from '../core/style';
 import type { FontId, PresetId } from '../core/style';
 import { t } from '../i18n';
-import { bindingCheck, build, setBuild, setStyle, style } from '../state';
+import { bindingCheck, build, fitRequest, setBuild, setStyle, style } from '../state';
 import { ColorField, Section, Seg, Select, Slider, Toggle } from './controls';
 
 export function ModeOptions() {
@@ -42,7 +42,10 @@ export function ModeOptions() {
 export function SettingsPanel() {
   const s = style.value;
   const b = build.value;
-  const applyPreset = (p: PresetId) => setStyle(presets[p]);
+  const applyPreset = (p: PresetId) => {
+    setStyle(presets[p]);
+    fitRequest.value++;
+  };
   return (
     <div class="settings">
       <Section title={t('presets')}>
@@ -53,7 +56,10 @@ export function SettingsPanel() {
               <small>{t(p === 'paper' ? 'presetPaperHint' : p === 'slides' ? 'presetSlidesHint' : 'presetBoardHint')}</small>
             </button>
           ))}
-          <button class="preset preset-reset" onClick={() => (style.value = { ...defaultStyle })}>
+          <button class="preset preset-reset" onClick={() => {
+            style.value = { ...defaultStyle };
+            fitRequest.value++;
+          }}>
             <strong>{t('reset')}</strong>
             <small>&nbsp;</small>
           </button>
