@@ -104,3 +104,15 @@ describe('layout', () => {
     assertEdgesAvoidLabels(l);
   });
 });
+
+describe('layout performance', () => {
+  test('a 400-node tree lays out quickly', () => {
+    const build = (d: number): string => (d === 0 ? '[N word]' : `[XP${d} ${build(d - 1)} ${build(d - 1)}]`);
+    const src = build(7); // 2^8 - 1 phrases + leaves
+    const t0 = performance.now();
+    const { l } = layout(src);
+    const ms = performance.now() - t0;
+    expect(l.list.length).toBeGreaterThan(380);
+    expect(ms).toBeLessThan(1500);
+  });
+});

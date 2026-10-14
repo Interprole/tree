@@ -65,6 +65,18 @@ test('arrow tool adds an arrow line; selecting and restyling it', async ({ page 
   await expect(page.locator('.arrow-bar')).toBeVisible();
   await page.locator('.arrow-bar button', { hasText: 'Dashed' }).click();
   await expect.poll(() => code(page)).toContain('dashed');
+  // drag the bend handle down by 40px
+  const h = await page.locator('.bend-handle').boundingBox();
+  expect(h).toBeTruthy();
+  await page.mouse.move(h!.x + h!.width / 2, h!.y + h!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h!.x + h!.width / 2, h!.y + 60, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => code(page)).toMatch(/bend=0,\d+/);
+  // delete the selected arrow with the keyboard
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('Delete');
+  await expect.poll(() => code(page)).not.toContain('->');
 });
 
 test('c-command highlighting', async ({ page }) => {
