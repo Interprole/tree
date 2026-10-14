@@ -115,3 +115,19 @@ describe('movement', () => {
     expect(tree('[S [DP_i x] [VP t_i]]', { autoArrows: false }).arrows).toHaveLength(0);
   });
 });
+
+import { serialize } from '../src/core/serialize';
+import { parse } from '../src/core/parser';
+describe('serialize (as displayed)', () => {
+  test('round-trips through the parser', () => {
+    for (const src of ['[TP [DP the cat] [T will] [VP [V eat] [DP fish]]]', '[CP [DP#wh what] [C′ [C did] [TP you [VP [V see] #wh]]]]', '[T{uφ, EPP} [V čitaet | read.PRS] [DP ^big cats]]']) {
+      for (const mode of ['manual', 'xbar', 'bps'] as const) {
+        const tr = tree(src, { mode });
+        const out = serialize(tr);
+        const r = parse(out);
+        expect(r.ok, out).toBe(true);
+        expect(show(tree(out))).toBe(show(tr));
+      }
+    }
+  });
+});
