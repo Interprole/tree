@@ -2,6 +2,7 @@ import type { Scene } from '../core/scene';
 import { colorHex } from '../core/latex';
 import type { FontId } from '../core/style';
 import { embeddedFontCss, facesFor, fetchBytes } from '../fonts';
+import { woffToSfnt } from '../fonts/woff';
 import type { FontFace } from '../fonts/fonts.generated';
 import { sceneToSvg } from '../render/svg';
 
@@ -72,7 +73,8 @@ export async function pdfBlob(scene: Scene, transparent: boolean): Promise<Blob>
   const embed = (f: FontFace) => {
     let p = embedded.get(f);
     if (!p) {
-      p = fetchBytes(f.sfnt).then((b) => pdf.embedFont(b, { subset: true }));
+      // WOFF must be unpacked; the subsetter loses glyphs of the symbol font, so it is embedded whole
+      p = fetchBytes(f.sfnt).then((b) => pdf.embedFont(woffToSfnt(b), { subset: f.id !== 'symbols' }));
       embedded.set(f, p);
     }
     return p;
@@ -85,6 +87,8 @@ export async function pdfBlob(scene: Scene, transparent: boolean): Promise<Blob>
       fs = facesFor(font, allText, [{ weight, style }]);
       if (!fs.length && style === 'italic') fs = facesFor(font, allText, [{ weight, style: 'normal' }]);
       if (!fs.length && weight === 700) fs = facesFor(font, allText, [{ weight: 400, style }]);
+      // fallback for symbols the font lacks (CMU has no ′ or ∅, Caveat no Greek)
+      fs = [...fs, ...facesFor('symbols' as FontId, allText)];
       facesByVariant.set(key, fs);
     }
     return fs;
