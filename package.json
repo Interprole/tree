@@ -1,0 +1,56 @@
+{
+  "name": "treeform",
+  "version": "0.1.0",
+  "description": "Interactive syntax tree editor for linguists",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc",
+    "e2e": "playwright test",
+    "screenshots": "playwright test --config=playwright.shots.config.ts",
+    "gen:fonts": "node scripts/gen-fonts.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Interprole/tree.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Interprole/tree/issues"
+  },
+  "homepage": "https://github.com/Interprole/tree#readme",
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.14",
+    "@fontsource/caveat": "^5.3.0",
+    "@fontsource/eb-garamond": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/libertinus-serif": "^5.3.0",
+    "@fontsource/noto-sans": "^5.3.0",
+    "@fontsource/noto-serif": "^5.3.0",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@preact/signals": "^2.11.3",
+    "codemirror": "^6.0.2",
+    "computer-modern": "^0.1.3",
+    "lz-string": "^1.5.0",
+    "pdf-lib": "^1.17.1",
+    "preact": "^11.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56",
+    "@preact/preset-vite": "^2.10.6",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  },
+  "private": true,
+  "type": "module"
+}
