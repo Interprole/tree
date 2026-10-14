@@ -135,3 +135,16 @@ describe('parser errors', () => {
     expect(r.ok && r.doc.root).toBe(null);
   });
 });
+
+import { parseRich } from '../src/core/richtext';
+describe('inline markup', () => {
+  test('scripts, primes, macros', () => {
+    expect(parseRich("X'_i^0", { primes: true })).toEqual([{ text: 'X′' }, { text: 'i', sub: true }, { text: '0', sup: true }]);
+    expect(parseRich('u\\phi \\0 DP_{i,j}')).toEqual([{ text: 'uφ ∅ DP' }, { text: 'i,j', sub: true }]);
+    expect(parseRich("don't")).toEqual([{ text: "don't" }]);
+  });
+  test('gloss small caps', () => {
+    const r = parseRich('read-PRS.3SG.F I', { smallCaps: true });
+    expect(r.filter((x) => x.sc).map((x) => x.text)).toEqual(['prs', '3sg', 'f']);
+  });
+});
