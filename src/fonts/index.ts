@@ -76,7 +76,9 @@ function toBase64(buf: ArrayBuffer): string {
 
 /** @font-face rules with embedded data for the characters actually used (for standalone SVG/PNG). */
 export async function embeddedFontCss(font: FontId, text: string): Promise<string> {
-  const faces = facesFor(font, text);
+  let faces = facesFor(font, text);
+  // symbols (′ ∅ → …) the main font may lack, as on the canvas
+  faces = [...faces, ...facesFor('symbols' as FontId, text)];
   const rules = await Promise.all(
     faces.map(async (f) => {
       const data = toBase64(await fetchBytes(f.woff2));

@@ -166,6 +166,8 @@ import f162 from 'computer-modern/fonts/cmu-serif-500-italic.woff2?url';
 import f163 from 'computer-modern/fonts/cmu-serif-500-italic.ttf?url';
 import f164 from 'computer-modern/fonts/cmu-serif-700-roman.woff2?url';
 import f165 from 'computer-modern/fonts/cmu-serif-700-roman.ttf?url';
+import f166 from '@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2?url';
+import f167 from '@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff?url';
 
 export interface FontFace {
   id: string;
@@ -263,4 +265,5 @@ export const FACES: FontFace[] = [
   { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'normal', range: '', woff2: f160, sfnt: f161 },
   { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'italic', range: '', woff2: f162, sfnt: f163 },
   { id: 'cmu', family: 'CMU Serif', weight: 700, style: 'normal', range: '', woff2: f164, sfnt: f165 },
+  { id: 'symbols', family: 'Treeform Symbols', weight: 400, style: 'normal', range: 'U+0370-03FF,U+2000-2BFF', woff2: f166, sfnt: f167 },
 ];

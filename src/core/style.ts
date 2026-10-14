@@ -115,12 +115,12 @@ export const presets: Record<PresetId, Partial<TreeStyle>> = {
 };
 
 export const FONT_FAMILIES: Record<FontId, { css: string; name: string; italic: boolean }> = {
-  cmu: { css: '"CMU Serif", "Latin Modern Roman", "Computer Modern", serif', name: 'Computer Modern (CMU Serif)', italic: true },
-  libertinus: { css: '"Libertinus Serif", "Linux Libertine", serif', name: 'Libertinus Serif', italic: true },
-  garamond: { css: '"EB Garamond", Garamond, serif', name: 'EB Garamond', italic: true },
-  'noto-serif': { css: '"Noto Serif", serif', name: 'Noto Serif', italic: true },
-  'noto-sans': { css: '"Noto Sans", "Helvetica Neue", Arial, sans-serif', name: 'Noto Sans', italic: true },
-  caveat: { css: 'Caveat, "Comic Sans MS", cursive', name: 'Caveat (handwriting)', italic: false },
+  cmu: { css: '"CMU Serif", "Latin Modern Roman", "Treeform Symbols", serif', name: 'Computer Modern (CMU Serif)', italic: true },
+  libertinus: { css: '"Libertinus Serif", "Linux Libertine", "Treeform Symbols", serif', name: 'Libertinus Serif', italic: true },
+  garamond: { css: '"EB Garamond", Garamond, "Treeform Symbols", serif', name: 'EB Garamond', italic: true },
+  'noto-serif': { css: '"Noto Serif", "Treeform Symbols", serif', name: 'Noto Serif', italic: true },
+  'noto-sans': { css: '"Noto Sans", "Treeform Symbols", "Helvetica Neue", Arial, sans-serif', name: 'Noto Sans', italic: true },
+  caveat: { css: 'Caveat, "Treeform Symbols", cursive', name: 'Caveat (handwriting)', italic: false },
 };
 
 /** Typographic proportions derived from the font size. */
