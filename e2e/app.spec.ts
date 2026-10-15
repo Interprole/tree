@@ -235,7 +235,7 @@ test('node: notes, edge style, restructure', async ({ page }) => {
   await expect.poll(() => code(page)).toContain('[VP;edge=#b91c1c');
   await page.locator('.node-bar button[aria-label^="Spacing"]').click();
   await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').fill('3');
-  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').press('Tab');
+  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').press('Enter');
   await expect.poll(() => code(page)).toContain(';width=3');
   await page.locator('.canvas').focus();
   await page.keyboard.press('Escape');
