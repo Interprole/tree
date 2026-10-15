@@ -9,7 +9,7 @@ import type { DTree } from './core/model';
 import { parse } from './core/parser';
 import { buildScene } from './core/scene';
 import type { Scene } from './core/scene';
-import { defaultStyle, FONT_FAMILIES } from './core/style';
+import { defaultStyle, fontCss } from './core/style';
 import type { TreeStyle } from './core/style';
 import { examples } from './examples';
 import type { Example } from './examples';
@@ -32,7 +32,8 @@ export const selection = signal<Selection>(null);
 export const arrowSource = signal<string | null>(null);
 /** node whose c-command / dominance is shown */
 export const relationOf = signal<string | null>(null);
-export const bindingCheck = signal(false);
+/** picking an existing constituent on the canvas to add it again (a new chain position) */
+export const pick = signal<null | { kind: 'daughter' | 'sister'; key: string }>(null);
 export const panelOpen = signal(false);
 export type Modal = null | 'export' | 'trees' | 'help' | 'shortcuts';
 export const modal = signal<Modal>(null);
@@ -73,7 +74,7 @@ export const editable = computed(() => parsed.value.ok);
 let measure: Measure = approxMeasure;
 function currentMeasure(): Measure {
   if (typeof document === 'undefined') return approxMeasure;
-  if (measure === approxMeasure) measure = canvasMeasure((f) => FONT_FAMILIES[f].css);
+  if (measure === approxMeasure) measure = canvasMeasure((f) => fontCss(f));
   return measure;
 }
 
@@ -109,7 +110,7 @@ effect(() => {
   if (f === loadedFont || typeof document === 'undefined') return;
   loadedFont = f;
   loadFont(f).then(() => {
-    measure = canvasMeasure((x) => FONT_FAMILIES[x].css);
+    measure = canvasMeasure((x) => fontCss(x));
     fontEpoch.value++;
   });
 });
@@ -120,7 +121,14 @@ type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]>
 
 export function mergeBuild(base: BuildOptions, p: DeepPartial<BuildOptions> | undefined): BuildOptions {
   if (!p) return base;
-  return { ...base, ...(p as Partial<BuildOptions>), xbar: { ...base.xbar, ...(p.xbar ?? {}) }, bps: { ...base.bps, ...(p.bps ?? {}) } };
+  const known = Object.fromEntries(Object.entries(p).filter(([k]) => k in base)) as Partial<BuildOptions>;
+  return {
+    ...base,
+    ...known,
+    xbar: { ...base.xbar, ...(p.xbar ?? {}) },
+    bps: { ...base.bps, ...(p.bps ?? {}) },
+    semantics: { ...base.semantics, ...(p.semantics ?? {}) },
+  };
 }
 
 export function setBuild(p: DeepPartial<BuildOptions>) {
@@ -149,7 +157,6 @@ export interface Snapshot {
   s: string;
   b?: DeepPartial<BuildOptions>;
   st?: Partial<TreeStyle>;
-  bc?: boolean;
 }
 
 export function snapshot(): Snapshot {
@@ -158,7 +165,6 @@ export function snapshot(): Snapshot {
   const st = diff(style.value, defaultStyle);
   if (Object.keys(b).length) snap.b = b as DeepPartial<BuildOptions>;
   if (Object.keys(st).length) snap.st = st;
-  if (bindingCheck.value) snap.bc = true;
   return snap;
 }
 
@@ -167,7 +173,6 @@ export function restore(snap: Snapshot) {
     source.value = snap.s ?? '';
     build.value = mergeBuild(defaultBuildOptions, snap.b);
     style.value = { ...defaultStyle, ...(snap.st ?? {}) };
-    bindingCheck.value = !!snap.bc;
     selection.value = null;
     relationOf.value = null;
     fitRequest.value++;
@@ -175,7 +180,7 @@ export function restore(snap: Snapshot) {
 }
 
 export function loadExample(ex: Example) {
-  restore({ s: ex.src, b: ex.build, st: ex.style, bc: ex.id === 'binding' });
+  restore({ s: ex.src, b: ex.build, st: ex.style });
   currentName.value = null;
 }
 
@@ -203,8 +208,8 @@ export function readHash(): Snapshot | null {
 
 /* ------------------------------------------------------------ local storage */
 
-const CURRENT = 'treeform:current';
-const TREES = 'treeform:trees';
+const CURRENT = 'nanotrees:current';
+const TREES = 'nanotrees:trees';
 
 export interface SavedTree {
   id: string;
@@ -215,7 +220,8 @@ export interface SavedTree {
 
 function lsGet<T>(k: string): T | null {
   try {
-    const v = localStorage.getItem(k);
+    // trees saved under the app's earlier name
+    const v = localStorage.getItem(k) ?? localStorage.getItem(k.replace(/^nanotrees:/, 'treeform:'));
     return v ? (JSON.parse(v) as T) : null;
   } catch {
     return null;
@@ -265,7 +271,7 @@ export function initState(): 'link' | 'autosave' | 'example' {
       origin = 'example';
     }
   }
-  const th = lsGet<Theme>('treeform:theme');
+  const th = lsGet<Theme>('nanotrees:theme');
   if (th) theme.value = th;
   let timer: ReturnType<typeof setTimeout> | undefined;
   effect(() => {
@@ -285,6 +291,6 @@ export function initState(): 'link' | 'autosave' | 'example' {
       }
     }, 400);
   });
-  effect(() => lsSet('treeform:theme', theme.value));
+  effect(() => lsSet('nanotrees:theme', theme.value));
   return origin;
 }
