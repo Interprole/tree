@@ -140,7 +140,7 @@ class Parser {
     let labelEnd = -1;
     while (this.i < this.src.length) {
       const c = this.peek();
-      if (isWs(c) || c === '[' || c === ']' || c === '|' || c === '%') break;
+      if (isWs(c) || c === '[' || c === ']' || c === '|' || c === '%' || c === '$') break;
       if (c === '{') {
         const prev = this.src[this.i - 1];
         if ((prev === '_' || prev === '^') && this.i - 1 >= tokStart) {
@@ -189,6 +189,10 @@ class Parser {
         }
         node.id = id;
         this.ids.set(id, node);
+        if (this.src[k] === '!' || this.src[k] === '?') {
+          node.pronounce = this.src[k] === '!';
+          k++;
+        }
         j = k;
       } else if (c === '@') {
         const branch = this.src[j + 1] === '@';
@@ -222,7 +226,8 @@ class Parser {
     while (this.peek() === ' ' || this.peek() === '\t') this.i++;
     const c = this.peek();
     if (c === undefined) this.fail('Missing "]" to close this bracket', open, open + 1);
-    if (c !== '[' && c !== ']' && c !== '{' && c !== '|' && c !== '\n' && c !== '\r' && c !== '%') {
+    const triangleFirst = c === '^' && (isWs(this.peek(1)) || this.peek(1) === '[' || this.peek(1) === ']');
+    if (c !== '[' && c !== ']' && c !== '{' && c !== '|' && c !== '\n' && c !== '\r' && c !== '%' && c !== '$' && !triangleFirst) {
       this.parseHeader(node);
     } else {
       node.labelSpan = { from: open + 1, to: open + 1 };
@@ -253,7 +258,7 @@ class Parser {
       }
       if (ch === '|') {
         this.i++;
-        const g = this.readText('[]|{', false);
+        const g = this.readText('[]|{$', false);
         const text = g ? g.text : '';
         const last = node.children[node.children.length - 1];
         if (last && last.kind === 'leaf') {
@@ -270,10 +275,29 @@ class Parser {
         while (k < this.src.length && ID_RE.test(this.src[k])) k++;
         const id = this.src.slice(s + 1, k);
         if (!id) this.fail('Expected an id after "#" (a reference to a shared node, e.g. #1)', s, s + 1);
+        let pronounce: boolean | undefined;
+        if (this.src[k] === '!' || this.src[k] === '?') {
+          pronounce = this.src[k] === '!';
+          k++;
+        }
         const ref: ARef = { kind: 'ref', id, span: { from: s, to: k } };
+        if (pronounce !== undefined) ref.pronounce = pronounce;
         this.refs.push(ref);
         node.children.push(ref);
         this.i = k;
+        continue;
+      }
+      if (ch === '$') {
+        const st = this.i;
+        let k = st + 1;
+        while (k < this.src.length && this.src[k] !== '$') {
+          if (this.src[k] === '\\') k++;
+          k++;
+        }
+        if (k >= this.src.length) this.fail('Unclosed "$": a meaning is written as $λx. cat(x) : <e,t>$', st, st + 1);
+        node.sem = this.src.slice(st + 1, k).trim();
+        node.semSpan = { from: st, to: k + 1 };
+        this.i = k + 1;
         continue;
       }
       if (ch === '^' && this.peek(1) !== '{') {
@@ -282,7 +306,7 @@ class Parser {
         this.i++;
         continue;
       }
-      const t = this.readText('[]|{', true);
+      const t = this.readText('[]|{$', true);
       if (!t) {
         this.fail(`Unexpected "${ch}"`, this.i, this.i + 1);
       }
@@ -316,20 +340,22 @@ class Parser {
       }
     }
     const line = this.src.slice(start, lineEnd);
-    const m = /^#([\p{L}\p{N}_\-.:]+)\s*(<->|<-|->|--|<=>|=>|<=)\s*#([\p{L}\p{N}_\-.:]+)/u.exec(line);
+    const m = /^#([\p{L}\p{N}_\-.:]+)(?:\/(\d+))?\s*(<->|<-|->|--|<=>|=>|<=)\s*#([\p{L}\p{N}_\-.:]+)(?:\/(\d+))?/u.exec(line);
     if (!m) {
       this.fail('Arrow lines look like:  #a -> #b  (optionally followed by dashed, curve, "label", @red)', start, lineEnd);
     }
-    const op = m[2];
+    const op = m[3];
     const head: ArrowHead = op === '<->' || op === '<=>' ? 'both' : op === '<-' || op === '<=' ? 'start' : op === '--' ? 'none' : 'end';
     const arrow: AArrow = {
       from: m[1],
-      to: m[3],
+      to: m[4],
       head,
       line: 'solid',
       route: 'under',
       span: { from: start, to: start + line.trimEnd().length },
     };
+    if (m[2]) arrow.fromOcc = Number(m[2]);
+    if (m[5]) arrow.toOcc = Number(m[5]);
     const rest = line.slice(m[0].length);
     const off = start + m[0].length;
     const tokRe = /\s*("(?:[^"\\]|\\.)*"|\S+)/gy;
@@ -340,12 +366,13 @@ class Parser {
       if (tok.startsWith('"')) arrow.label = tok.slice(1, -1).replace(/\\(.)/g, '$1');
       else if (tok === 'dashed' || tok === 'dotted' || tok === 'solid') arrow.line = tok;
       else if (tok === 'under' || tok === 'curve') arrow.route = tok;
+      else if (tok === 'hide') arrow.hidden = true;
       else if (tok.startsWith('@') && tok.length > 1) arrow.color = tok.slice(1);
       else if (tok.startsWith('bend=')) {
         const nums = tok.slice(5).split(',').map(Number);
         if (nums.some((n) => !Number.isFinite(n))) this.fail('bend= expects numbers, e.g. bend=0,20', tokFrom, tokFrom + tok.length);
         arrow.bend = [nums.length > 1 ? nums[0] : 0, nums.length > 1 ? nums[1] : nums[0]];
-      } else this.fail(`Unknown arrow option "${tok}". Use dashed, dotted, curve, "label", @colour or bend=x,y`, tokFrom, tokFrom + tok.length);
+      } else this.fail(`Unknown arrow option "${tok}". Use dashed, dotted, curve, hide, "label", @colour or bend=x,y`, tokFrom, tokFrom + tok.length);
     }
     this.i = lineEnd;
     return arrow;

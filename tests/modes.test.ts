@@ -68,51 +68,100 @@ describe('BPS mode', () => {
   });
 });
 
-describe('multidominance', () => {
-  const src = '[CP [DP#wh what] [C′ [C did] [TP [DP you] [VP [V see] #wh]]]]';
-  test('one node, two mothers', () => {
-    const t = tree(src);
+describe('movement chains (# positions)', () => {
+  const src = '[CP [DP#wh what] [C′ [C did] [TP you [VP [V see] #wh]]]]';
+  const md = { chains: 'multidominance' as const };
+  test('multidominance: one node, two mothers, no arrows', () => {
+    const t = tree(src, md);
     const wh = t.nodes.find((n) => n.id === 'wh')!;
     expect(wh.parents.map((p) => plain(p.label))).toEqual(['CP', 'VP']);
     expect(t.nodes.filter((n) => plain(n.label) === 'what')).toHaveLength(1);
+    expect(t.arrows).toHaveLength(0);
   });
-  test('copies view: highest occurrence stays, lower ones become copies', () => {
-    const t = tree(src, { multidominance: 'copies' });
+  test('copies: highest position pronounced, lower one a silent copy, arrow between them', () => {
+    const t = tree(src);
     const whats = t.nodes.filter((n) => plain(n.label) === 'what');
-    expect(whats).toHaveLength(2);
     expect(whats.map((n) => !!n.copy)).toEqual([false, true]);
     expect(t.nodes.every((n) => n.parents.length <= 1)).toBe(true);
+    expect(t.arrows).toHaveLength(1);
+    expect(t.arrows[0]).toMatchObject({ auto: true, chain: { id: 'wh', from: 2, to: 1 } });
+  });
+  test('traces: lower position becomes [DP t]', () => {
+    const t = tree(src, { chains: 'traces' });
+    expect(show(t)).toBe('[CP [DP what] [C′ [C did] [TP you [VP [V see] [DP t]]]]]');
+  });
+  test('several pronounced copies: #id! marks a position as overt, #id? as silent', () => {
+    const t = tree('[CP [DP#wh? what] [C′ [C did] [TP you [VP [V see] #wh!]]]]');
+    const whats = t.nodes.filter((n) => plain(n.label) === 'what');
+    expect(whats.map((n) => !!n.copy)).toEqual([true, false]);
+    const both = tree('[CP [DP#wh what] [TP [DP #wh!] [VP see #wh]]]');
+    expect(both.nodes.filter((n) => plain(n.label) === 'what').map((n) => !!n.copy)).toEqual([false, false, true]);
+  });
+  test('movement indices are added on request and avoid binding indices', () => {
+    const t = tree('[CP [DP#wh what] [TP [DP_i John] [VP thinks [DP himself_i] #wh]]]', { chainIndices: true, chains: 'traces' });
+    const labels = t.nodes.map((n) => plain(n.label));
+    expect(labels).toContain('DPj');
+    expect(labels).toContain('tj');
+  });
+  test('chain arrows can be switched off', () => {
+    expect(tree(src, { chainArrows: false }).arrows).toHaveLength(0);
+  });
+  test('coindexation alone creates no chain', () => {
+    const t = tree('[CP [DP_i what] [VP see [DP t_i]]]');
+    expect(t.arrows).toHaveLength(0);
+  });
+  test('an explicit line restyles one automatic arrow, "hide" removes it', () => {
+    const t = tree(src + '\n#wh/2 -> #wh/1 dashed "wh"');
+    expect(t.arrows).toHaveLength(1);
+    expect(t.arrows[0]).toMatchObject({ line: 'dashed', label: 'wh' });
+    expect(t.arrows[0].auto).toBeFalsy();
+    expect(tree(src + '\n#wh/2 -> #wh/1 hide').arrows).toHaveLength(0);
   });
   test('works together with X-bar and BPS', () => {
-    expect(tree(src, { mode: 'xbar' }).nodes.find((n) => n.id === 'wh')!.parents).toHaveLength(2);
-    expect(tree(src, { mode: 'bps' }).nodes.find((n) => n.id === 'wh')!.parents).toHaveLength(2);
+    expect(tree(src, { mode: 'xbar', ...md }).nodes.find((n) => n.id === 'wh')!.parents).toHaveLength(2);
+    expect(tree(src, { mode: 'bps', ...md }).nodes.find((n) => n.id === 'wh')!.parents).toHaveLength(2);
   });
 });
 
-describe('movement', () => {
-  test('arrows from traces to antecedents, successive-cyclic chains link step by step', () => {
-    const t = tree('[CP [DP_i what] [C′ [C do] [TP you [VP think [CP [DP t_i] [C′ that [TP he [VP saw [DP t_i]]]]]]]]]');
-    expect(t.arrows).toHaveLength(2);
-    const [a, b] = t.arrows;
-    expect(plain(a.to.label)).toBe('DPi');
-    expect(plain(a.from.label)).toBe('ti');
-    expect(b.to).toBe(a.from);
+describe('head movement', () => {
+  test('arrows between heads: source struck, target V+v+T', () => {
+    const t = tree('[TP [T#t -s] [vP [v#v ∅] [VP [V#r sing] [DP songs]]]]\n#r -> #v\n#v -> #t');
+    const lab = (id: string) => plain(t.nodes.find((n) => n.id === id)!.label);
+    expect(lab('v')).toBe('V+v');
+    expect(lab('t')).toBe('V+v+T');
+    expect(t.nodes.find((n) => n.id === 'r')!.struck).toBe(true);
   });
-  test('copies <…> are traces', () => {
-    const t = tree('[TP [DP_i John] [VP seems [TP [DP <John>_i] [T′ to win]]]]');
-    const copy = t.nodes.find((n) => n.copy)!;
-    expect(plain(copy.label)).toBe('Johni');
-    expect(t.arrows).toHaveLength(1);
+  test('arrows between phrases are not head movement', () => {
+    const t = tree('[CP [DP#a what] [VP see [DP#b it]]]\n#b -> #a');
+    expect(t.nodes.some((n) => n.struck)).toBe(false);
   });
-  test('coindexed non-traces get no arrow (binding)', () => {
-    expect(tree('[S [DP_i John] [VP likes [DP himself_i]]]').arrows).toHaveLength(0);
+});
+
+describe('triangles', () => {
+  test('a triangle over a structure keeps the structure in the source', () => {
+    const t = tree('[S [DP ^ [D the] [NP [A big] [N cat]]] [VP runs]]');
+    expect(show(t)).toBe('[S [DP the big cat] [VP runs]]');
+    expect(t.nodes.find((n) => plain(n.label) === 'DP')!.triangle).toBe(true);
   });
-  test('explicit arrows', () => {
-    const t = tree('[S [A#a x] [B#b y]]\n#b -> #a dashed "move"', { autoArrows: false });
-    expect(t.arrows[0]).toMatchObject({ line: 'dashed', label: 'move' });
+});
+
+describe('semantics in the tree', () => {
+  test('meanings are computed bottom-up', () => {
+    const t = tree('[S [DP Mary $mary : e$] [VP sleeps $λx. sleep(x)$]]');
+    expect(plain(t.root.sem!.runs)).toBe('sleep(mary)');
+    expect(t.root.sem!.rule).toBe('FA');
   });
-  test('auto arrows can be switched off', () => {
-    expect(tree('[S [DP_i x] [VP t_i]]', { autoArrows: false }).arrows).toHaveLength(0);
+  test('type errors are reported at the node', () => {
+    const t = tree('[S [DP Mary $mary : e$] [DP John $john : e$]]');
+    expect(t.root.sem!.error).toMatch(/No composition rule applies to e and e/);
+  });
+  test('a daughter without any meaning is skipped (vacuous)', () => {
+    const t = tree('[S [C that] [VP sleeps $λx. sleep(x)$]]');
+    expect(plain(t.root.sem!.runs)).toBe('λx. sleep(x)');
+  });
+  test('bad formulas are reported', () => {
+    const t = tree('[N cat $λx. cat(x$]');
+    expect(t.root.sem!.error).toBeTruthy();
   });
 });
 
@@ -129,5 +178,12 @@ describe('serialize (as displayed)', () => {
         expect(show(tree(out))).toBe(show(tr));
       }
     }
+  });
+});
+
+describe('meaning display', () => {
+  test('typed binders are shown as subscripts', () => {
+    const t = tree('[D the $λP_<e,t>. ιx. P(x)$]');
+    expect(t.root.sem!.runs).toEqual([{ text: 'λP' }, { text: '⟨e,t⟩', sub: true }, { text: '. ιx. P(x)' }]);
   });
 });

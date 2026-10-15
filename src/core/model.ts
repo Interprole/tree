@@ -37,6 +37,27 @@ export interface DNode {
   indices: string[];
   /** for nodes duplicated from a multidominated node (copies view): key of the original */
   copyOf?: string;
+  /** position of a movement chain this node instantiates (#id/occ, 1 = highest) */
+  chainRef?: { id: string; occ: number };
+  /** source of a head-movement arrow: drawn struck through */
+  struck?: boolean;
+  /** semantic value shown under the node */
+  sem?: DSem;
+  /** pronunciation marks of the occurrences (aligned with children): from #id! / #id? */
+  occ?: (boolean | undefined)[];
+}
+
+export interface DSem {
+  runs: Runs;
+  /** type, as text (⟨e,t⟩) */
+  type?: string;
+  /** computed bottom-up rather than written */
+  computed?: boolean;
+  /** a computed formula in input syntax (to write it into the code) */
+  source?: string;
+  /** composition rule used: FA, PC, EI, FC */
+  rule?: string;
+  error?: string;
 }
 
 export interface DArrow {
@@ -48,8 +69,10 @@ export interface DArrow {
   label?: string;
   color?: string;
   bend: [number, number];
-  /** derived automatically from coindexation */
+  /** drawn automatically between the positions of a chain */
   auto?: boolean;
+  /** chain link of an automatic arrow: occurrence numbers (1 = highest) */
+  chain?: { id: string; from: number; to: number };
   src?: AArrow;
   /** index into doc.arrows for explicit arrows */
   index?: number;

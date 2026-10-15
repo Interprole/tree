@@ -31,6 +31,7 @@ export const MACROS: Record<string, string> = {
   to: '→', rightarrow: '→', leftarrow: '←', Rightarrow: '⇒', pm: '±', times: '×', cdot: '·',
   surd: '√', sqrt: '√', check: '✓', star: '*', ast: '*', bullet: '•', dots: '…', ldots: '…',
   langle: '⟨', rangle: '⟩', neg: '¬', forall: '∀', exists: '∃', in: '∈', cup: '∪', cap: '∩',
+land: '∧', wedge: '∧', lor: '∨', vee: '∨', lnot: '¬', llbracket: '⟦', rrbracket: '⟧', leftrightarrow: '↔', subset: '⊂',
   emdash: '—', endash: '–', prime: '′', dprime: '″', sharp: '♯', flat: '♭',
 };
 
