@@ -4,6 +4,8 @@ import * as A from '../actions';
 import type * as E from '../core/edits';
 import { cCommandDomain, dominated } from '../core/analysis';
 import { plain } from '../core/richtext';
+import { cubicAt } from '../core/arrows';
+import type { ArrowGeom } from '../core/arrows';
 import type { NodeHit, Scene } from '../core/scene';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
@@ -81,6 +83,7 @@ export function Canvas() {
   const hitByKey = useMemo(() => new Map((sc?.hits ?? []).map((h) => [h.key, h])), [sc]);
 
   // ---------- pointer handling (pan, pinch, bend drag)
+  const labelEdit = useSignal<null | { kind: 'note' | 'arrow'; owner: string | number; index: number; box: { x1: number; y1: number; x2: number; y2: number }; text: string }>(null);
   const labelGhost = useSignal<null | { box: { x1: number; y1: number; x2: number; y2: number }; dx: number; dy: number }>(null);
   const drag = useRef<null | { kind: 'pan' | 'bend' | 'label'; label?: { kind: 'note' | 'arrow'; owner: string | number; index: number; off: [number, number]; box: { x1: number; y1: number; x2: number; y2: number } }; sx: number; sy: number; vx: number; vy: number; moved: boolean; index?: number; bend?: [number, number]; target?: Element }>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -88,6 +91,7 @@ export function Canvas() {
 
   const onPointerDown = (e: PointerEvent) => {
     if ((e.target as Element).closest('.floating, .canvas-tools, .rename-box, .canvas-hint')) return;
+    labelEdit.value = null;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
@@ -154,9 +158,12 @@ export function Canvas() {
     if (d.kind === 'label') {
       const g = labelGhost.value;
       labelGhost.value = null;
-      if (g && d.moved) {
-        const l = d.label!;
-        A.moveLabel(l.kind, l.owner, l.index, [Math.round(l.off[0] + g.dx), Math.round(l.off[1] + g.dy)]);
+      const l = d.label!;
+      if (g && d.moved) A.moveLabel(l.kind, l.owner, l.index, [Math.round(l.off[0] + g.dx), Math.round(l.off[1] + g.dy)]);
+      else if (!d.moved) {
+        // a click on a label: rename or delete it
+        const text = A.labelText(l.kind, l.owner, l.index);
+        if (text !== undefined) labelEdit.value = { kind: l.kind, owner: l.owner, index: l.index, box: l.box, text };
       }
       return;
     }
@@ -355,7 +362,7 @@ export function Canvas() {
             ))}
             {sc.labels.map((l) => (
               <rect key={`lab${l.kind}${l.owner}${l.index}`} x={l.box.x1} y={l.box.y1} width={l.box.x2 - l.box.x1} height={l.box.y2 - l.box.y1} rx="3" class="label-hit" data-label={`${l.kind}|${l.owner}|${l.index}`}>
-                <title>Drag to move</title>
+                <title>Click to edit or delete, drag to move</title>
               </rect>
             ))}
             {labelGhost.value && (
@@ -393,7 +400,15 @@ export function Canvas() {
       {selHit && tool.value === 'select' && !renaming.value && !pick.value && tr && (
         <NodeBar key={selHit.key} hit={selHit} pos={toScreen((selHit.box.x1 + selHit.box.x2) / 2, selHit.box.y1)} pop={popover.value} setPop={(p) => (popover.value = popover.value === p ? null : p)} onRename={() => startRename(selHit.key)} />
       )}
-      {selArrow && tr?.arrows[selArrow.index] && <ArrowBar index={selArrow.index} pos={toScreen(selArrow.geom.handle[0], selArrow.geom.handle[1])} up={toScreen(0, selArrow.geom.handle[1]).y > (wrap.current?.clientHeight ?? 800) - 340} />}
+      {labelEdit.value && (
+        <LabelEditor
+          key={`${labelEdit.value.kind}${labelEdit.value.owner}${labelEdit.value.index}`}
+          edit={labelEdit.value}
+          pos={toScreen((labelEdit.value.box.x1 + labelEdit.value.box.x2) / 2, labelEdit.value.box.y2)}
+          onClose={() => (labelEdit.value = null)}
+        />
+      )}
+      {selArrow && tr?.arrows[selArrow.index] && <ArrowBar index={selArrow.index} place={arrowBarPlace(selArrow.geom, toScreen, wrap.current)} />}
 
       {renaming.value && hitByKey.get(renaming.value.key) && (() => {
         const h = hitByKey.get(renaming.value!.key)!;
@@ -447,7 +462,7 @@ function ToolBtn({ id, icon, label }: { id: Tool; icon: preact.JSX.Element; labe
   );
 }
 
-type Pop = null | 'style' | 'features' | 'meaning' | 'notes' | 'copy' | 'more';
+type Pop = null | 'style' | 'spacing' | 'features' | 'meaning' | 'notes' | 'copy' | 'more';
 
 const SIDES = ['auto', 'left', 'right', 'above', 'below'] as const;
 
@@ -530,7 +545,7 @@ function NodeBar({ hit, pos, pop, setPop, onRename }: { hit: NodeHit; pos: { x: 
     else A.setOption(n, target.value === 'edge' ? 'edge' : 'sem', c);
   };
   return (
-    <div class="floating node-bar" style={{ left: `${pos.x}px`, top: `${pos.y}px` }} onPointerDown={(e) => e.stopPropagation()}>
+    <div class={`floating node-bar ${pos.y < 280 ? 'pops-below' : 'pops-above'}`} style={{ left: `${pos.x}px`, top: `${pos.y}px` }} onPointerDown={(e) => e.stopPropagation()}>
       {btn(t('rename'), <IEdit />, onRename)}
       {btn(t('addChild'), <IChild />, () => A.addChild(n))}
       {btn(t('addSister'), <ISister />, () => A.addSister(n))}
@@ -539,8 +554,10 @@ function NodeBar({ hit, pos, pop, setPop, onRename }: { hit: NodeHit; pos: { x: 
       {btn('Features [ … ]', <span class="txt-icon">[f]</span>, () => setPop('features'), { active: pop === 'features' })}
       {btn('Meaning ⟦ ⟧', <span class="txt-icon">λ</span>, () => setPop('meaning'), { active: pop === 'meaning' })}
       {btn('Notes next to the node', <span class="txt-icon">“ ”</span>, () => setPop('notes'), { active: pop === 'notes' })}
-      {btn('Colours and edge', <IPalette />, () => setPop('style'), { active: pop === 'style' })}
-      {btn('More: branching, pronunciation, arrow', <IMore />, () => setPop('more'), { active: pop === 'more', disabled: false })}
+      {btn('Colours', <IPalette />, () => setPop('style'), { active: pop === 'style' })}
+      {btn('Spacing: edge width and length, spread of daughters', <span class="txt-icon">↔</span>, () => setPop('spacing'), { active: pop === 'spacing' })}
+      {btn('Draw an arrow from here (then click the target)', <IArrowTool />, () => A.startArrow(n), { disabled: false })}
+      {btn('More: branching, pronunciation', <IMore />, () => setPop('more'), { active: pop === 'more', disabled: false })}
       {btn(t('delete'), <ITrash />, () => A.deleteNode(n), { danger: true })}
       {pop === 'style' && (
         <div class="color-pop style-pop">
@@ -557,6 +574,10 @@ function NodeBar({ hit, pos, pop, setPop, onRename }: { hit: NodeHit; pos: { x: 
             ))}
             <button class="swatch none" title="Default colour" aria-label="Default colour" onClick={() => applyColor(null)} />
           </div>
+        </div>
+      )}
+      {pop === 'spacing' && (
+        <div class="color-pop style-pop">
           <div class="num-row">
             <NumField label="Edge width" value={n.edgeWidth} placeholder="1" onCommit={(v) => A.setOption(n, 'width', v)} />
             <NumField label="Extra length" value={n.edgeLen} placeholder="0" onCommit={(v) => A.setOption(n, 'len', v)} />
@@ -610,7 +631,7 @@ function NodeBar({ hit, pos, pop, setPop, onRename }: { hit: NodeHit; pos: { x: 
             <input autoFocus value={meaning.value} placeholder="lambda x. cat(x) : <e,t>" onInput={(e) => (meaning.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.stopPropagation()} />
           </label>
           <p class="pop-hint">
-            λ: <code>lambda x.</code> or <code>\x.</code>; ι: <code>iota x.</code>. Types can be anything: <code>e</code>, <code>t</code>, <code>s</code>, <code>d</code>, <code>&lt;e,&lt;s,t&gt;&gt;</code>… Typed variables: <code>λx_e.</code>
+            Write symbols either directly (λ ι ∀ ∃ ∧ ∨ ¬ → ↔) or as LaTeX commands: <code>\lambda x.</code>, <code>\iota x.</code>, <code>\forall</code>, <code>\exists</code>, <code>\land</code>, <code>\neg</code>, <code>\Rightarrow</code>… (also the words <code>lambda x.</code>, <code>iota x.</code>). Types can be anything: <code>e</code>, <code>t</code>, <code>s</code>, <code>d</code>, <code>&lt;e,&lt;s,t&gt;&gt;</code>… Typed variables: <code>λx_e.</code>
           </p>
           <div class="row">
             <button class="btn small primary" type="submit">Apply</button>
@@ -626,25 +647,99 @@ function NodeBar({ hit, pos, pop, setPop, onRename }: { hit: NodeHit; pos: { x: 
       {pop === 'more' && (
         <div class="color-pop menu-list">
           <div class="row tight">
-            <span class="pop-hint">Branching:</span>
-            <button onClick={() => A.restructure(n, 'flat')} disabled={disabled}>flat</button>
-            <button onClick={() => A.restructure(n, 'left')} disabled={disabled}>left</button>
-            <button onClick={() => A.restructure(n, 'right')} disabled={disabled}>right</button>
+            <span class="pop-hint">Branching (swaps the two daughters):</span>
+            <button onClick={() => A.restructure(n, 'left')} disabled={disabled} title="[XP X [Z]] → [XP [Z] X]">left</button>
+            <button onClick={() => A.restructure(n, 'right')} disabled={disabled} title="[XP [Z] X] → [XP X [Z]]">right</button>
           </div>
           {inChain && <button onClick={() => A.togglePronounce(n)}>{overt ? 'Silence this position' : 'Pronounce this position'}</button>}
-          <button onClick={() => A.startArrow(n)}>Draw an arrow from here</button>
         </div>
       )}
     </div>
   );
 }
 
-function ArrowBar({ index, pos, up: flip }: { index: number; pos: { x: number; y: number }; up?: boolean }) {
+function LabelEditor({ edit, pos, onClose }: { edit: { kind: 'note' | 'arrow'; owner: string | number; index: number; text: string }; pos: { x: number; y: number }; onClose: () => void }) {
+  const text = useSignal(edit.text);
+  const save = () => {
+    if (text.value !== edit.text) A.editLabel(edit.kind, edit.owner, edit.index, text.value);
+    onClose();
+  };
+  return (
+    <form
+      class="floating label-editor"
+      style={{ left: `${pos.x}px`, top: `${pos.y + 8}px` }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <input
+        autoFocus
+        value={text.value}
+        aria-label="Label text"
+        onInput={(e) => (text.value = (e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Escape') onClose();
+        }}
+      />
+      <button class="btn small primary" type="submit">OK</button>
+      <button
+        class="icon-btn danger"
+        type="button"
+        title="Delete this label"
+        aria-label="Delete this label"
+        onClick={() => {
+          A.editLabel(edit.kind, edit.owner, edit.index, null);
+          onClose();
+        }}
+      >
+        <ITrash />
+      </button>
+    </form>
+  );
+}
+
+const BAR_W = 340;
+const BAR_H = 330;
+
+/** Put the arrow toolbar next to the arrow, never on top of it: below, above, right or left of its box. */
+function arrowBarPlace(g: ArrowGeom, toScreen: (x: number, y: number) => { x: number; y: number }, el: HTMLElement | null): Record<string, string> {
+  const W = el?.clientWidth ?? 1200;
+  const H = el?.clientHeight ?? 800;
+  let x1 = Infinity;
+  let y1 = Infinity;
+  let x2 = -Infinity;
+  let y2 = -Infinity;
+  const add = (x: number, y: number) => {
+    const p = toScreen(x, y);
+    x1 = Math.min(x1, p.x);
+    x2 = Math.max(x2, p.x);
+    y1 = Math.min(y1, p.y);
+    y2 = Math.max(y2, p.y);
+  };
+  for (let t = 0; t <= 1.0001; t += 0.05) add(...cubicAt(g, t));
+  for (const l of g.labels) {
+    add(l.x - l.w / 2, l.y - 14);
+    add(l.x + l.w / 2, l.y + 4);
+  }
+  const cx = Math.min(Math.max((x1 + x2) / 2, BAR_W / 2 + 8), W - BAR_W / 2 - 8);
+  const cy = Math.min(Math.max((y1 + y2) / 2 - BAR_H / 2, 8), Math.max(8, H - BAR_H - 8));
+  const gap = 12;
+  if (y2 + gap + BAR_H < H) return { left: `${cx}px`, top: `${y2 + gap}px` };
+  if (y1 - gap - BAR_H > 0) return { left: `${cx}px`, top: `${y1 - gap}px`, transform: 'translate(-50%, -100%)' };
+  if (x2 + gap + BAR_W < W) return { left: `${x2 + gap}px`, top: `${cy}px`, transform: 'none' };
+  if (x1 - gap - BAR_W > 0) return { left: `${x1 - gap}px`, top: `${cy}px`, transform: 'translateX(-100%)' };
+  return { left: `${cx}px`, top: `${Math.min(y2 + gap, H - BAR_H)}px` };
+}
+
+function ArrowBar({ index, place }: { index: number; place: Record<string, string> }) {
   const a = tree.value!.arrows[index];
   const up = (p: Parameters<typeof A.updateArrow>[1]) => A.updateArrow(a, p);
   const initial = (a.src?.labels ?? []).map((l) => ({ text: l.text, side: l.side, off: l.off }));
   return (
-    <div class="floating arrow-bar" style={flip ? { left: `${pos.x}px`, top: `${pos.y - 14}px`, transform: 'translate(-50%, -100%)' } : { left: `${pos.x}px`, top: `${pos.y + 14}px` }} onPointerDown={(e) => e.stopPropagation()}>
+    <div class="floating arrow-bar" style={place} onPointerDown={(e) => e.stopPropagation()}>
       {a.auto && <div class="note">{t('autoArrow')}</div>}
       <div class="seg small">
         <button class={a.line === 'solid' ? 'on' : ''} onClick={() => up({ line: 'solid' })}>{t('arrowSolid')}</button>

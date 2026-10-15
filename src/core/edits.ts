@@ -16,6 +16,8 @@ export interface Edit {
   changes: TextChange[];
   /** range to select afterwards, in the coordinates of the new text */
   select?: { from: number; to: number };
+  /** the operation does not apply here */
+  error?: string;
 }
 
 /** Apply changes (any order, non-overlapping) to a string. */
@@ -167,53 +169,29 @@ export function setPronounce(occurrence: { node: ANode } | { ref: ARef }, value:
  * Change the branching of a node: flat, right-branching or left-branching. With three or more
  * daughters it re-brackets them; with two it rotates ([X [Y a b] c] ↔ [X a [Y b c]]).
  */
-export function restructure(src: string, n: ANode, shape: 'flat' | 'right' | 'left'): Edit {
+/**
+ * Change the branching direction of a node with two daughters by swapping them:
+ * right → left: [XP X [Z]] → [XP [Z] X];  left → right: [XP [Z] X] → [XP X [Z]].
+ * The daughter with more structure decides the current direction; equal daughters are just swapped.
+ */
+export function restructure(src: string, n: ANode, shape: 'right' | 'left'): Edit {
   const kids = n.children;
-  if (!kids.length) return { changes: [] };
-  const text = (c: AChild) => {
-    const sp = c.kind === 'leaf' ? c.fullSpan : c.span;
-    return src.slice(sp.from, sp.to);
+  if (kids.length !== 2) return { changes: [], error: `Changing the branching needs exactly two daughters; [${n.label || '…'}] has ${kids.length}.` };
+  const span = (c: AChild) => (c.kind === 'leaf' ? c.fullSpan : c.span);
+  const weight = (c: AChild): number => (c.kind === 'node' ? 1 + c.children.reduce((s, k) => s + weight(k), 0) : 1);
+  const [a, b] = kids;
+  const wa = weight(a);
+  const wb = weight(b);
+  if (shape === 'left' && wa > wb) return { changes: [], error: 'Already left-branching: the bigger daughter is on the left.' };
+  if (shape === 'right' && wb > wa) return { changes: [], error: 'Already right-branching: the bigger daughter is on the right.' };
+  const sa = span(a);
+  const sb = span(b);
+  return {
+    changes: [
+      { from: sa.from, to: sa.to, insert: src.slice(sb.from, sb.to) },
+      { from: sb.from, to: sb.to, insert: src.slice(sa.from, sa.to) },
+    ],
   };
-  const header = (c: ANode) => src.slice(c.span.from + 1, c.headerSpan.to);
-  const isIntermediate = (c: AChild): c is ANode =>
-    c.kind === 'node' && (c.label === n.label || c.label === '') && !c.id && !c.features && !c.sem && !c.triangle && !c.notes && c.children.length > 0;
-  const items: string[] = [];
-  const collect = (list: AChild[]) => {
-    for (const c of list) {
-      if (isIntermediate(c)) collect(c.children);
-      else items.push(text(c));
-    }
-  };
-  collect(kids);
-  const from = (kids[0].kind === 'leaf' ? kids[0].fullSpan : kids[0].span).from;
-  const last = kids[kids.length - 1];
-  const to = (last.kind === 'leaf' ? last.fullSpan : last.span).to;
-  const replace = (body: string): Edit => (body === src.slice(from, to) ? { changes: [] } : { changes: [{ from, to, insert: body }] });
-  const wrap = (inner: string) => `[${n.label} ${inner}]`;
-
-  if (shape === 'flat') {
-    if (items.length > kids.length) return replace(items.join(' '));
-    // nothing intermediate: lift the daughters of every branching daughter one level up
-    const lifted = kids.flatMap((c) => (c.kind === 'node' && c.children.length > 1 && !c.id ? c.children.map(text) : [text(c)]));
-    return replace(lifted.join(' '));
-  }
-  if (items.length > 2) {
-    const right = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${xs[0]} ${wrap(right(xs.slice(1)))}`);
-    const left = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${wrap(left(xs.slice(0, -1)))} ${xs[xs.length - 1]}`);
-    return replace(shape === 'right' ? right(items) : left(items));
-  }
-  if (kids.length === 2) {
-    const [a, b] = kids;
-    if (shape === 'right' && a.kind === 'node' && a.children.length === 2 && !a.id) {
-      // [X [Y p q] r] → [X p [Y q r]]
-      return replace(`${text(a.children[0])} [${header(a)} ${text(a.children[1])} ${text(b)}]`);
-    }
-    if (shape === 'left' && b.kind === 'node' && b.children.length === 2 && !b.id) {
-      // [X p [Y q r]] → [X [Y p q] r]
-      return replace(`[${header(b)} ${text(a)} ${text(b.children[0])}] ${text(b.children[1])}`);
-    }
-  }
-  return { changes: [] };
 }
 
 export function addSister(n: ANode | ALeaf, label = 'X'): Edit {

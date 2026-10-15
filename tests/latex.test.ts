@@ -8,7 +8,7 @@ import type { LatexFormat } from '../src/core/latex';
 import { buildScene } from '../src/core/scene';
 import { approxMeasure } from '../src/core/measure';
 import { defaultStyle } from '../src/core/style';
-import { parseRich } from '../src/core/richtext';
+import { LATEX_SYMBOLS, parseRich, plain } from '../src/core/richtext';
 import { examples } from '../src/examples';
 import { tree } from './helpers';
 import type { BuildOptions } from '../src/core/build';
@@ -58,6 +58,10 @@ function errorExcerpt(log: string) {
 }
 
 describe('LaTeX text conversion', () => {
+  test('LaTeX symbol commands are read and written back', () => {
+    expect(plain(parseRich('\\Rightarrow \\Leftrightarrow \\varnothing \\emptyset \\Leftarrow'))).toBe('⇒ ⇔ ∅ ∅ ⇐');
+    expect(texRuns(parseRich('a \\Leftrightarrow b'))).toContain('\\Leftrightarrow');
+  });
   test('escapes special characters', () => {
     expect(texEscape('50% & $5 #1 a_b {x}')).toBe('50\\% \\& \\$5 \\#1 a\\_b \\{x\\}');
   });
@@ -120,6 +124,7 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
   cases.push({ name: 'atb-traces', src: examples.find((e) => e.id === 'atb')!.src, build: { chains: 'traces', chainIndices: true } });
   cases.push({ name: 'arrow-styles', src: '[CP#c [C′ [C#d did] [TP [DP#y you] [VP [V see] [DP#w what]]]]]\n#w -> #c dashed "wh"\n#y <-> #d curve dotted @blue\n#y -- #w @#2a7', style: { copyStyle: 'strike', leavesAtBottom: true } });
   cases.push({ name: 'round3-decorations', src: '[TP;spread=20 [DP#s;edge=red;width=2 **she** &"focus" &left"✓"@5,-3] [T\' [T;len=15 ~~will~~ *x*] [VP #s"herself" [V sing]]]]\n#s/2 -> #s/1 @blue above"*A*-mvt" below"x"' });
+  cases.push({ name: 'latex-symbols', src: `[S [A ${Object.keys(LATEX_SYMBOLS).slice(0, 120).map((k) => '\\' + k).join(' ')}] [B ${Object.keys(LATEX_SYMBOLS).slice(120).map((k) => '\\' + k).join(' ')}]]` });
   cases.push({ name: 'special-chars', src: '[S [A 50\\% \\& \\$ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
 
   for (const c of cases) {
@@ -139,6 +144,11 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
       if (!r.ok) throw new Error(errorExcerpt(r.log));
     }, 120_000);
   }
+  test.skipIf(!which('xelatex'))('every LaTeX symbol compiles with XeLaTeX', async () => {
+    const src = `[S ${Object.keys(LATEX_SYMBOLS).map((k) => '\\' + k).join(' ')}]`;
+    const r = await compile(latex(src, 'forest'), 'xelatex');
+    if (!r.ok) throw new Error(errorExcerpt(r.log));
+  }, 120_000);
   test.skipIf(!which('xelatex'))('TikZ output compiles with XeLaTeX', async () => {
     const r = await compile(latex(examples[1].src, 'tikz'), 'xelatex');
     if (!r.ok) throw new Error(errorExcerpt(r.log));

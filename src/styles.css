@@ -483,6 +483,10 @@ kbd {
   z-index: 50;
   display: flex;
   flex-direction: column;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .menu-pop button {
@@ -519,14 +523,15 @@ kbd {
   overflow: hidden;
   touch-action: none;
   outline: none;
-  cursor: grab;
+  /* a dark cursor with a white outline: visible on the white paper and on the dark background */
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%202l3.5%203.5h-2.3v5.3h5.3V8.5L22%2012l-3.5%203.5v-2.3h-5.3v5.3h2.3L12%2022l-3.5-3.5h2.3v-5.3H5.5v2.3L2%2012l3.5-3.5v2.3h5.3V5.5H8.5z%22%20fill%3D%22%231f2328%22%20stroke%3D%22%23fff%22%20stroke-width%3D%221.4%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 12 12, move;
   background-color: var(--canvas-bg);
   background-image: radial-gradient(var(--canvas-dots) 1px, transparent 1.2px);
   background-size: 18px 18px;
 }
 
 .canvas:active {
-  cursor: grabbing;
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%202l3.5%203.5h-2.3v5.3h5.3V8.5L22%2012l-3.5%203.5v-2.3h-5.3v5.3h2.3L12%2022l-3.5-3.5h2.3v-5.3H5.5v2.3L2%2012l3.5-3.5v2.3h5.3V5.5H8.5z%22%20fill%3D%22%231f2328%22%20stroke%3D%22%23fff%22%20stroke-width%3D%221.4%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E") 12 12, grabbing;
 }
 
 .canvas-svg {
@@ -770,6 +775,10 @@ kbd {
   border: 1.5px solid #2563eb;
   box-shadow: var(--shadow);
   padding: 2px 8px;
+  /* the box sits on the white paper: dark text and a clearly visible caret in both themes */
+  background: #fff;
+  color: #111;
+  caret-color: #c2410c;
 }
 
 
@@ -1624,4 +1633,23 @@ textarea.code {
 .swatch.on {
   outline: 2px solid var(--accent, #2563eb);
   outline-offset: 1px;
+}
+
+/* node toolbar popovers open above the toolbar (below it when the node is near the top) */
+.node-bar.pops-above .color-pop {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.label-editor {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 5px;
+  transform: translateX(-50%);
+}
+
+.label-editor input {
+  width: 170px;
+  padding: 3px 7px;
 }

@@ -133,3 +133,24 @@ describe('colours', () => {
     expect(edgeTo('V').stroke).toBe('#ff0000');
   });
 });
+
+import { layoutTree } from '../src/core/layout';
+import { layoutArrows } from '../src/core/arrows';
+describe('movement arrows', () => {
+  const end = (src: string, id: string) => {
+    const t = mkTree(src, { chains: 'traces' });
+    const L = layoutTree(t, ds, am);
+    const { geoms } = layoutArrows(L, t.arrows);
+    const n = t.nodes.find((x) => x.id === id)!;
+    return { y: geoms[0].p3[1], node: L.nodes.get(n)!, kids: n.children.map((c) => L.nodes.get(c)!) };
+  };
+  test('an arrow lands on the label of a phrase, between its branches', () => {
+    const { y, node, kids } = end('[S [DP#q [D every] [NP cat]] [VP [V likes] #q]]', 'q');
+    expect(y).toBeGreaterThan(node.y + node.block.h - 1);
+    expect(y).toBeLessThan(Math.min(...kids.map((k) => k.y)));
+  });
+  test('a unary phrase is entered from under its yield', () => {
+    const { y, kids } = end('[S [DP#q [NP cat]] [VP [V likes] #q]]', 'q');
+    expect(y).toBeGreaterThan(kids[0].y + kids[0].block.h);
+  });
+});
