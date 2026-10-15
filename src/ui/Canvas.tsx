@@ -512,6 +512,11 @@ function NumField({ label, value, onCommit, placeholder }: { label: string; valu
   useEffect(() => {
     draft.value = value === undefined ? '' : String(value);
   }, [value]);
+  const commit = () => {
+    const v = draft.value.trim();
+    if (v === (value === undefined ? '' : String(value))) return;
+    onCommit(v === '' ? null : v);
+  };
   return (
     <label class="num-field">
       <span>{label}</span>
@@ -521,11 +526,11 @@ function NumField({ label, value, onCommit, placeholder }: { label: string; valu
         value={draft.value}
         placeholder={placeholder}
         onInput={(e) => (draft.value = (e.target as HTMLInputElement).value)}
-        onKeyDown={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const v = (e.target as HTMLInputElement).value.trim();
-          onCommit(v === '' ? null : v);
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') commit();
         }}
+        onBlur={commit}
       />
     </label>
   );
