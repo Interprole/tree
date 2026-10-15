@@ -38,7 +38,7 @@ const HAVE_LATEX = which('pdflatex') && which('kpsewhich') && (() => {
 if (process.env.REQUIRE_LATEX && !HAVE_LATEX) throw new Error('REQUIRE_LATEX is set but pdflatex/forest are not available');
 
 function compile(texSrc: string, engine = 'pdflatex'): Promise<{ ok: boolean; log: string }> {
-  const dir = mkdtempSync(join(tmpdir(), 'treeform-tex-'));
+  const dir = mkdtempSync(join(tmpdir(), 'nanotrees-tex-'));
   writeFileSync(join(dir, 'tree.tex'), texSrc);
   return new Promise((resolve) => {
     // Vitest sets MODE=test, which Metafont's mktextfm would take as the printer mode
@@ -83,12 +83,12 @@ describe('forest export', () => {
     expect(latex('[S [DP ^the big cat] [VP runs]]', 'forest', {}, false)).toMatch(/\\textit\{the big cat\}\}, roof\]/);
   });
   test('multidominance: shared node written once plus an extra branch', () => {
-    const out = latex('[&P [VP likes #1] [&′ and [VP hates [DP#1 bagels]]]]', 'forest', {}, false);
+    const out = latex('[&P [VP likes #1] [&′ and [VP hates [DP#1 bagels]]]]', 'forest', { chains: 'multidominance' }, false);
     expect(out.match(/bagels/g)).toHaveLength(1);
     expect(out).toMatch(/\\draw \(n\d+\.south\) -- \(n\d+\.north\);/);
   });
   test('arrows are TikZ code after the tree', () => {
-    const out = latex('[CP [DP_i what] [C′ did [VP see [DP t_i]]]]', 'forest', {}, false);
+    const out = latex('[CP [DP#w what] [C′ did [VP see #w]]]', 'forest', {}, false);
     expect(out).toContain('\\coordinate (tf-bottom) at (current bounding box.south);');
     expect(out).toMatch(/\\draw\[-\{Stealth\}, semithick\] \(n\d+\.south\) \.\. controls/);
   });
@@ -109,11 +109,12 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
   for (const ex of examples) {
     cases.push({ name: ex.id, src: ex.src, build: ex.build as Partial<BuildOptions>, style: ex.style });
   }
-  cases.push({ name: 'atb-as-copies', src: examples.find((e) => e.id === 'atb')!.src, build: { multidominance: 'copies' } });
+  cases.push({ name: 'atb-as-copies', src: examples.find((e) => e.id === 'atb')!.src, build: { chains: 'copies' } });
   cases.push({ name: 'xbar-bar-style', src: examples[0].src, build: { mode: 'xbar', xbar: { bar: 'always', headLabel: 'X0', emptySpecs: true, barStyle: 'bar', expandWords: true } } });
   cases.push({ name: 'bps-sets', src: examples.find((e) => e.id === 'bps')!.src, build: { mode: 'bps', bps: { label: 'set' } } });
+  cases.push({ name: 'atb-traces', src: examples.find((e) => e.id === 'atb')!.src, build: { chains: 'traces', chainIndices: true } });
   cases.push({ name: 'arrow-styles', src: '[CP#c [C′ [C#d did] [TP [DP#y you] [VP [V see] [DP#w what]]]]]\n#w -> #c dashed "wh"\n#y <-> #d curve dotted @blue\n#y -- #w @#2a7', style: { copyStyle: 'strike', leavesAtBottom: true } });
-  cases.push({ name: 'special-chars', src: '[S [A 50\\% & $ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
+  cases.push({ name: 'special-chars', src: '[S [A 50\\% & \\$ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
 
   for (const c of cases) {
     for (const format of ['forest', 'qtree', 'tikz'] as LatexFormat[]) {

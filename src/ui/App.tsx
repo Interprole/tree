@@ -4,9 +4,9 @@ import * as A from '../actions';
 import { lineCol } from '../core/parser';
 import { examples } from '../examples';
 import { copyText } from '../export';
-import { lang, setLang, t } from '../i18n';
+import { t } from '../i18n';
 import {
-  arrowSource, build, error, loadExample, mobileTab, modal, panelOpen, relationOf, scene, selection, setBuild, shareUrl, showToast, source, theme, toast, tool, tree,
+  arrowSource, build, error, loadExample, mobileTab, modal, panelOpen, pick, relationOf, scene, selection, setBuild, shareUrl, showToast, source, theme, toast, tool, tree,
 } from '../state';
 import { Canvas, canvasApi } from './Canvas';
 import { Seg } from './controls';
@@ -14,7 +14,7 @@ import { Help, MyTrees, Shortcuts } from './Dialogs';
 import { Editor } from './Editor';
 import { ExportDialog } from './ExportDialog';
 import { IAuto, IBook, IChevron, IHelp, IDownload, IFolder, IKeyboard, ILink, IMoon, IRedo, ISliders, ISun, IUndo, IClose } from './icons';
-import { ModeOptions, SettingsPanel } from './SettingsPanel';
+import { ChainOptions, ModeOptions, SettingsPanel } from './SettingsPanel';
 
 function useTheme() {
   useSignalEffect(() => {
@@ -64,6 +64,7 @@ function useShortcuts() {
       const mod = e.ctrlKey || e.metaKey;
       if (e.key === 'Escape') {
         if (modal.value) modal.value = null;
+        else if (pick.value) pick.value = null;
         else if (tool.value !== 'select') {
           tool.value = 'select';
           arrowSource.value = null;
@@ -163,7 +164,6 @@ function ExamplesMenu() {
     window.addEventListener('pointerdown', close);
     return () => window.removeEventListener('pointerdown', close);
   }, []);
-  const l = lang.value;
   return (
     <div class="examples menu">
       <button class="btn ghost" aria-haspopup="true" aria-expanded={open.value} onClick={() => (open.value = !open.value)} data-testid="examples-button">
@@ -181,8 +181,8 @@ function ExamplesMenu() {
                 open.value = false;
               }}
             >
-              <strong>{ex.title[l]}</strong>
-              <small>{ex.note[l]}</small>
+              <strong>{ex.title}</strong>
+              <small>{ex.note}</small>
             </button>
           ))}
         </div>
@@ -235,16 +235,23 @@ export function App() {
             <circle cx="16" cy="6.5" r="3" fill="var(--accent)" />
           </svg>
           <div>
-            <h1>Treeform</h1>
-            <span class="tagline hide-sm">{t('appTagline')}</span>
+            <h1>NanoTrees</h1>
+            <span class="tagline hide-sm">{t('appTagline')} · by Gleb Bubnov</span>
           </div>
         </div>
         <ExamplesMenu />
-        <div class="mode-switch hide-xs">
+        <div class="mode-switch hide-xs" title="Labelling">
           <Seg value={b.mode} onChange={(v) => setBuild({ mode: v })} options={[
             { v: 'manual', label: t('modeManual'), title: t('modeManualHint') },
             { v: 'xbar', label: t('modeXbar'), title: t('modeXbarHint') },
             { v: 'bps', label: t('modeBps'), title: t('modeBpsHint') },
+          ]} />
+        </div>
+        <div class="mode-switch chain-switch hide-md" title="Movement chains">
+          <Seg value={b.chains} onChange={(v) => setBuild({ chains: v })} options={[
+            { v: 'copies', label: 'Copies', title: 'Chains drawn with copies' },
+            { v: 'traces', label: 'Traces', title: 'Chains drawn with traces' },
+            { v: 'multidominance', label: 'MD', title: 'Chains drawn as multidominance' },
           ]} />
         </div>
         <div class="spacer" />
@@ -266,17 +273,14 @@ export function App() {
             <IDownload size={17} /> <span class="hide-sm">{t('export')}</span>
           </button>
           <span class="sep hide-xs" />
-          <button class="icon-btn" title={t('help')} aria-label={t('help')} onClick={() => (modal.value = 'help')}>
-            <IHelp />
+          <button class="btn ghost" title="Guide: how to write and edit trees" aria-label="Guide" onClick={() => (modal.value = 'help')} data-testid="guide">
+            <IHelp size={17} /> <span class="hide-sm">Guide</span>
           </button>
           <button class="icon-btn hide-sm" title={t('shortcuts')} aria-label={t('shortcuts')} onClick={() => (modal.value = 'shortcuts')}>
             <IKeyboard />
           </button>
           <button class="icon-btn" title={`${t('theme')}: ${t(th === 'auto' ? 'themeAuto' : th === 'light' ? 'themeLight' : 'themeDark')}`} aria-label={t('theme')} onClick={() => (theme.value = nextTheme)}>
             {th === 'auto' ? <IAuto /> : th === 'light' ? <ISun /> : <IMoon />}
-          </button>
-          <button class="lang-btn" title={t('language')} aria-label={t('language')} onClick={() => setLang(lang.value === 'en' ? 'ru' : 'en')}>
-            {lang.value === 'en' ? 'RU' : 'EN'}
           </button>
           <button class={`icon-btn panel-toggle ${panelOpen.value ? 'active' : ''}`} title={t('settings')} aria-label={t('settings')} aria-pressed={panelOpen.value} onClick={() => (panelOpen.value = !panelOpen.value)} data-testid="settings-toggle">
             <ISliders />
@@ -290,6 +294,7 @@ export function App() {
           <StatusBar />
           <div class="mode-options">
             <ModeOptions />
+            <ChainOptions />
           </div>
         </section>
         <section class="pane canvas-pane" aria-label={t('tree')}>

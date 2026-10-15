@@ -50,10 +50,43 @@ describe('canvas edits keep the text valid', () => {
     const out = run(s, (d) => E.deleteElement(s, d, find(d, 'A')));
     expect(out).toBe('[S [B]]');
   });
-  test('triangle on and off', () => {
-    const tri = run(src, (d) => E.toggleTriangle(src, d, find(d, 'VP')));
-    expect(tri).toBe('[S [NP John] [VP ^saw Mary]]');
-    expect(run(tri, (d) => E.toggleTriangle(tri, d, find(d, 'VP')))).toBe('[S [NP John] [VP saw Mary]]');
+  test('triangle on and off keeps the structure', () => {
+    const tri = run(src, (d) => E.toggleTriangle(src, find(d, 'VP')));
+    expect(tri).toBe('[S [NP John] [VP ^ [V saw] [NP Mary]]]');
+    expect(run(tri, (d) => E.toggleTriangle(tri, find(d, 'VP')))).toBe(src);
+    const s2 = '[ [A x] [B y]]';
+    const t2 = run(s2, (d) => E.toggleTriangle(s2, d.root!));
+    expect(t2).toBe('[^ [A x] [B y]]');
+    expect(run(t2, (d) => E.toggleTriangle(t2, d.root!))).toBe('[[A x] [B y]]');
+  });
+  test('daughter of a terminal', () => {
+    expect(run(src, (d) => E.addChild(find(d, 'V').children[0] as ALeaf))).toBe('[S [NP John] [VP [V [saw [X]]] [NP Mary]]]');
+  });
+  test('copies: a new position of an existing constituent', () => {
+    expect(run(src, (d) => E.addCopy(d, find(d, 'NP'), { kind: 'daughter', of: find(d, 'VP') }))).toBe('[S [NP#np John] [VP [V saw] [NP Mary] #np]]');
+    expect(run(src, (d) => E.addCopy(d, find(d, 'NP'), { kind: 'sister', of: find(d, 'V') }))).toBe('[S [NP#np John] [VP [V saw] #np [NP Mary]]]');
+  });
+  test('features and meanings', () => {
+    expect(run(src, (d) => E.setFeatures(find(d, 'VP'), 'uφ, EPP'))).toBe('[S [NP John] [VP{uφ, EPP} [V saw] [NP Mary]]]');
+    expect(run(src, (d) => E.setMeaning(find(d, 'V'), 'λx. λy. see(x)(y)'))).toBe('[S [NP John] [VP [V saw $λx. λy. see(x)(y)$] [NP Mary]]]');
+  });
+  test('pronunciation of chain positions', () => {
+    const s3 = '[CP [DP#wh what] [VP see #wh]]';
+    const d = doc(s3);
+    const ref = (find(d, 'VP').children[1]) as never;
+    expect(E.applyChanges(s3, E.setPronounce({ ref }, true).changes)).toBe('[CP [DP#wh what] [VP see #wh!]]');
+    expect(E.applyChanges(s3, E.setPronounce({ node: find(d, 'DP') }, false).changes)).toBe('[CP [DP#wh? what] [VP see #wh]]');
+  });
+  test('bundling sister heads', () => {
+    const s4 = '[TP [T -s] [Agr 3sg] [VP go]]';
+    expect(run(s4, (d) => E.bundle(s4, find(d, 'T'), find(d, 'Agr')))).toBe('[TP [T.Agr -s 3sg] [VP go]]');
+  });
+  test('re-bracketing', () => {
+    const s5 = '[VP [V give] [DP a] [PP b]]';
+    const right = run(s5, (d) => E.restructure(s5, d.root!, 'right'));
+    expect(right).toBe('[VP [V give] [VP [DP a] [PP b]]]');
+    expect(run(s5, (d) => E.restructure(s5, d.root!, 'left'))).toBe('[VP [VP [V give] [DP a]] [PP b]]');
+    expect(run(right, (d) => E.restructure(right, d.root!, 'flat'))).toBe(s5);
   });
   test('colours', () => {
     expect(run(src, (d) => E.setColor(find(d, 'VP'), 'red', false))).toBe('[S [NP John] [VP@red [V saw] [NP Mary]]]');
@@ -66,7 +99,7 @@ describe('canvas edits keep the text valid', () => {
     expect(run(s, (d) => E.setHead(find(d, 'N'), d.root, true))).toBe('[ [D the] [N* cat]]');
   });
   test('arrows: add (with ids), restyle, delete', () => {
-    const withArrow = run(src, (d) => E.addArrow(src, d, find(d, 'V'), find(d, 'S')));
+    const withArrow = run(src, (d) => E.addArrow(src, d, { node: find(d, 'V') }, { node: find(d, 'S') }));
     expect(withArrow).toBe('[S#s [NP John] [VP [V#v saw] [NP Mary]]]\n#v -> #s\n');
     const d2 = doc(withArrow);
     const restyled = E.applyChanges(withArrow, E.updateArrow(d2.arrows[0], { line: 'dashed', label: 'head mvt', bend: [0, 20] }).changes);

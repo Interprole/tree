@@ -1,10 +1,10 @@
 import { signal } from '@preact/signals';
-import type { AArrow, ALeaf, ANode } from './core/ast';
+import type { AArrow, ALeaf, ANode, ARef } from './core/ast';
 import * as E from './core/edits';
 import type { Edit } from './core/edits';
 import type { DArrow, DNode } from './core/model';
 import { t } from './i18n';
-import { arrowSource, doc, editable, selection, showToast, source, tool, tree } from './state';
+import { arrowSource, doc, editable, pick, selection, showToast, source, tool, tree } from './state';
 
 /** Bridge to the code editor, so that canvas edits go through its undo history. */
 export interface EditorBridge {
@@ -93,9 +93,8 @@ export function renameNode(n: DNode, text: string) {
 export function addChild(n: DNode | null = selectedNode()) {
   if (!guard(n)) return;
   const s = n.src!;
-  if (s.kind === 'leaf') return addSister(n);
   applyEdit(E.addChild(s));
-  selectNewNode(s.span.to - 1 + 2);
+  selectNewNode(s.kind === 'leaf' ? s.span.from + s.text.length + 3 : s.span.to - 1 + 2);
 }
 
 export function addSister(n: DNode | null = selectedNode()) {
@@ -139,7 +138,103 @@ export function toggleTriangle(n: DNode | null = selectedNode()) {
     if (!p) return;
     s = p;
   }
-  applyEdit(E.toggleTriangle(source.value, doc.value!, s));
+  applyEdit(E.toggleTriangle(source.value, s));
+}
+
+/** the source node a canvas node stands for (terminals and synthetic nodes: their mother) */
+function nodeSrc(n: DNode): ANode | null {
+  return n.src?.kind === 'node' ? n.src : parentSrc(n);
+}
+
+export function setFeatures(n: DNode | null, text: string) {
+  if (!guard(n)) return;
+  const s = nodeSrc(n);
+  if (s) applyEdit(E.setFeatures(s, text));
+}
+
+export function setMeaning(n: DNode | null, text: string) {
+  if (!guard(n)) return;
+  const s = nodeSrc(n);
+  if (s) applyEdit(E.setMeaning(s, text));
+}
+
+/** Write a computed meaning into the code. */
+export function keepComputedMeaning(n: DNode | null = selectedNode()) {
+  if (!n?.sem?.computed || !n.sem.source) return;
+  setMeaning(n, n.sem.source);
+}
+
+/** The source position (defining node or #ref) of one position of a chain. */
+function chainPosition(n: DNode): { node: ANode } | { ref: ARef } | null {
+  const id = n.chainRef?.id ?? n.id;
+  if (!id) return null;
+  let p: DNode | undefined = n.parents[0];
+  while (p && !(p.src?.kind === 'node' && !p.synthetic)) p = p.parents[0];
+  const mother = p?.src as ANode | undefined;
+  if (!mother) return null;
+  for (const c of mother.children) {
+    if (c.kind === 'ref' && c.id === id) return { ref: c };
+    if (c.kind === 'node' && c.id === id) return { node: c };
+  }
+  return null;
+}
+
+/** Pronounce or silence one position of a chain. */
+export function togglePronounce(n: DNode | null = selectedNode()) {
+  if (!n || !editable.value) return;
+  const pos = chainPosition(n);
+  if (!pos) {
+    showToast('Select a position of a chain (a node with #id).');
+    return;
+  }
+  const overt = !n.copy && !n.trace;
+  applyEdit(E.setPronounce(pos, !overt));
+}
+
+/** Click-to-pick: add an existing constituent again as a daughter or sister (a new chain position). */
+export function startPick(kind: 'daughter' | 'sister', n: DNode | null = selectedNode()) {
+  if (!guard(n)) return;
+  pick.value = { kind, key: n.key };
+}
+
+export function completePick(target: DNode) {
+  const p = pick.value;
+  pick.value = null;
+  const place = nodeByKey(p?.key);
+  if (!p || !place || !guard(place)) return;
+  const t = target.chainRef ? doc.value?.ids.get(target.chainRef.id) : nodeSrc(target);
+  if (!t) return;
+  const placeSrc = p.kind === 'daughter' ? nodeSrc(place) : place.src!;
+  if (!placeSrc) return;
+  // a node cannot dominate itself
+  const inside = (outer: ANode, inner: { span: { from: number; to: number } }) => inner.span.from >= outer.span.from && inner.span.to <= outer.span.to;
+  const mother = p.kind === 'daughter' ? (placeSrc as ANode) : parentSrc(place);
+  if (mother && inside(t, mother)) {
+    showToast('A constituent cannot be re-merged inside itself.');
+    return;
+  }
+  applyEdit(E.addCopy(doc.value!, t, p.kind === 'daughter' ? { kind: 'daughter', of: placeSrc as ANode } : { kind: 'sister', of: placeSrc }));
+}
+
+/** Bundle a head with its right (or else left) sister: [X a] [Y b] → [X.Y a b]. */
+export function bundleWithSister(n: DNode | null = selectedNode()) {
+  if (!guard(n) || n.src!.kind !== 'node') return;
+  const me = n.src as ANode;
+  const mother = parentSrc(n);
+  if (!mother) return;
+  const sisters = mother.children;
+  const i = sisters.indexOf(me);
+  const other = [sisters[i + 1], sisters[i - 1]].find((c): c is ANode => c?.kind === 'node');
+  if (!other) {
+    showToast('Bundling needs a sister node next to this one.');
+    return;
+  }
+  applyEdit(E.bundle(source.value, me, other));
+}
+
+export function restructure(n: DNode | null, shape: 'flat' | 'right' | 'left') {
+  if (!guard(n) || n.src!.kind !== 'node') return;
+  applyEdit(E.restructure(source.value, n.src as ANode, shape));
 }
 
 export function setColor(n: DNode | null, color: string | null, branch: boolean) {
@@ -168,6 +263,18 @@ export function startArrow(n: DNode | null = selectedNode()) {
   arrowSource.value = n.key;
 }
 
+/** Arrow endpoint for a canvas node: a node, or one position of a chain (#id/n). */
+function endpointOf(n: DNode | null): E.Endpoint | null {
+  let cur: DNode | undefined = n ?? undefined;
+  while (cur && !(cur.src?.kind === 'node' && !cur.synthetic) && !cur.chainRef) cur = cur.parents[0];
+  if (!cur) return null;
+  if (cur.chainRef) {
+    const def = doc.value?.ids.get(cur.chainRef.id);
+    return def ? { node: def, occ: cur.chainRef.occ } : null;
+  }
+  return { node: cur.src as ANode };
+}
+
 export function arrowClick(n: DNode) {
   if (!editable.value) {
     showToast(t('editDisabled'));
@@ -177,8 +284,8 @@ export function arrowClick(n: DNode) {
     arrowSource.value = n.key;
     return;
   }
-  const from = srcNodeOf(nodeByKey(arrowSource.value));
-  const to = srcNodeOf(n);
+  const from = endpointOf(nodeByKey(arrowSource.value));
+  const to = endpointOf(n);
   arrowSource.value = null;
   tool.value = 'select';
   if (!from || !to) return;
@@ -196,11 +303,21 @@ export function selectedArrow(): DArrow | null {
   return tree.value?.arrows[s.index] ?? null;
 }
 
-/** Turn an automatic arrow into an explicit one (ids + arrow line). */
+/** Turn an automatic arrow into an explicit line (so that it can be restyled or hidden). */
 function materialise(a: DArrow, patch: Partial<AArrow>): boolean {
-  const from = srcNodeOf(a.from);
-  const to = srcNodeOf(a.to);
-  if (!from || !to || !doc.value) return false;
+  if (!doc.value) return false;
+  let from: E.Endpoint | null;
+  let to: E.Endpoint | null;
+  if (a.chain) {
+    const def = doc.value.ids.get(a.chain.id);
+    if (!def) return false;
+    from = { node: def, occ: a.chain.from };
+    to = { node: def, occ: a.chain.to };
+  } else {
+    from = endpointOf(a.from);
+    to = endpointOf(a.to);
+  }
+  if (!from || !to) return false;
   applyEdit(E.addArrow(source.value, doc.value, from, to, { route: a.route, line: a.line, head: a.head, ...patch }));
   return true;
 }
@@ -217,12 +334,10 @@ export function updateArrow(a: DArrow, patch: Partial<AArrow>) {
   applyEdit(E.updateArrow(a.src, patch));
 }
 
+/** Delete an arrow; an automatic chain arrow is hidden with a "hide" line. */
 export function deleteArrow(a: DArrow | null = selectedArrow()) {
   if (!a) return;
-  if (a.auto || !a.src) {
-    showToast(t('autoArrow'));
-    return;
-  }
-  applyEdit(E.deleteArrow(source.value, a.src));
+  if (a.auto || !a.src) materialise(a, { hidden: true });
+  else applyEdit(E.deleteArrow(source.value, a.src));
   selection.value = null;
 }

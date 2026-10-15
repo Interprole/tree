@@ -1,7 +1,3 @@
-import { signal } from '@preact/signals';
-
-export type Lang = 'en' | 'ru';
-
 const en = {
   appTagline: 'syntax trees for linguists',
   examples: 'Examples',
@@ -26,7 +22,6 @@ const en = {
   themeAuto: 'Auto',
   themeLight: 'Light',
   themeDark: 'Dark',
-  language: 'Язык: русский',
   code: 'Code',
   tree: 'Tree',
   ok: 'OK',
@@ -93,7 +88,6 @@ const en = {
   mdCopies: 'Copies instead',
   autoArrows: 'Arrows from coindexed traces',
   showEmpty: 'Show empty heads ∅',
-  bindingCheck: 'Check binding principles A/B/C',
   layout: 'Layout',
   levelGap: 'Level distance',
   siblingGap: 'Sister distance',
@@ -158,15 +152,6 @@ const en = {
   confirmDelete: 'Delete “{name}”?',
   untitled: 'Untitled tree',
   close: 'Close',
-  // binding
-  bindingTitle: 'Binding',
-  bindingNone: 'No coindexed nominals (add indices like DP_i … himself_i).',
-  bindingA_ok: '{x} is an anaphor bound by {y} in its domain {d} — Principle A satisfied.',
-  bindingA_bad: '{x} is an anaphor but is not bound in its domain {d} — violates Principle A.',
-  bindingB_ok: '{x} is a pronoun and is free in its domain {d} — Principle B satisfied.',
-  bindingB_bad: '{x} is a pronoun bound by {y} inside its domain {d} — violates Principle B.',
-  bindingC_ok: '{x} is an R-expression and is free — Principle C satisfied.',
-  bindingC_bad: '{x} is an R-expression bound by {y} — violates Principle C.',
   // cheatsheet
   cheatTitle: 'Bracket notation',
   loadedFromLink: 'Tree loaded from a shared link',
@@ -175,197 +160,8 @@ const en = {
 
 export type Key = keyof typeof en;
 
-const ru: Record<Key, string> = {
-  appTagline: 'синтаксические деревья для лингвистов',
-  examples: 'Примеры',
-  mode: 'Ярлыки',
-  modeManual: 'Ручной',
-  modeXbar: 'X-bar',
-  modeBps: 'BPS',
-  modeManualHint: 'Всё в точности как написано',
-  modeXbarHint: 'Проекции XP → X′ → X достраиваются автоматически',
-  modeBpsHint: 'Голая структура составляющих: ярлык — проецирующая вершина (*)',
-  undo: 'Отменить',
-  redo: 'Повторить',
-  export: 'Экспорт',
-  share: 'Ссылка',
-  shareCopied: 'Ссылка скопирована',
-  shareTooLong: 'Ссылка скопирована (длинная — {n} символов)',
-  myTrees: 'Мои деревья',
-  settings: 'Вид',
-  help: 'Разметка',
-  shortcuts: 'Горячие клавиши',
-  theme: 'Тема',
-  themeAuto: 'Авто',
-  themeLight: 'Светлая',
-  themeDark: 'Тёмная',
-  language: 'Language: English',
-  code: 'Код',
-  tree: 'Дерево',
-  ok: 'OK',
-  nodes: 'узлов: {n}',
-  errorAt: 'Строка {line}, столбец {col}',
-  showingLastGood: 'показано последнее корректное дерево',
-  emptyDoc: 'Введите дерево в скобочной записи, например [S [NP Иван] [VP спит]]',
-  zoomIn: 'Увеличить',
-  zoomOut: 'Уменьшить',
-  fit: 'По размеру окна',
-  toolSelect: 'Выделение и правка',
-  toolArrow: 'Нарисовать стрелку передвижения',
-  toolCcommand: 'Показать c-командную область',
-  toolDominance: 'Показать доминирование',
-  arrowPickSource: 'Стрелка: щёлкните по передвинутому элементу (источник)…',
-  arrowPickTarget: 'Стрелка: теперь щёлкните по позиции приземления (цель). Esc — отмена.',
-  ccHint: 'Щёлкните по узлу: зелёным — то, что он c-командует',
-  domHint: 'Щёлкните по узлу: синим — то, что он доминирует',
-  rename: 'Переименовать (Enter)',
-  addChild: 'Добавить дочку (A)',
-  addSister: 'Добавить сестру (S)',
-  delete: 'Удалить (Del)',
-  triangle: 'Треугольник вкл/выкл (T)',
-  color: 'Цвет',
-  colorNode: 'Узел',
-  colorBranch: 'Вся ветка',
-  colorNone: 'Без цвета',
-  head: 'Проецирующая дочка * (H)',
-  arrowFrom: 'Стрелка отсюда (M)',
-  syntheticNode: 'Этот узел добавлен режимом ярлыков автоматически. Чтобы его править, включите ручной режим.',
-  editDisabled: 'Исправьте ошибку в коде, чтобы править на холсте.',
-  autoArrow: 'Эта стрелка построена по коиндексации (t_i). Потяните её, чтобы превратить в явную.',
-  arrowStyle: 'Стрелка',
-  arrowSolid: 'Сплошная',
-  arrowDashed: 'Пунктир',
-  arrowDotted: 'Точки',
-  arrowUnder: 'Под деревом',
-  arrowCurve: 'Прямая дуга',
-  arrowHeadEnd: 'Наконечник у цели',
-  arrowHeadBoth: 'С двух сторон',
-  arrowHeadNone: 'Без наконечника',
-  arrowLabel: 'Подпись',
-  arrowResetBend: 'Сбросить изгиб',
-  labelling: 'Ярлыки',
-  xbarBar: 'Уровень X′',
-  xbarBarAlways: 'Всегда',
-  xbarBarAuto: 'Только при спецификаторе',
-  xbarBarNever: 'Никогда (плоско)',
-  xbarHead: 'Вершины',
-  xbarBarStyle: 'Обозначение уровня',
-  xbarBarPrime: 'Штрих X′',
-  xbarBarOver: 'Черта X̄',
-  xbarEmptySpecs: 'Вставлять пустые спецификаторы',
-  xbarExpand: 'Разворачивать однословные группы (NP → N′ → N)',
-  bpsLabel: 'Вычисленный ярлык',
-  bpsCategory: 'Категория (D)',
-  bpsHead: 'Вершина (the)',
-  bpsSet: 'Множество {the, {the, cat}}',
-  display: 'Отображение',
-  mdShared: 'Мультидоминирование',
-  mdSharedOpt: 'Один узел, несколько матерей',
-  mdCopies: 'Копиями',
-  autoArrows: 'Стрелки от коиндексированных следов',
-  showEmpty: 'Показывать пустые вершины ∅',
-  bindingCheck: 'Проверять принципы связывания A/B/C',
-  layout: 'Расположение',
-  levelGap: 'Между уровнями',
-  siblingGap: 'Между сёстрами',
-  padding: 'Поля',
-  leavesAtBottom: 'Терминалы на общей линии',
-  lines: 'Линии и цвета',
-  lineWidth: 'Толщина линий',
-  lineColor: 'Линии',
-  nodeColor: 'Нетерминалы',
-  leafColor: 'Терминалы',
-  arrowColor: 'Стрелки',
-  background: 'Фон',
-  handDrawn: 'Линии «от руки»',
-  typography: 'Шрифт',
-  font: 'Гарнитура',
-  fontSize: 'Кегль',
-  leafItalic: 'Курсивные терминалы',
-  nodeBold: 'Жирные ярлыки',
-  copyStyle: 'Нижние копии',
-  copyGrey: 'Серые',
-  copyStrike: 'Зачёркнутые',
-  copyAngle: '⟨В угловых скобках⟩',
-  presets: 'Пресеты',
-  presetPaper: 'Статья',
-  presetPaperHint: 'ч/б, как в LaTeX',
-  presetSlides: 'Слайды',
-  presetSlidesHint: 'крупно, контрастно',
-  presetBoard: 'Доска',
-  presetBoardHint: 'рукописный вид',
-  reset: 'Сброс',
-  exportTitle: 'Экспорт',
-  image: 'Изображение',
-  latex: 'LaTeX',
-  downloadSvg: 'Скачать SVG',
-  downloadPng: 'Скачать PNG',
-  downloadPdf: 'Скачать PDF',
-  copySvg: 'Копировать SVG-код',
-  copyImage: 'Копировать картинку',
-  copyBrackets: 'Копировать скобочную запись',
-  copyBracketsShown: 'Копировать скобочную запись (как показано)',
-  scale: 'Масштаб PNG',
-  transparent: 'Прозрачный фон',
-  embedFonts: 'Встроить шрифты в SVG',
-  latexFormat: 'Пакет',
-  latexForest: 'forest (рекомендуется)',
-  latexQtree: 'tikz-qtree',
-  latexTikz: 'TikZ (точная раскладка)',
-  standalone: 'Полный документ',
-  copy: 'Копировать',
-  copied: 'Скопировано',
-  downloadTex: 'Скачать .tex',
-  latexNote: 'Компилируется pdfLaTeX или LuaLaTeX. Нужен пакет forest / tikz-qtree из TeX Live или MiKTeX.',
-  latexMdNote: 'forest: узел с несколькими матерями записан под одной из них, остальные ветви рисуются командой \\draw после дерева.',
-  exporting: 'Готовим…',
-  saveCurrent: 'Сохранить текущее дерево',
-  treeName: 'Название',
-  open: 'Открыть',
-  noTrees: 'Сохранённых деревьев пока нет. Текущее дерево автоматически сохраняется в этом браузере.',
-  savedAt: 'сохранено {date}',
-  confirmDelete: 'Удалить «{name}»?',
-  untitled: 'Без названия',
-  close: 'Закрыть',
-  bindingTitle: 'Связывание',
-  bindingNone: 'Нет коиндексированных именных групп (добавьте индексы: DP_i … himself_i).',
-  bindingA_ok: '{x} — анафор, связан {y} в своей области {d}: Принцип A соблюдён.',
-  bindingA_bad: '{x} — анафор, но не связан в своей области {d}: нарушен Принцип A.',
-  bindingB_ok: '{x} — местоимение, свободно в своей области {d}: Принцип B соблюдён.',
-  bindingB_bad: '{x} — местоимение, связано {y} внутри области {d}: нарушен Принцип B.',
-  bindingC_ok: '{x} — R-выражение, свободно: Принцип C соблюдён.',
-  bindingC_bad: '{x} — R-выражение, связано {y}: нарушен Принцип C.',
-  cheatTitle: 'Скобочная запись',
-  loadedFromLink: 'Дерево загружено по ссылке',
-  fontsLoading: 'Загружаем шрифты…',
-};
-
-const dicts: Record<Lang, Record<Key, string>> = { en, ru };
-
-function initialLang(): Lang {
-  try {
-    const s = localStorage.getItem('treeform:lang');
-    if (s === 'en' || s === 'ru') return s;
-  } catch {
-    /* storage unavailable */
-  }
-  return 'en';
-}
-
-export const lang = signal<Lang>(initialLang());
-
-export function setLang(l: Lang) {
-  lang.value = l;
-  document.documentElement.lang = l;
-  try {
-    localStorage.setItem('treeform:lang', l);
-  } catch {
-    /* ignore */
-  }
-}
-
 export function t(key: Key, params?: Record<string, string | number>): string {
-  let s = dicts[lang.value][key] ?? en[key];
+  let s: string = en[key];
   if (params) for (const [k, v] of Object.entries(params)) s = s.replace(`{${k}}`, String(v));
   return s;
 }

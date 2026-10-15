@@ -22,6 +22,11 @@ export interface ANode {
   triangleSpan?: Span;
   features?: string[];
   featureSpan?: Span;
+  /** pronunciation of this occurrence of a chain: true = overt (!), false = silent (?) */
+  pronounce?: boolean;
+  /** semantic value: "formula : type" between $…$ */
+  sem?: string;
+  semSpan?: Span;
   /** gloss lines attached to the node itself (when there is no terminal) */
   gloss?: string[];
   children: AChild[];
@@ -41,6 +46,8 @@ export interface ALeaf {
 export interface ARef {
   kind: 'ref';
   id: string;
+  /** true = pronounced (#id!), false = silent (#id?) */
+  pronounce?: boolean;
   span: Span;
 }
 
@@ -53,6 +60,11 @@ export type ArrowRoute = 'under' | 'curve';
 export interface AArrow {
   from: string;
   to: string;
+  /** a particular position of a chain: #wh/2 (1 = highest) */
+  fromOcc?: number;
+  toOcc?: number;
+  /** "hide": suppresses the automatic arrow between these positions */
+  hidden?: boolean;
   head: ArrowHead;
   line: ArrowLine;
   route: ArrowRoute;

@@ -1,19 +1,17 @@
 import { useComputed, useSignal, useSignalEffect } from '@preact/signals';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import * as A from '../actions';
-import { cCommandDomain, checkBinding, dominated } from '../core/analysis';
-import type { BindingResult } from '../core/analysis';
-import type { DNode } from '../core/model';
+import { cCommandDomain, dominated } from '../core/analysis';
 import { plain } from '../core/richtext';
 import type { NodeHit, Scene } from '../core/scene';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
 import {
-  arrowSource, bendOverride, bindingCheck, build, editable, fitRequest, fontEpoch, relationOf, scene, selection, showToast, tool, tree,
+  arrowSource, bendOverride, build, editable, fitRequest, fontEpoch, pick, relationOf, scene, selection, showToast, tool, tree,
 } from '../state';
 import type { Tool } from '../state';
 import {
-  IArrowTool, ICcommand, IChild, IDominance, IEdit, IFit, IMinus, IMove, IPalette, IPlus, IPointer, ISister, IStar, ITrash, ITriangle,
+  IArrowTool, ICcommand, IChild, ICopyNode, IDominance, IEdit, IFit, IMinus, IMore, IPalette, IPlus, IPointer, ISister, ITrash, ITriangle,
 } from './icons';
 
 const PALETTE = ['#b91c1c', '#c2410c', '#a16207', '#15803d', '#0f766e', '#1d4ed8', '#6d28d9', '#be185d', '#57534e'];
@@ -24,20 +22,12 @@ interface View {
   y: number;
 }
 
-function bindingText(r: BindingResult): string {
-  const yieldOf = (n: DNode): string => (n.kind === 'leaf' ? plain(n.label) : n.children.map(yieldOf).join(' '));
-  const name = (n: DNode | undefined) => (n ? `“${yieldOf(n).trim() || plain(n.label)}”` : '');
-  const dom = (n: DNode | undefined) => (n ? plain(n.label) : '');
-  const key = `binding${r.principle}_${r.ok ? 'ok' : 'bad'}` as Parameters<typeof t>[0];
-  return t(key, { x: name(r.node), y: name(r.binder), d: dom(r.domain) });
-}
-
 export function Canvas() {
   const wrap = useRef<HTMLDivElement>(null);
   const view = useSignal<View>({ zoom: 1, x: 0, y: 0 });
   const size = useSignal({ w: 800, h: 600 });
   const renaming = useSignal<{ key: string; value: string } | null>(null);
-  const colorOpen = useSignal(false);
+  const popover = useSignal<Pop>(null);
   const hover = useSignal<string | null>(null);
 
   // ---------- fit
@@ -73,7 +63,7 @@ export function Canvas() {
   const sc = scene.value;
   const tr = tree.value;
 
-  // ---------- relations & binding
+  // ---------- relations
   const relation = useComputed(() => {
     const key = relationOf.value;
     const tl = tool.value;
@@ -83,7 +73,6 @@ export function Canvas() {
     const set = tl === 'ccommand' ? cCommandDomain(n) : dominated(n);
     return { kind: tl, of: key, keys: new Set([...set].map((x) => x.key)) };
   });
-  const binding = useComputed(() => (bindingCheck.value && tree.value ? checkBinding(tree.value) : null));
 
   // ---------- coordinates
   const v = view.value;
@@ -96,7 +85,7 @@ export function Canvas() {
   const pinch = useRef<null | { d: number; zoom: number; cx: number; cy: number; vx: number; vy: number }>(null);
 
   const onPointerDown = (e: PointerEvent) => {
-    if ((e.target as Element).closest('.floating, .canvas-tools, .rename-box, .binding-panel, .canvas-hint')) return;
+    if ((e.target as Element).closest('.floating, .canvas-tools, .rename-box, .canvas-hint')) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
@@ -158,7 +147,7 @@ export function Canvas() {
     const target = d.target ?? (e.target as Element);
     const nodeEl = target.closest('[data-node]');
     const arrowEl = target.closest('[data-arrow]');
-    colorOpen.value = false;
+    popover.value = null;
     if (nodeEl) clickNode(nodeEl.getAttribute('data-node')!);
     else if (arrowEl) {
       selection.value = { kind: 'arrow', index: Number(arrowEl.getAttribute('data-arrow')) };
@@ -172,6 +161,10 @@ export function Canvas() {
   const clickNode = (key: string) => {
     const n = A.nodeByKey(key);
     if (!n) return;
+    if (pick.value) {
+      A.completePick(n);
+      return;
+    }
     const tl = tool.value;
     if (tl === 'arrow') {
       A.arrowClick(n);
@@ -280,8 +273,9 @@ export function Canvas() {
 
   const box = (h: NodeHit, pad = 3) => ({ x: h.box.x1 - pad, y: h.box.y1 - pad, width: h.box.x2 - h.box.x1 + pad * 2, height: h.box.y2 - h.box.y1 + pad * 2 });
 
-  const hint =
-    tool.value === 'arrow' ? (srcKey ? t('arrowPickTarget') : t('arrowPickSource')) : tool.value === 'ccommand' ? t('ccHint') : tool.value === 'dominance' ? t('domHint') : null;
+  const hint = pick.value
+    ? `Click the constituent to add again as a ${pick.value.kind} (a new position of the same element). Esc to cancel.`
+    : tool.value === 'arrow' ? (srcKey ? t('arrowPickTarget') : t('arrowPickSource')) : tool.value === 'ccommand' ? t('ccHint') : tool.value === 'dominance' ? t('domHint') : null;
 
   return (
     <div
@@ -335,17 +329,6 @@ export function Canvas() {
             {selArrow && (
               <circle cx={selArrow.geom.handle[0]} cy={selArrow.geom.handle[1]} r={6 / Math.sqrt(v.zoom)} class="bend-handle" data-handle={selArrow.index} />
             )}
-            {binding.value?.map((r, i) => {
-              const h = hitByKey.get(r.node.key);
-              if (!h) return null;
-              return (
-                <g key={'b' + i} class={`badge ${r.ok ? 'ok' : 'bad'}`} transform={`translate(${h.box.x2 + 2} ${h.box.y1 - 4})`}>
-                  <rect width="30" height="15" rx="7.5" />
-                  <text x="15" y="11" text-anchor="middle">{r.principle} {r.ok ? '✓' : '✗'}</text>
-                  <title>{bindingText(r)}</title>
-                </g>
-              );
-            })}
           </g>
         )}
       </svg>
@@ -372,8 +355,8 @@ export function Canvas() {
 
       {hint && <div class="canvas-hint">{hint}</div>}
 
-      {selHit && tool.value === 'select' && !renaming.value && tr && (
-        <NodeBar hit={selHit} pos={toScreen((selHit.box.x1 + selHit.box.x2) / 2, selHit.box.y1)} colorOpen={colorOpen.value} toggleColor={() => (colorOpen.value = !colorOpen.value)} onRename={() => startRename(selHit.key)} bps={build.value.mode === 'bps'} />
+      {selHit && tool.value === 'select' && !renaming.value && !pick.value && tr && (
+        <NodeBar key={selHit.key} hit={selHit} pos={toScreen((selHit.box.x1 + selHit.box.x2) / 2, selHit.box.y1)} pop={popover.value} setPop={(p) => (popover.value = popover.value === p ? null : p)} onRename={() => startRename(selHit.key)} bps={build.value.mode === 'bps'} />
       )}
       {selArrow && tr?.arrows[selArrow.index] && <ArrowBar index={selArrow.index} pos={toScreen(selArrow.geom.handle[0], selArrow.geom.handle[1])} />}
 
@@ -402,21 +385,6 @@ export function Canvas() {
           />
         );
       })()}
-
-      {binding.value && (
-        <div class="binding-panel">
-          <strong>{t('bindingTitle')}</strong>
-          {binding.value.length === 0 ? <p>{t('bindingNone')}</p> : (
-            <ul>
-              {binding.value.map((r, i) => (
-                <li key={i} class={r.ok ? 'ok' : 'bad'}>
-                  <span class="pill">{r.principle} {r.ok ? '✓' : '✗'}</span> {bindingText(r)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -444,39 +412,35 @@ function ToolBtn({ id, icon, label }: { id: Tool; icon: preact.JSX.Element; labe
   );
 }
 
-function NodeBar({ hit, pos, colorOpen, toggleColor, onRename, bps }: { hit: NodeHit; pos: { x: number; y: number }; colorOpen: boolean; toggleColor: () => void; onRename: () => void; bps: boolean }) {
+type Pop = null | 'color' | 'features' | 'meaning' | 'copy' | 'more';
+
+function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: { x: number; y: number }; pop: Pop; setPop: (p: Pop) => void; onRename: () => void; bps: boolean }) {
   const n = hit.node;
   const branch = useSignal(false);
   const disabled = !n.src;
+  const srcNode = n.src?.kind === 'node' ? n.src : (n.parents[0]?.src?.kind === 'node' ? n.parents[0].src : null);
+  const feats = useSignal(srcNode?.features?.join(', ') ?? '');
+  const meaning = useSignal(srcNode?.sem ?? '');
+  const inChain = !!(n.chainRef || n.id);
+  const overt = !n.copy && !n.trace;
+  const btn = (title: string, icon: preact.JSX.Element, onClick: () => void, opts: { active?: boolean; disabled?: boolean; danger?: boolean } = {}) => (
+    <button class={`icon-btn ${opts.active ? 'active' : ''} ${opts.danger ? 'danger' : ''}`} title={title} aria-label={title} disabled={opts.disabled ?? disabled} onClick={onClick}>
+      {icon}
+    </button>
+  );
   return (
     <div class="floating node-bar" style={{ left: `${pos.x}px`, top: `${pos.y}px` }} onPointerDown={(e) => e.stopPropagation()}>
-      <button class="icon-btn" title={t('rename')} aria-label={t('rename')} disabled={disabled} onClick={onRename}>
-        <IEdit />
-      </button>
-      <button class="icon-btn" title={t('addChild')} aria-label={t('addChild')} disabled={disabled} onClick={() => A.addChild(n)}>
-        <IChild />
-      </button>
-      <button class="icon-btn" title={t('addSister')} aria-label={t('addSister')} disabled={disabled} onClick={() => A.addSister(n)}>
-        <ISister />
-      </button>
-      <button class="icon-btn" title={t('triangle')} aria-label={t('triangle')} disabled={disabled} onClick={() => A.toggleTriangle(n)}>
-        <ITriangle />
-      </button>
-      <button class={`icon-btn ${colorOpen ? 'active' : ''}`} title={t('color')} aria-label={t('color')} disabled={disabled} onClick={toggleColor}>
-        <IPalette />
-      </button>
-      {bps && n.kind === 'phrase' && (
-        <button class={`icon-btn ${n.head ? 'active' : ''}`} title={t('head')} aria-label={t('head')} disabled={disabled} onClick={() => A.toggleHead(n)}>
-          <IStar />
-        </button>
-      )}
-      <button class="icon-btn" title={t('arrowFrom')} aria-label={t('arrowFrom')} onClick={() => A.startArrow(n)}>
-        <IMove />
-      </button>
-      <button class="icon-btn danger" title={t('delete')} aria-label={t('delete')} disabled={disabled} onClick={() => A.deleteNode(n)}>
-        <ITrash />
-      </button>
-      {colorOpen && (
+      {btn(t('rename'), <IEdit />, onRename)}
+      {btn(t('addChild'), <IChild />, () => A.addChild(n))}
+      {btn(t('addSister'), <ISister />, () => A.addSister(n))}
+      {btn('Add an existing constituent again (copy / remerge)', <ICopyNode />, () => setPop('copy'), { active: pop === 'copy' })}
+      {btn(t('triangle'), <ITriangle />, () => A.toggleTriangle(n), { active: !!n.triangle || !!n.parents[0]?.triangle })}
+      {btn('Features [ … ]', <span class="txt-icon">[f]</span>, () => setPop('features'), { active: pop === 'features' })}
+      {btn('Meaning ⟦ ⟧', <span class="txt-icon">λ</span>, () => setPop('meaning'), { active: pop === 'meaning' })}
+      {btn(t('color'), <IPalette />, () => setPop('color'), { active: pop === 'color' })}
+      {btn('More: bundle, re-bracket, pronounce, arrow', <IMore />, () => setPop('more'), { active: pop === 'more', disabled: false })}
+      {btn(t('delete'), <ITrash />, () => A.deleteNode(n), { danger: true })}
+      {pop === 'color' && (
         <div class="color-pop">
           <div class="seg small">
             <button class={!branch.value ? 'on' : ''} onClick={() => (branch.value = false)}>{t('colorNode')}</button>
@@ -488,6 +452,70 @@ function NodeBar({ hit, pos, colorOpen, toggleColor, onRename, bps }: { hit: Nod
             ))}
             <button class="swatch none" title={t('colorNone')} aria-label={t('colorNone')} onClick={() => A.setColor(n, null, false)} />
           </div>
+        </div>
+      )}
+      {pop === 'copy' && (
+        <div class="color-pop menu-list">
+          <p class="pop-hint">Then click the constituent on the tree. It becomes one more position of the same element (#id).</p>
+          <button onClick={() => A.startPick('daughter', n)}>Add as a daughter…</button>
+          <button onClick={() => A.startPick('sister', n)} disabled={!n.parents.length}>Add as a sister…</button>
+        </div>
+      )}
+      {pop === 'features' && (
+        <form
+          class="color-pop field-pop"
+          onSubmit={(e) => {
+            e.preventDefault();
+            A.setFeatures(n, feats.value);
+            setPop(null);
+          }}
+        >
+          <label>
+            Features, separated by commas
+            <input autoFocus value={feats.value} placeholder="uφ, iT, EPP" onInput={(e) => (feats.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.stopPropagation()} />
+          </label>
+          <button class="btn small primary" type="submit">Apply</button>
+        </form>
+      )}
+      {pop === 'meaning' && (
+        <form
+          class="color-pop field-pop wide"
+          onSubmit={(e) => {
+            e.preventDefault();
+            A.setMeaning(n, meaning.value);
+            setPop(null);
+          }}
+        >
+          <label>
+            Meaning: formula, optionally “ : type”
+            <input autoFocus value={meaning.value} placeholder="λx. cat(x) : <e,t>" onInput={(e) => (meaning.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.stopPropagation()} />
+          </label>
+          <p class="pop-hint">
+            λ: type <code>\\</code> or <code>λ</code>; types <code>e</code>, <code>t</code>, <code>s</code> (events), <code>&lt;e,t&gt;</code>; typed variables <code>λx_e.</code>
+          </p>
+          <div class="row">
+            <button class="btn small primary" type="submit">Apply</button>
+            {n.sem?.computed && n.sem.source && (
+              <button class="btn small" type="button" onClick={() => (meaning.value = n.sem!.source!)}>
+                Use computed meaning
+              </button>
+            )}
+          </div>
+          {n.sem?.error && <p class="pop-error">{n.sem.error}</p>}
+        </form>
+      )}
+      {pop === 'more' && (
+        <div class="color-pop menu-list">
+          <button onClick={() => A.bundleWithSister(n)} disabled={disabled}>Bundle with sister (X.Y)</button>
+          <div class="row tight">
+            <span class="pop-hint">Branching:</span>
+            <button onClick={() => A.restructure(n, 'flat')} disabled={disabled}>flat</button>
+            <button onClick={() => A.restructure(n, 'right')} disabled={disabled}>right</button>
+            <button onClick={() => A.restructure(n, 'left')} disabled={disabled}>left</button>
+          </div>
+          {inChain && <button onClick={() => A.togglePronounce(n)}>{overt ? 'Silence this position' : 'Pronounce this position'}</button>}
+          {bps && n.kind === 'phrase' && <button onClick={() => A.toggleHead(n)} disabled={disabled}>{n.head ? 'Unmark projecting daughter' : 'Mark as projecting daughter (*)'}</button>}
+          <button onClick={() => A.startArrow(n)}>Draw an arrow from here</button>
         </div>
       )}
     </div>

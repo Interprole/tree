@@ -1,5 +1,5 @@
 import type { Prim, Scene, TextPiece } from '../core/scene';
-import { FONT_FAMILIES } from '../core/style';
+import { fontCss } from '../core/style';
 
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -33,7 +33,7 @@ export function primToSvg(p: Prim): string {
   const weight = first.bold ? ' font-weight="700"' : '';
   const op = p.opacity !== undefined && p.opacity < 1 ? ` fill-opacity="${p.opacity}"` : '';
   const spans = p.pieces.map((q) => `<tspan${pieceAttrs(q, baseSize, baseItalic)}>${esc(q.text)}</tspan>`).join('');
-  return `<text font-family="${esc(FONT_FAMILIES[p.font].css)}" font-size="${r2(baseSize)}"${baseItalic ? ' font-style="italic"' : ''}${weight} fill="${esc(p.color)}"${op}>${spans}</text>`;
+  return `<text font-family="${esc(fontCss(p.font))}" font-size="${r2(baseSize)}"${baseItalic ? ' font-style="italic"' : ''}${weight} fill="${esc(p.color)}"${op}>${spans}</text>`;
 }
 
 export interface SvgOptions {

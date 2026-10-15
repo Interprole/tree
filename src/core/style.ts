@@ -1,6 +1,18 @@
 /** Visual settings of a tree (everything that the appearance panel controls). */
 
-export type FontId = 'cmu' | 'libertinus' | 'garamond' | 'noto-serif' | 'noto-sans' | 'caveat';
+export type BuiltinFont = 'cmu' | 'libertinus' | 'garamond' | 'noto-serif' | 'noto-sans' | 'caveat';
+/** a built-in font, or "local:Family Name" for a font installed on the computer */
+export type FontId = BuiltinFont | `local:${string}`;
+
+export function isLocalFont(f: FontId): f is `local:${string}` {
+  return f.startsWith('local:');
+}
+
+/** CSS font-family list for a font id. */
+export function fontCss(f: FontId): string {
+  if (isLocalFont(f)) return `"${f.slice(6).replace(/"/g, '')}", "NanoTrees Symbols", serif`;
+  return (FONT_FAMILIES[f] ?? FONT_FAMILIES.cmu).css;
+}
 
 export interface TreeStyle {
   font: FontId;
@@ -21,8 +33,8 @@ export interface TreeStyle {
   leafItalic: boolean;
   /** terminals on a common baseline */
   leavesAtBottom: boolean;
-  /** how lower copies look */
-  copyStyle: 'grey' | 'strike' | 'angle';
+  /** how unpronounced copies look */
+  copyStyle: 'regular' | 'gray' | 'strike' | 'angle';
   /** colour of movement arrows */
   arrowColor: string;
   /** gap between a label and the branches */
@@ -47,7 +59,7 @@ export const defaultStyle: TreeStyle = {
   leafColor: '#111111',
   leafItalic: true,
   leavesAtBottom: false,
-  copyStyle: 'grey',
+  copyStyle: 'gray',
   arrowColor: '#1a1a1a',
   edgeGap: 3,
   handDrawn: false,
@@ -88,7 +100,7 @@ export const presets: Record<PresetId, Partial<TreeStyle>> = {
     leafColor: '#9a2617',
     leafItalic: false,
     leavesAtBottom: true,
-    copyStyle: 'grey',
+    copyStyle: 'gray',
     arrowColor: '#c2410c',
     handDrawn: false,
     nodeBold: true,
@@ -114,13 +126,13 @@ export const presets: Record<PresetId, Partial<TreeStyle>> = {
   },
 };
 
-export const FONT_FAMILIES: Record<FontId, { css: string; name: string; italic: boolean }> = {
-  cmu: { css: '"CMU Serif", "Latin Modern Roman", "Treeform Symbols", serif', name: 'Computer Modern (CMU Serif)', italic: true },
-  libertinus: { css: '"Libertinus Serif", "Linux Libertine", "Treeform Symbols", serif', name: 'Libertinus Serif', italic: true },
-  garamond: { css: '"EB Garamond", Garamond, "Treeform Symbols", serif', name: 'EB Garamond', italic: true },
-  'noto-serif': { css: '"Noto Serif", "Treeform Symbols", serif', name: 'Noto Serif', italic: true },
-  'noto-sans': { css: '"Noto Sans", "Treeform Symbols", "Helvetica Neue", Arial, sans-serif', name: 'Noto Sans', italic: true },
-  caveat: { css: 'Caveat, "Treeform Symbols", cursive', name: 'Caveat (handwriting)', italic: false },
+export const FONT_FAMILIES: Record<BuiltinFont, { css: string; name: string; italic: boolean }> = {
+  cmu: { css: '"CMU Serif", "Latin Modern Roman", "NanoTrees Symbols", serif', name: 'Computer Modern (CMU Serif)', italic: true },
+  libertinus: { css: '"Libertinus Serif", "Linux Libertine", "NanoTrees Symbols", serif', name: 'Libertinus Serif', italic: true },
+  garamond: { css: '"EB Garamond", Garamond, "NanoTrees Symbols", serif', name: 'EB Garamond', italic: true },
+  'noto-serif': { css: '"Noto Serif", "NanoTrees Symbols", serif', name: 'Noto Serif', italic: true },
+  'noto-sans': { css: '"Noto Sans", "NanoTrees Symbols", "Helvetica Neue", Arial, sans-serif', name: 'Noto Sans', italic: true },
+  caveat: { css: 'Caveat, "NanoTrees Symbols", cursive', name: 'Caveat (handwriting)', italic: false },
 };
 
 /** Typographic proportions derived from the font size. */
@@ -134,6 +146,8 @@ export function metricsFor(style: TreeStyle) {
     featureLineH: fs * 0.78 * 1.22,
     glossFs: fs * 0.82,
     glossLineH: fs * 0.82 * 1.3,
+    semFs: fs * 0.8,
+    semLineH: fs * 0.8 * 1.4,
     /** distance from the top of a line box to the baseline */
     ascent: fs * 0.98,
     /** where branches end above a label (from the top of the line box) */
