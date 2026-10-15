@@ -1,6 +1,6 @@
 import { layoutArrows } from './arrows';
 import type { ArrowGeom } from './arrows';
-import { displayLabel, fontFor, layoutTree } from './layout';
+import { displayLabel, fontFor, layoutTree, semDisplay } from './layout';
 import type { Box, Layout, LNode } from './layout';
 import { SC_SCALE, SCRIPT_SCALE } from './measure';
 import type { Measure } from './measure';
@@ -29,7 +29,7 @@ export interface TextPiece {
 
 export type Prim =
   | { t: 'path'; d: string; stroke?: string; width?: number; dash?: number[]; fill?: string; role: 'edge' | 'triangle' | 'arrow' | 'arrowhead' | 'bracket' | 'deco'; node?: string; arrow?: number; join?: 'round' | 'miter' }
-  | { t: 'text'; pieces: TextPiece[]; color: string; font: FontId; role: 'label' | 'leaf' | 'feature' | 'gloss' | 'arrowlabel'; node?: string; opacity?: number };
+  | { t: 'text'; pieces: TextPiece[]; color: string; font: FontId; role: 'label' | 'leaf' | 'feature' | 'gloss' | 'sem' | 'arrowlabel'; node?: string; opacity?: number };
 
 export interface NodeHit {
   key: string;
@@ -60,7 +60,9 @@ export interface Scene {
   style: TreeStyle;
 }
 
-const GREY = '#8a8a8a';
+const GRAY = '#8a8a8a';
+const SEM_COMPUTED = '#2f5d8a';
+const SEM_ERROR = '#c0392b';
 
 const f = (n: number) => (Math.round(n * 100) / 100).toString();
 
@@ -147,16 +149,22 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   const hits: NodeHit[] = [];
   const hand = style.handDrawn;
 
-  const colourOf = (n: DNode, kind: 'text' | 'line') => {
-    if (n.copy && style.copyStyle !== 'angle') return GREY;
-    if (kind === 'line') return n.branchColor ?? style.lineColor;
+  const grayCopy = (n: DNode) => n.copy && style.copyStyle === 'gray';
+  const colourOf = (n: DNode) => {
+    if (grayCopy(n)) return GRAY;
     return n.color ?? (n.kind === 'leaf' ? style.leafColor : style.nodeColor);
+  };
+  /** a coloured branch colours the edges inside it, not the edge above it */
+  const edgeColour = (parent: DNode, child: DNode) => {
+    if (grayCopy(child)) return GRAY;
+    if (child.branchColor && parent.branchColor === child.branchColor) return child.branchColor;
+    return style.lineColor;
   };
 
   // edges first (labels on top)
   for (const e of layout.edges) {
-    const stroke = colourOf(e.child.node, 'line');
-    const dash = e.child.node.copy && style.copyStyle !== 'angle' ? [3, 2.5] : undefined;
+    const stroke = edgeColour(e.parent.node, e.child.node);
+    const dash = grayCopy(e.child.node) ? [3, 2.5] : undefined;
     if (e.kind === 'triangle') {
       const d = `M${f(X(e.x1))} ${f(Y(e.y1))}L${f(X(e.bx2!))} ${f(Y(e.y2))}L${f(X(e.bx1!))} ${f(Y(e.y2))}Z`;
       prims.push({ t: 'path', d: hand ? linePath(X(e.x1), Y(e.y1), X(e.bx2!), Y(e.y2), true) + linePath(X(e.bx2!), Y(e.y2), X(e.bx1!), Y(e.y2), true) + linePath(X(e.bx1!), Y(e.y2), X(e.x1), Y(e.y1), true) : d, stroke, width: style.lineWidth, role: 'triangle', node: e.child.node.key, join: 'round' });
@@ -174,7 +182,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     const b = ln.block;
     const font = fontFor(n, style);
     const label = displayLabel(n, style);
-    const color = colourOf(n, 'text');
+    const color = colourOf(n);
     const left = X(ln.x) - b.labelW / 2;
     const base = Y(ln.y) + m.ascent;
     if (b.labelW > 0) {
@@ -184,7 +192,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
         const oy = base - font.size * 0.78;
         prims.push({ t: 'path', d: `M${f(a + 0.5)} ${f(oy)}L${f(z - 0.5)} ${f(oy)}`, stroke: color, width: Math.max(0.7, font.size * 0.055), role: 'deco', node: n.key });
       }
-      if (n.copy && style.copyStyle === 'strike') {
+      if ((n.copy && style.copyStyle === 'strike') || n.struck) {
         const sy = base - font.size * 0.3;
         prims.push({ t: 'path', d: `M${f(left - 1)} ${f(sy)}L${f(left + b.labelW + 1)} ${f(sy)}`, stroke: color, width: Math.max(0.8, font.size * 0.06), role: 'deco', node: n.key });
       }
@@ -207,13 +215,21 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
       });
       y += b.featureH;
     }
+    const sem = semDisplay(n);
+    if (sem) {
+      const ss = m.semFs;
+      const w = runsPieces(sem.runs, 0, 0, ss, false, false, measure, style.font).width;
+      const { pieces } = runsPieces(sem.runs, X(ln.x) - w / 2, y + ss * 1.05, ss, false, false, measure, style.font);
+      prims.push({ t: 'text', pieces, color: sem.kind === 'error' ? SEM_ERROR : sem.kind === 'computed' ? SEM_COMPUTED : color, font: style.font, role: 'sem', node: n.key });
+      y += b.semH;
+    }
     if (n.gloss?.length) {
       const gs = m.glossFs;
       n.gloss.forEach((g, i) => {
         const w = runsPieces(g, 0, 0, gs, false, false, measure, style.font).width;
         const quoted = /^["'‘“«]/.test(g[0]?.text ?? '');
         const { pieces } = runsPieces(g, X(ln.x) - w / 2, y + gs * 1.02 + i * m.glossLineH, gs, false, false, measure, style.font);
-        prims.push({ t: 'text', pieces, color: n.copy && style.copyStyle !== 'angle' ? GREY : quoted ? style.leafColor : style.leafColor, font: style.font, role: 'gloss', node: n.key, opacity: 0.88 });
+        prims.push({ t: 'text', pieces, color: grayCopy(n) ? GRAY : quoted ? style.leafColor : style.leafColor, font: style.font, role: 'gloss', node: n.key, opacity: 0.88 });
       });
     }
     hits.push({

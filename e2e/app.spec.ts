@@ -99,7 +99,7 @@ test('share link restores tree and settings', async ({ page, context }) => {
   const p2 = await context.newPage();
   await p2.goto(url);
   await expect(p2.locator('.cm-content')).toContainText('[XP [Y share me]]');
-  await expect(p2.locator('.mode-switch button.on')).toHaveText('BPS');
+  await expect(p2.locator('.mode-switch:not(.chain-switch) button.on')).toHaveText('BPS');
 });
 
 test('LaTeX export shows forest code', async ({ page }) => {
@@ -135,8 +135,46 @@ test('my trees: save and reopen', async ({ page }) => {
   await expect(page.locator('.cm-content')).toContainText('[A saved tree]');
 });
 
-test('language switch', async ({ page }) => {
+test('triangle toggles without losing structure', async ({ page }) => {
   await page.goto('./');
-  await page.getByRole('button', { name: 'Язык: русский' }).click();
-  await expect(page.getByTestId('export')).toContainText('Экспорт');
+  await setCode(page, '[S [DP [D the] [N cat]] [VP runs]]');
+  await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
+  await page.locator('[data-node] title', { hasText: /^DP$/ }).locator('..').click();
+  await page.keyboard.press('t');
+  await expect.poll(() => code(page)).toContain('[DP ^ [D the] [N cat]]');
+  await expect(page.locator('.prims text', { hasText: 'the cat' })).toHaveCount(1);
+  await page.locator('[data-node] title', { hasText: /^DP$/ }).locator('..').click();
+  await page.keyboard.press('t');
+  await expect.poll(() => code(page)).toContain('[DP [D the] [N cat]]');
+});
+
+test('add an existing constituent again by clicking it (a chain)', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP what] [VP [V see]]]');
+  await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
+  await page.locator('[data-node] title', { hasText: /^VP$/ }).locator('..').click();
+  await page.locator('.node-bar button[title^="Add an existing"]').click();
+  await page.locator('.menu-list button', { hasText: 'Add as a daughter' }).click();
+  await page.locator('[data-node] title', { hasText: /^DP$/ }).first().locator('..').click();
+  await expect.poll(() => code(page)).toBe('[CP [DP#dp what] [VP [V see] #dp]]');
+  // copies view: a gray copy and an arrow
+  await expect(page.locator('.prims text', { hasText: 'what' })).toHaveCount(2);
+  await expect(page.locator('.arrow-hit')).toHaveCount(1);
+  await page.locator('.chain-switch button', { hasText: 'Traces' }).click();
+  await expect(page.locator('.prims text', { hasText: /^t$/ })).toHaveCount(1);
+});
+
+test('semantics example computes meanings', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('examples-button').click();
+  await page.locator('[data-example="semantics"]').click();
+  await expect(page.locator('.prims text', { hasText: 'agent' }).first()).toBeVisible();
+  await expect(page.locator('.prims text', { hasText: /^✗/ })).toHaveCount(0);
+});
+
+test('guide opens', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('guide').click();
+  await page.locator('.guide-nav button', { hasText: 'Semantics' }).click();
+  await expect(page.locator('.guide-body')).toContainText('Event Identification');
 });

@@ -1,7 +1,7 @@
 import type { Scene } from '../core/scene';
 import { colorHex } from '../core/latex';
 import type { FontId } from '../core/style';
-import { embeddedFontCss, facesFor, fetchBytes } from '../fonts';
+import { embeddedFontCss, facePool, facesFor, fetchBytes } from '../fonts';
 import { woffToSfnt } from '../fonts/woff';
 import type { FontFace } from '../fonts/fonts.generated';
 import { sceneToSvg } from '../render/svg';
@@ -59,7 +59,7 @@ export async function pdfBlob(scene: Scene, transparent: boolean): Promise<Blob>
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkitMod.default ?? fontkitMod);
   pdf.setTitle('Syntax tree');
-  pdf.setCreator('Treeform');
+  pdf.setCreator('NanoTrees');
   const k = 0.75; // px → pt
   const W = scene.width * k;
   const H = scene.height * k;
@@ -74,19 +74,28 @@ export async function pdfBlob(scene: Scene, transparent: boolean): Promise<Blob>
     let p = embedded.get(f);
     if (!p) {
       // WOFF must be unpacked; the subsetter loses glyphs of the symbol font, so it is embedded whole
-      p = fetchBytes(f.sfnt).then((b) => pdf.embedFont(woffToSfnt(b), { subset: f.id !== 'symbols' }));
+      p = fetchBytes(f.sfnt)
+        .then((b) => pdf.embedFont(woffToSfnt(b), { subset: f.id !== 'symbols' }))
+        .catch(() => {
+          // e.g. an installed font in a format pdf-lib cannot read (font collections): use CMU
+          const cmu = facesFor('cmu', 'a', [{ weight: f.weight, style: f.style }])[0] ?? facesFor('cmu', 'a')[0];
+          return fetchBytes(cmu.sfnt).then((b) => pdf.embedFont(woffToSfnt(b), { subset: true }));
+        });
       embedded.set(f, p);
     }
     return p;
   };
+  const pool = await facePool(font);
   const facesByVariant = new Map<string, FontFace[]>();
   const facesFor2 = (weight: number, style: string) => {
     const key = weight + style;
     let fs = facesByVariant.get(key);
     if (!fs) {
-      fs = facesFor(font, allText, [{ weight, style }]);
-      if (!fs.length && style === 'italic') fs = facesFor(font, allText, [{ weight, style: 'normal' }]);
-      if (!fs.length && weight === 700) fs = facesFor(font, allText, [{ weight: 400, style }]);
+      fs = facesFor(font, allText, [{ weight, style }], pool);
+      if (!fs.length && style === 'italic') fs = facesFor(font, allText, [{ weight, style: 'normal' }], pool);
+      if (!fs.length && weight === 700) fs = facesFor(font, allText, [{ weight: 400, style }], pool);
+      // an installed font whose files cannot be read: fall back to Computer Modern
+      if (!fs.length) fs = facesFor('cmu', allText, [{ weight: 400, style }]);
       // fallback for symbols the font lacks (CMU has no ′ or ∅, Caveat no Greek)
       fs = [...fs, ...facesFor('symbols' as FontId, allText)];
       facesByVariant.set(key, fs);

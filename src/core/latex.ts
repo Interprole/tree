@@ -1,4 +1,5 @@
 import { layoutArrows } from './arrows';
+import { semDisplay } from './layout';
 import type { Layout } from './layout';
 import type { DArrow, DNode, DTree } from './model';
 import type { Run, Runs } from './richtext';
@@ -33,7 +34,7 @@ const MATH: Record<string, string> = {
   '∅': '\\varnothing', Ø: '\\varnothing', '′': "{}'", '″': "{}''", '⟨': '\\langle', '⟩': '\\rangle', '→': '\\rightarrow',
   '←': '\\leftarrow', '⇒': '\\Rightarrow', '±': '\\pm', '×': '\\times', '·': '\\cdot', '√': '\\surd', '∀': '\\forall',
   '∃': '\\exists', '∈': '\\in', '∪': '\\cup', '∩': '\\cap', '¬': '\\neg', '⊂': '\\subset', '⊃': '\\supset', '≺': '\\prec',
-  '⁰': '^{0}', '•': '\\bullet', '♯': '\\sharp', '♭': '\\flat', '✓': '\\checkmark',
+  '⁰': '^{0}', '∧': '\\wedge', '∨': '\\vee', '↔': '\\leftrightarrow', '⟦': '[\\![', '⟧': ']\\!]', '•': '\\bullet', '♯': '\\sharp', '♭': '\\flat', '✓': '\\checkmark',
 };
 
 const TEXT: Record<string, string> = {
@@ -127,16 +128,19 @@ function labelTex(n: DNode, style: TreeStyle): string {
   let t = texRuns(n.label);
   if (n.kind === 'leaf' && style.leafItalic && t) t = `\\textit{${t}}`;
   if (n.kind === 'phrase' && style.nodeBold && t) t = `\\textbf{${t}}`;
-  if (n.copy) {
-    if (style.copyStyle === 'angle') t = `$\\langle$${t}$\\rangle$`;
+  if (n.copy && t) {
+    if (style.copyStyle === 'angle' && n.kind === 'leaf') t = `$\\langle$${t}$\\rangle$`;
     else if (style.copyStyle === 'strike') t = `\\tfstrike{${t}}`;
-    else t = `\\textcolor{gray}{${t}}`;
+    else if (style.copyStyle === 'gray') t = `\\textcolor{gray}{${t}}`;
   }
+  if (n.struck && !(n.copy && style.copyStyle === 'strike') && t) t = `\\tfstrike{${t}}`;
   const lines = [t];
   if (n.features?.length) {
     const f = n.features.map((x) => texRuns(x)).join('\\\\ ');
     lines.push(`{\\footnotesize$\\left[\\mbox{\\begin{tabular}{@{}l@{}}${f}\\end{tabular}}\\right]$}`);
   }
+  const sem = semDisplay(n);
+  if (sem && sem.kind !== 'error') lines.push(`{\\small ${texRuns(sem.runs)}}`);
   if (n.gloss?.length) for (const g of n.gloss) lines.push(`{\\small ${texRuns(g)}}`);
   return lines.join('\\\\ ');
 }
@@ -227,11 +231,11 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     const content = labelTex(n, style);
     if (content.includes('\\\\')) opts.push('align=center', 'base=top');
     if (parent?.triangle && n.kind === 'leaf') opts.push('roof');
-    const tc = colors.name(n.copy && style.copyStyle === 'grey' ? undefined : n.color);
+    const tc = colors.name(n.copy && style.copyStyle === 'gray' ? undefined : n.color);
     if (tc) opts.push(`text=${tc}`);
-    const ec = colors.name(n.branchColor);
+    const ec = parent && parent.branchColor === n.branchColor ? colors.name(n.branchColor) : null;
     if (ec && parent) opts.push(`edge=${ec}`);
-    if (n.copy && style.copyStyle === 'grey' && parent) opts.push('edge={gray, densely dashed}');
+    if (n.copy && style.copyStyle === 'gray' && parent) opts.push('edge={gray, densely dashed}');
     if (!plain(n.label).trim() && !n.features?.length && n.kind === 'phrase') opts.push('coordinate');
     const kids = n.children.filter((c) => c.parents.length < 2 || host.get(c) === n);
     const head = `[{${content}}${opts.length ? ', ' + opts.join(', ') : ''}`;

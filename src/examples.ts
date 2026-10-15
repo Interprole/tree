@@ -5,8 +5,8 @@ type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]>
 
 export interface Example {
   id: string;
-  title: { en: string; ru: string };
-  note: { en: string; ru: string };
+  title: string;
+  note: string;
   src: string;
   build?: DeepPartial<BuildOptions>;
   style?: Partial<TreeStyle>;
@@ -15,11 +15,8 @@ export interface Example {
 export const examples: Example[] = [
   {
     id: 'xbar',
-    title: { en: 'X-bar: auto-projected clause', ru: 'X-bar: автоматические проекции' },
-    note: {
-      en: 'Written in shorthand; X-bar mode builds the X′ levels.',
-      ru: 'Записано сокращённо; режим X-bar сам достраивает уровни X′.',
-    },
+    title: 'X-bar: auto-projected clause',
+    note: 'Written in shorthand; X-bar mode builds the X′ levels.',
     src: `% X-bar mode completes XP → X′ → X
 [TP [DP [D the] [NP student]]
     [T will]
@@ -29,24 +26,31 @@ export const examples: Example[] = [
   },
   {
     id: 'wh',
-    title: { en: 'Wh-question with movement arrows', ru: 'Wh-вопрос со стрелками передвижения' },
-    note: {
-      en: 'Arrows come from coindexed traces (t_i, t_j); drag an arrow to bend it.',
-      ru: 'Стрелки строятся по коиндексации следов (t_i, t_j); стрелку можно изгибать мышью.',
-    },
-    src: `[CP [DP_i what]
-    [C' [C did_j]
+    title: 'Wh-movement and T-to-C as chains',
+    note: '[DP#wh …] and #wh are two positions of one constituent. Switch between copies, traces and multidominance.',
+    src: `% #wh and #t mark the positions of a moved constituent
+[CP [DP#wh what]
+    [C' [C #t]
         [TP [DP Mary]
-            [T' [T t_j]
-                [VP [V buy] [DP t_i]]]]]]`,
+            [T' [T#t did]
+                [VP [V buy] #wh]]]]]`,
+  },
+  {
+    id: 'head',
+    title: 'Head movement: V-to-v-to-T',
+    note: 'An arrow between two heads is head movement: the source is struck through, the target becomes V+v.',
+    src: `[TP [DP#subj she]
+    [T' [T#t -s]
+        [vP #subj
+            [v' [v#v ∅]
+                [VP [V#root sing] [DP songs]]]]]]
+#root -> #v
+#v -> #t`,
   },
   {
     id: 'bps',
-    title: { en: 'Bare Phrase Structure: computed labels', ru: 'BPS: вычисляемые ярлыки' },
-    note: {
-      en: 'Non-terminals are unlabelled; * marks the projecting daughter. Try the label style switch.',
-      ru: 'Нетерминалы без ярлыков; * отмечает проецирующую дочку. Переключите вид ярлыков.',
-    },
+    title: 'Bare Phrase Structure: computed labels',
+    note: 'Non-terminals are unlabelled; * marks the projecting daughter. Try the label style switch.',
     src: `% * marks the daughter that projects
 [ [ [D* the] [N cat]]
   [* [T* will]
@@ -55,11 +59,9 @@ export const examples: Example[] = [
   },
   {
     id: 'atb',
-    title: { en: 'Multidominance: ATB wh-movement', ru: 'Мультидоминирование: ATB-передвижение' },
-    note: {
-      en: 'One wh-phrase with three mothers: [DP#wh …] defines it, #wh re-merges it.',
-      ru: 'Одна wh-группа с тремя матерями: [DP#wh …] задаёт узел, #wh — повторное слияние.',
-    },
+    title: 'Multidominance: ATB wh-movement',
+    note: 'One wh-phrase with three mothers: [DP#wh …] defines it, #wh re-merges it.',
+    build: { chains: 'multidominance' },
     src: `[CP [DP#wh which book]
     [C' [C did]
         [&P [TP [DP John] [VP [V buy] #wh]]
@@ -68,11 +70,8 @@ export const examples: Example[] = [
   },
   {
     id: 'nano',
-    title: { en: 'Nanosyntax: case sequence', ru: 'Наносинтаксис: падежная последовательность' },
-    note: {
-      en: 'Feature stacks in {…}; the coloured branch is spelled out by one morpheme.',
-      ru: 'Стопки признаков в {…}; выделенная ветка лексикализуется одной морфемой.',
-    },
+    title: 'Nanosyntax: case sequence',
+    note: 'Feature stacks in {…}; the coloured branch is spelled out by one morpheme.',
     src: `% Caha (2009): NOM ⊂ ACC ⊂ GEN ⊂ DAT
 [DatP{K1, K2, K3, K4}
   [K4]
@@ -87,11 +86,8 @@ export const examples: Example[] = [
   },
   {
     id: 'russian',
-    title: { en: 'Russian sentence with glosses', ru: 'Русское предложение с глоссами' },
-    note: {
-      en: 'Glosses go after | ; ALL-CAPS abbreviations are set in small caps.',
-      ru: 'Глоссы пишутся после | ; аббревиатуры ПРОПИСНЫМИ набираются капителью.',
-    },
+    title: 'Russian sentence with glosses',
+    note: 'Glosses go after | ; ALL-CAPS abbreviations are set in small caps.',
     src: `[TP [DP мальчик | boy.NOM]
     [T' [T ∅]
         [VP [V читает | read.PRS.3SG]
@@ -100,18 +96,15 @@ export const examples: Example[] = [
     style: { leavesAtBottom: true },
   },
   {
-    id: 'binding',
-    title: { en: 'Binding theory check', ru: 'Проверка принципов связывания' },
-    note: {
-      en: 'Turn on the binding check: himself_i is not bound in its clause (Principle A).',
-      ru: 'Включите проверку связывания: himself_i не связан в своей клаузе (Принцип A).',
-    },
-    src: `[TP [DP_i John]
-    [T' [T -s]
-        [VP [V think]
-            [CP [C that]
-                [TP [DP Bill]
-                    [T' [T -s]
-                        [VP [V like] [DP himself_i]]]]]]]]`,
+    id: 'semantics',
+    title: 'Compositional semantics: Event Identification',
+    note: 'Meanings go between $…$. The tree computes the rest: FA, Predicate Conjunction, Event Identification, Function Composition.',
+    src: `% meanings of the leaves; the rest is computed (Kratzer 1996)
+[VoiceP [DP Mary $mary : e$]
+  [Voice' [Voice $λx_e.λe_s. agent(e)(x)$]
+          [VP [V fed $λx_e.λe_s. feed(e) ∧ theme(e)(x)$]
+              [DP [D the $λP_<e,t>. ιx. P(x)$]
+                  [NP [A gray $λx. gray(x)$] [N cat $λx. cat(x)$]]]]]]`,
+    build: { semantics: { show: true, compute: true, types: true } },
   },
 ];
