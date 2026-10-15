@@ -58,6 +58,9 @@ export function texEscape(s: string): string {
 function texRun(r: Run): string {
   let t = texEscape(r.sc ? r.text.toLowerCase() : r.text);
   if (r.sc) t = `\\textsc{${t}}`;
+  if (r.b) t = `\\textbf{${t}}`;
+  if (r.i) t = `\\textit{${t}}`;
+  if (r.s) t = `\\tfstrike{${t}}`;
   if (r.over) t = `$\\overline{\\mbox{${t}}}$`;
   if (r.sub) t = `\\textsubscript{${t}}`;
   if (r.sup) t = `\\textsuperscript{${t}}`;
@@ -174,7 +177,13 @@ function arrowTikz(a: DArrow, names: Map<DNode, string>, layout: Layout | undefi
   const col = colors.name(a.color);
   if (col) opts.push(col);
   opts.push('semithick');
-  const label = a.label ? ` node[midway, below, font=\\small\\itshape]{${texEscape(a.label)}}` : '';
+  const label = a.labels
+    .map((l) => {
+      const side = l.side === 'auto' ? (a.route === 'under' ? 'below' : 'right') : l.side;
+      const shift = l.off ? `, xshift=${px2pt(l.off[0])}pt, yshift=${px2pt(-l.off[1])}pt` : '';
+      return ` node[midway, ${side}${shift}, font=\\small\\itshape]{${texRuns(l.runs)}}`;
+    })
+    .join('');
   if (a.route === 'curve') {
     const s = names.get(a.from)!;
     const t = names.get(a.to)!;
@@ -233,8 +242,15 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     if (parent?.triangle && n.kind === 'leaf') opts.push('roof');
     const tc = colors.name(n.copy && style.copyStyle === 'gray' ? undefined : n.color);
     if (tc) opts.push(`text=${tc}`);
-    const ec = parent && parent.branchColor === n.branchColor ? colors.name(n.branchColor) : null;
-    if (ec && parent) opts.push(`edge=${ec}`);
+    const ec = n.edgeColor ? colors.name(n.edgeColor) : parent && parent.branchColor === n.branchColor ? colors.name(n.branchColor) : null;
+    const edgeOpts = [ec, n.edgeWidth !== undefined ? `line width=${px2pt(n.edgeWidth)}pt` : null].filter(Boolean);
+    if (edgeOpts.length && parent) opts.push(`edge={${edgeOpts.join(', ')}}`);
+    if (n.edgeLen) opts.push(`l+=${px2pt(n.edgeLen)}pt`);
+    if (n.spread) opts.push(`for children={s sep+=${px2pt(n.spread)}pt}`);
+    for (const note of n.notes ?? []) {
+      const side = { left: 'left', right: 'right', above: 'above', below: 'below', auto: 'right' }[note.side];
+      opts.push(`label={[font=\\small]${side}:{${texRuns(note.runs)}}}`);
+    }
     if (n.copy && style.copyStyle === 'gray' && parent) opts.push('edge={gray, densely dashed}');
     if (!plain(n.label).trim() && !n.features?.length && n.kind === 'phrase') opts.push('coordinate');
     const kids = n.children.filter((c) => c.parents.length < 2 || host.get(c) === n);

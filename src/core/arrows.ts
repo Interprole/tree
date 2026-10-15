@@ -12,10 +12,15 @@ export interface ArrowGeom {
   p3: [number, number];
   /** the draggable handle (lowest point / apex of the curve) */
   handle: [number, number];
-  /** label anchor (centre, baseline) */
-  labelAt?: [number, number];
+  /** label positions (centre, baseline) and widths */
+  labels: { x: number; y: number; w: number; index: number }[];
   level: number;
+  /** curve arrows: unit vector pointing outwards */
+  outward?: [number, number];
 }
+
+/** Width of a label's text (approximate when no measurer is given). */
+export type LabelWidth = (runs: import('./richtext').Runs) => number;
 
 /** The lowest point of everything a node dominates. */
 function subtreeBottom(layout: Layout, n: DNode, memo: Map<DNode, number>): number {
@@ -42,7 +47,7 @@ export function cubicAt(g: Pick<ArrowGeom, 'p0' | 'p1' | 'p2' | 'p3'>, t: number
  * below the tree and come up under the landing site; nested and overlapping arrows get separate
  * levels so they never run on top of each other.
  */
-export function layoutArrows(layout: Layout, arrows: DArrow[]): { geoms: ArrowGeom[]; box: Box } {
+export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: LabelWidth): { geoms: ArrowGeom[]; box: Box } {
   const style = layout.style;
   const m = metricsFor(style);
   const memo = new Map<DNode, number>();
@@ -118,10 +123,11 @@ export function layoutArrows(layout: Layout, arrows: DArrow[]): { geoms: ArrowGe
         p2: [tx + dx, Math.max(yL, ty)],
         p3: [tx, ty],
         handle: [0, 0],
+        labels: [],
         level,
       };
       g.handle = cubicAt(g, 0.5);
-      if (a.label) g.labelAt = [g.handle[0], g.handle[1] + m.fs * 0.95];
+      g.labels = [];
       geoms.push(g);
     } else {
       // direct curve from the source label to the target label, bulging outwards
@@ -150,10 +156,12 @@ export function layoutArrows(layout: Layout, arrows: DArrow[]): { geoms: ArrowGe
         p2: [tx + (2 / 3) * (cx - tx), ty + (2 / 3) * (cy - ty)],
         p3: [tx, ty],
         handle: [0, 0],
+        labels: [],
         level: 0,
       };
       g.handle = cubicAt(g, 0.5);
-      if (a.label) g.labelAt = [g.handle[0] + nx * m.fs * 0.8, g.handle[1] + ny * m.fs * 0.8 + m.fs * 0.3];
+      g.labels = [];
+      g.outward = [nx, ny];
       geoms.push(g);
     }
   }
@@ -165,11 +173,36 @@ export function layoutArrows(layout: Layout, arrows: DArrow[]): { geoms: ArrowGe
       box.y1 = Math.min(box.y1, y - 6);
       box.y2 = Math.max(box.y2, y + 6);
     }
-    if (g.labelAt) {
-      const w = (g.arrow.label!.length * m.fs * 0.55) / 2 + 4;
-      box.x1 = Math.min(box.x1, g.labelAt[0] - w);
-      box.x2 = Math.max(box.x2, g.labelAt[0] + w);
-      box.y2 = Math.max(box.y2, g.labelAt[1] + m.fs * 0.35);
+    // labels: auto = below an "under" arrow / outside a curve; or above, below, left, right; plus drag offset
+    const lh = m.fs * 0.95;
+    let stackBelow = 0;
+    let stackAbove = 0;
+    for (const l of g.arrow.labels) {
+      const w = labelWidth ? labelWidth(l.runs) : l.runs.reduce((s, r) => s + r.text.length, 0) * m.fs * 0.45;
+      const [hx, hy] = g.handle;
+      let x = hx;
+      let y = hy;
+      let side = l.side;
+      if (side === 'auto') side = g.arrow.route === 'under' ? 'below' : g.outward && g.outward[0] < 0 ? 'left' : 'right';
+      if (side === 'below') {
+        y = hy + lh * (1 + stackBelow);
+        stackBelow++;
+      } else if (side === 'above') {
+        y = hy - lh * (0.6 + stackAbove);
+        stackAbove++;
+      } else {
+        x = side === 'left' ? hx - w / 2 - 8 : hx + w / 2 + 8;
+        y = hy + m.fs * 0.3 + lh * (side === 'left' ? stackAbove++ : stackBelow++);
+      }
+      if (l.off) {
+        x += l.off[0];
+        y += l.off[1];
+      }
+      g.labels.push({ x, y, w, index: l.index });
+      box.x1 = Math.min(box.x1, x - w / 2 - 4);
+      box.x2 = Math.max(box.x2, x + w / 2 + 4);
+      box.y1 = Math.min(box.y1, y - m.fs);
+      box.y2 = Math.max(box.y2, y + m.fs * 0.35);
     }
   }
   return { geoms, box };
