@@ -36,10 +36,10 @@ describe('parser', () => {
     expect((d.root!.children[1] as ANode).children[0]).toMatchObject({ text: 'кошка' });
   });
 
-  test('modifiers: id, head, colours', () => {
-    const d = ok('[DP#1*@red [D@@#c00 the] [NP cat]]');
+  test('modifiers: id, colours', () => {
+    const d = ok('[DP#1@red [D@@#c00 the] [NP cat]]');
     const r = d.root!;
-    expect(r).toMatchObject({ label: 'DP', id: '1', head: true, color: 'red' });
+    expect(r).toMatchObject({ label: 'DP', id: '1', color: 'red' });
     expect((r.children[0] as ANode).branchColor).toBe('#c00');
     expect(d.ids.get('1')).toBe(r);
   });
@@ -66,7 +66,8 @@ describe('parser', () => {
 
   test('multidominance references and arrows', () => {
     const d = ok('[&P [TP John [VP likes #1]] [&′ and [TP Mary [VP hates [DP#1 what]]]]]\n#1 -> #1 dashed "ATB"');
-    expect(d.arrows[0]).toMatchObject({ from: '1', to: '1', line: 'dashed', label: 'ATB', head: 'end', route: 'under' });
+    expect(d.arrows[0]).toMatchObject({ from: '1', to: '1', line: 'dashed', head: 'end', route: 'under' });
+    expect(d.arrows[0].labels[0].text).toBe('ATB');
   });
 
   test('arrow options', () => {
@@ -84,7 +85,7 @@ describe('parser', () => {
   });
 
   test('empty label', () => {
-    const d = ok('[ [D* the] [N cat]]');
+    const d = ok('[ [D the] [N cat]]');
     expect(d.root!.label).toBe('');
     expect(d.root!.children).toHaveLength(2);
   });
@@ -146,5 +147,38 @@ describe('inline markup', () => {
   test('gloss small caps', () => {
     const r = parseRich('read-PRS.3SG.F I', { smallCaps: true });
     expect(r.filter((x) => x.sc).map((x) => x.text)).toEqual(['prs', '3sg', 'f']);
+  });
+});
+
+describe('markdown in labels', () => {
+  test('bold, italic, strike; unmatched markers stay literal', () => {
+    expect(parseRich('**DP** *big* ~~old~~ *John')).toEqual([{ text: 'DP', b: true }, { text: ' ' }, { text: 'big', i: true }, { text: ' ' }, { text: 'old', s: true }, { text: ' *John' }]);
+    expect(parseRich('**DP**_i')).toEqual([{ text: 'DP', b: true }, { text: 'i', sub: true }]);
+    expect(parseRich('\\*x\\*')).toEqual([{ text: '*x*' }]);
+  });
+});
+
+describe('notes, options, positions', () => {
+  test('node options and notes', () => {
+    const d = ok('[DP;edge=red;width=2;len=20 &right"focus"@4,-2 &"x" the cat]');
+    expect(d.root!.opts).toEqual({ edge: 'red', width: '2', len: '20' });
+    expect(d.root!.notes!.map((n) => [n.text, n.side, n.off])).toEqual([['focus', 'right', [4, -2]], ['x', 'auto', undefined]]);
+    expect(d.root!.children[0]).toMatchObject({ kind: 'leaf', text: 'the cat' });
+  });
+  test('option values can be hex colours', () => {
+    expect(ok('[DP;edge=#b91c1c;sem=#06c#d x]').root).toMatchObject({ opts: { edge: '#b91c1c', sem: '#06c' }, id: 'd' });
+  });
+  test('chain position with its own words and meaning', () => {
+    const d = ok('[CP [DP#wh which book] [VP read #wh!"which"$x : e$]]');
+    const ref = (d.root!.children[1] as ANode).children[1];
+    expect(ref).toMatchObject({ kind: 'ref', id: 'wh', pronounce: true, text: 'which', sem: 'x : e' });
+  });
+  test('several arrow labels with sides and offsets', () => {
+    const d = ok('[A#a [B#b x]]\n#b -> #a "one" above"two"@3,4');
+    expect(d.arrows[0].labels.map((l) => [l.text, l.side, l.off])).toEqual([['one', 'auto', undefined], ['two', 'above', [3, 4]]]);
+  });
+  test('bad node option', () => {
+    const r = parse('[DP;foo=1 x]');
+    expect(r.ok).toBe(false);
   });
 });

@@ -14,7 +14,6 @@ export interface ANode {
   /** span of the whole header token: label + modifiers (#id, *, @color) */
   headerSpan: Span;
   id?: string;
-  head?: boolean;
   color?: string;
   branchColor?: string;
   triangle?: boolean;
@@ -27,6 +26,10 @@ export interface ANode {
   /** semantic value: "formula : type" between $…$ */
   sem?: string;
   semSpan?: Span;
+  /** header options ;key=value: edge, width, len, spread, sem */
+  opts?: Record<string, string>;
+  /** notes next to the node: &right"text"@dx,dy */
+  notes?: ALabel[];
   /** gloss lines attached to the node itself (when there is no terminal) */
   gloss?: string[];
   children: AChild[];
@@ -48,6 +51,20 @@ export interface ARef {
   id: string;
   /** true = pronounced (#id!), false = silent (#id?) */
   pronounce?: boolean;
+  /** pronounced with other words: #wh!"whom" */
+  text?: string;
+  /** meaning of this position: #wh$x : e$ */
+  sem?: string;
+  span: Span;
+}
+
+export type LabelSide = 'auto' | 'left' | 'right' | 'above' | 'below';
+
+/** a label of an arrow or a note of a node: side"text"@dx,dy */
+export interface ALabel {
+  text: string;
+  side: LabelSide;
+  off?: [number, number];
   span: Span;
 }
 
@@ -68,7 +85,7 @@ export interface AArrow {
   head: ArrowHead;
   line: ArrowLine;
   route: ArrowRoute;
-  label?: string;
+  labels: ALabel[];
   color?: string;
   /** user offset of the control handle */
   bend?: [number, number];

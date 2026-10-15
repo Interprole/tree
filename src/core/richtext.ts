@@ -18,6 +18,10 @@ export interface Run {
   sc?: boolean;
   /** overline (X-bar "bar" notation) */
   over?: boolean;
+  /** markdown: **bold**, *italic*, ~~strike~~ */
+  b?: boolean;
+  i?: boolean;
+  s?: boolean;
 }
 
 export type Runs = Run[];
@@ -48,14 +52,12 @@ export interface RichOptions {
 function push(runs: Runs, text: string, style: Omit<Run, 'text'> = {}) {
   if (!text) return;
   const last = runs[runs.length - 1];
-  if (last && !!last.sub === !!style.sub && !!last.sup === !!style.sup && !!last.sc === !!style.sc && !!last.over === !!style.over) {
+  const keys = ['sub', 'sup', 'sc', 'over', 'b', 'i', 's'] as const;
+  if (last && keys.every((k) => !!last[k] === !!style[k])) {
     last.text += text;
   } else {
     const r: Run = { text };
-    if (style.sub) r.sub = true;
-    if (style.sup) r.sup = true;
-    if (style.sc) r.sc = true;
-    if (style.over) r.over = true;
+    for (const k of keys) if (style[k]) r[k] = true;
     runs.push(r);
   }
 }
@@ -134,14 +136,41 @@ export function parseRich(src: string, opts: RichOptions = {}): Runs {
   const runs: Runs = [];
   let i = 0;
   let buf = '';
+  const cur: { b?: boolean; i?: boolean; s?: boolean } = {};
   const flush = () => {
     if (!buf) return;
-    if (opts.smallCaps) smallCapsSplit(runs, buf, {});
-    else push(runs, buf);
+    if (opts.smallCaps) smallCapsSplit(runs, buf, { ...cur });
+    else push(runs, buf, { ...cur });
     buf = '';
+  };
+  /** a closing single * after position k (not part of **) */
+  const closingStar = (k: number) => {
+    for (let j = k; j < src.length; j++) {
+      if (src[j] === '\\') {
+        j++;
+        continue;
+      }
+      if (src[j] === '*' && src[j + 1] !== '*' && src[j - 1] !== '*') return true;
+    }
+    return false;
   };
   while (i < src.length) {
     const c = src[i];
+    // markdown: a marker only counts when it is closed later
+    if (src.startsWith('**', i) || src.startsWith('~~', i)) {
+      const key = c === '*' ? 'b' : 's';
+      if (cur[key] || src.indexOf(src.slice(i, i + 2), i + 2) >= 0) {
+        flush();
+        cur[key] = !cur[key];
+        i += 2;
+        continue;
+      }
+    } else if (c === '*' && (cur.i || closingStar(i + 1))) {
+      flush();
+      cur.i = !cur.i;
+      i++;
+      continue;
+    }
     if (c === '\\') {
       const m = readMacro(src, i);
       buf += m.text;
@@ -158,7 +187,7 @@ export function parseRich(src: string, opts: RichOptions = {}): Runs {
     } else if ((c === '_' || c === '^') && i + 1 < src.length) {
       flush();
       const s = readScript(src, i + 1);
-      const style = c === '_' ? { sub: true } : { sup: true };
+      const style = c === '_' ? { ...cur, sub: true } : { ...cur, sup: true };
       // nested markup inside a script group (e.g. _{i'}) – keep it simple: macros resolved above
       push(runs, opts.primes ? s.text.replace(/'/g, '′') : s.text, style);
       i = s.end;
