@@ -1,4 +1,4 @@
-import type { AArrow, ADoc, ALeaf, ANode } from './ast';
+import type { AArrow, AChild, ADoc, ALeaf, ANode, ARef } from './ast';
 import { walkAst } from './parser';
 
 /**
@@ -46,12 +46,15 @@ export function escapeText(s: string): string {
   return t;
 }
 
-export function modifiers(n: Pick<ANode, 'id' | 'head' | 'color' | 'branchColor'>): string {
-  return (n.id ? '#' + n.id : '') + (n.head ? '*' : '') + (n.color ? '@' + n.color : '') + (n.branchColor ? '@@' + n.branchColor : '');
+type Mods = Pick<ANode, 'id' | 'head' | 'color' | 'branchColor' | 'pronounce'>;
+
+export function modifiers(n: Mods): string {
+  const voice = n.id && n.pronounce !== undefined ? (n.pronounce ? '!' : '?') : '';
+  return (n.id ? '#' + n.id : '') + voice + (n.head ? '*' : '') + (n.color ? '@' + n.color : '') + (n.branchColor ? '@@' + n.branchColor : '');
 }
 
-function setModifiers(n: ANode, patch: Partial<Pick<ANode, 'id' | 'head' | 'color' | 'branchColor'>>): TextChange {
-  const next = { id: n.id, head: n.head, color: n.color, branchColor: n.branchColor, ...patch };
+function setModifiers(n: ANode, patch: Partial<Mods>): TextChange {
+  const next = { id: n.id, head: n.head, color: n.color, branchColor: n.branchColor, pronounce: n.pronounce, ...patch };
   const ins = modifiers(next);
   // a node without a header token: the header starts right after "["; an empty label followed
   // directly by a child needs a separating space
@@ -72,10 +75,99 @@ export function renameLeaf(l: ALeaf, text: string): Edit {
   return { changes: [{ from: l.span.from, to: l.span.to, insert: ins }], select: { from: l.span.from, to: l.span.from + ins.length } };
 }
 
-export function addChild(n: ANode, label = 'X'): Edit {
+export function addChild(n: ANode | ALeaf, label = 'X'): Edit {
+  if (n.kind === 'leaf') {
+    // a terminal gets a daughter: it becomes a node labelled with its text
+    const ins = `[${n.text} [${label}]]`;
+    const at = n.span.from + n.text.length + 3;
+    return { changes: [{ from: n.span.from, to: n.span.to, insert: ins }], select: { from: at, to: at + label.length } };
+  }
   const at = n.span.to - 1;
   const ins = ` [${label}]`;
   return { changes: [{ from: at, to: at, insert: ins }], select: { from: at + 2, to: at + 2 + label.length } };
+}
+
+/** Insert a reference to another constituent (a new position of the same element). */
+export function addCopy(doc: ADoc, target: ANode, place: { kind: 'daughter'; of: ANode } | { kind: 'sister'; of: ANode | ALeaf }): Edit {
+  const { id, change } = ensureId(doc, target);
+  const at = place.kind === 'daughter' ? place.of.span.to - 1 : place.of.kind === 'leaf' ? place.of.fullSpan.to : place.of.span.to;
+  const changes: TextChange[] = [{ from: at, to: at, insert: ` #${id}` }];
+  if (change) changes.push(change);
+  return { changes };
+}
+
+/** Replace (or add) the feature stack. */
+export function setFeatures(n: ANode, features: string): Edit {
+  const body = features.trim();
+  if (n.featureSpan) return { changes: [{ from: n.featureSpan.from, to: n.featureSpan.to, insert: body ? `{${body}}` : '' }] };
+  if (!body) return { changes: [] };
+  return { changes: [{ from: n.headerSpan.to, to: n.headerSpan.to, insert: `{${body}}` }] };
+}
+
+/** Replace (or add) the meaning $…$. */
+export function setMeaning(n: ANode, formula: string): Edit {
+  const body = formula.trim().replace(/\$/g, '\\$');
+  if (n.semSpan) return { changes: [{ from: n.semSpan.from, to: n.semSpan.to, insert: body ? `$${body}$` : '' }] };
+  if (!body) return { changes: [] };
+  const at = n.span.to - 1;
+  return { changes: [{ from: at, to: at, insert: ` $${body}$` }] };
+}
+
+/** Pronounce / silence one position of a chain (the defining node or a #ref). */
+export function setPronounce(occurrence: { node: ANode } | { ref: ARef }, value: boolean | undefined): Edit {
+  if ('node' in occurrence) return { changes: [setModifiers(occurrence.node, { pronounce: value })] };
+  const r = occurrence.ref;
+  const id = r.id;
+  return { changes: [{ from: r.span.from, to: r.span.to, insert: `#${id}${value === undefined ? '' : value ? '!' : '?'}` }] };
+}
+
+/** Bundle two sister heads [X a] [Y b] into [X.Y a b] (Distributed Morphology). */
+export function bundle(src: string, x: ANode, y: ANode): Edit {
+  const [first, second] = x.span.from < y.span.from ? [x, y] : [y, x];
+  const content = (n: ANode) => src.slice(n.headerSpan.to, n.span.to - 1).trim();
+  const label = `${first.label}.${second.label}`;
+  const body = [content(first), content(second)].filter(Boolean).join(' ');
+  const merged = `[${label}${E_mods(first)}${body ? ' ' + body : ''}]`;
+  return {
+    changes: [
+      { from: first.span.from, to: first.span.to, insert: merged },
+      removeRange(src, second.span.from, second.span.to),
+    ],
+  };
+}
+
+function E_mods(n: ANode): string {
+  return modifiers({ id: n.id, head: n.head, color: n.color, branchColor: n.branchColor, pronounce: n.pronounce });
+}
+
+/** Re-bracket the daughters of a node: flat, right-branching or left-branching. */
+export function restructure(src: string, n: ANode, shape: 'flat' | 'right' | 'left'): Edit {
+  const kids = n.children;
+  if (!kids.length) return { changes: [] };
+  const spanOf = (c: AChild) => (c.kind === 'leaf' ? c.fullSpan : c.span);
+  const plainLabel = n.label;
+  // flatten: intermediate nodes that repeat the mother's label (or have none) and carry nothing else
+  const isIntermediate = (c: AChild): c is ANode =>
+    c.kind === 'node' && (c.label === plainLabel || c.label === '') && !c.id && !c.features && !c.sem && !c.triangle && !c.color && !c.branchColor && c.children.length > 0;
+  const items: string[] = [];
+  const collect = (list: AChild[]) => {
+    for (const c of list) {
+      if (isIntermediate(c)) collect(c.children);
+      else {
+        const sp = spanOf(c);
+        items.push(src.slice(sp.from, sp.to));
+      }
+    }
+  };
+  collect(kids);
+  const lab = plainLabel || '';
+  const wrap = (inner: string) => `[${lab} ${inner}]`;
+  const right = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${xs[0]} ${wrap(right(xs.slice(1)))}`);
+  const left = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${wrap(left(xs.slice(0, -1)))} ${xs[xs.length - 1]}`);
+  const body = shape === 'flat' ? items.join(' ') : shape === 'right' ? right(items) : left(items);
+  const from = spanOf(kids[0]).from;
+  const to = spanOf(kids[kids.length - 1]).to;
+  return { changes: [{ from, to, insert: body }] };
 }
 
 export function addSister(n: ANode | ALeaf, label = 'X'): Edit {
@@ -118,33 +210,19 @@ function dedupe(changes: TextChange[]): TextChange[] {
   return changes.filter((c, i) => !changes.some((o, j) => j !== i && o.from <= c.from && o.to >= c.to && (o.from !== c.from || o.to !== c.to || j < i)));
 }
 
-function leafTexts(n: ANode, doc: ADoc, seen = new Set<ANode>()): string[] {
-  if (seen.has(n)) return [];
-  seen.add(n);
-  const out: string[] = [];
-  for (const c of n.children) {
-    if (c.kind === 'leaf') out.push(c.text);
-    else if (c.kind === 'node') out.push(...leafTexts(c, doc, seen));
-    else {
-      const t = doc.ids.get(c.id);
-      if (t) out.push(...leafTexts(t, doc, seen));
-    }
-  }
-  return out;
-}
 
-/** Collapse a constituent into a triangle over its yield, or undo a triangle. */
-export function toggleTriangle(src: string, doc: ADoc, n: ANode): Edit {
+/** Draw a constituent as a triangle (the structure stays in the code), or undo it. */
+export function toggleTriangle(src: string, n: ANode): Edit {
   if (n.triangle && n.triangleSpan) {
     const s = n.triangleSpan;
-    return { changes: [{ from: s.from, to: s.to, insert: '' }] };
+    const to = src[s.to] === ' ' ? s.to + 1 : s.to;
+    return { changes: [{ from: s.from, to, insert: '' }] };
   }
-  const words = leafTexts(n, doc).join(' ');
-  const feats = n.featureSpan ? ' ' + src.slice(n.featureSpan.from, n.featureSpan.to) : '';
-  const gloss = n.children.flatMap((c) => (c.kind === 'leaf' ? c.gloss : []));
-  const g = gloss.length && n.children.filter((c) => c.kind === 'leaf').length === 1 ? gloss.map((x) => ' | ' + x).join('') : '';
-  const sep = n.headerSpan.from === n.headerSpan.to ? '' : ' ';
-  return { changes: [{ from: n.headerSpan.to, to: n.span.to - 1, insert: `${feats}${sep}^${words || '…'}${g}` }] };
+  const at = n.featureSpan && n.featureSpan.from === n.headerSpan.to ? n.featureSpan.to : n.headerSpan.to;
+  const next = src[at];
+  const emptyHeader = n.headerSpan.from === n.headerSpan.to && at === n.headerSpan.to;
+  const ins = emptyHeader ? (next === ' ' ? '^' : '^ ') : next === ' ' ? ' ^' : ' ^ ';
+  return { changes: [{ from: at, to: at, insert: ins }] };
 }
 
 export function setColor(n: ANode, color: string | null, branch: boolean): Edit {
@@ -176,7 +254,9 @@ export function ensureId(doc: ADoc, n: ANode, reserved: Set<string> = new Set())
 
 export function arrowLine(a: Omit<AArrow, 'span'>): string {
   const op = a.head === 'both' ? '<->' : a.head === 'start' ? '<-' : a.head === 'none' ? '--' : '->';
-  const parts = [`#${a.from} ${op} #${a.to}`];
+  const end = (id: string, occ?: number) => `#${id}${occ ? '/' + occ : ''}`;
+  const parts = [`${end(a.from, a.fromOcc)} ${op} ${end(a.to, a.toOcc)}`];
+  if (a.hidden) parts.push('hide');
   if (a.line !== 'solid') parts.push(a.line);
   if (a.route !== 'under') parts.push(a.route);
   if (a.color) parts.push('@' + a.color);
@@ -185,15 +265,21 @@ export function arrowLine(a: Omit<AArrow, 'span'>): string {
   return parts.join(' ');
 }
 
-/** Add an arrow between two nodes, giving them ids where needed. */
-export function addArrow(src: string, doc: ADoc, from: ANode, to: ANode, extra: Partial<AArrow> = {}): Edit {
+export interface Endpoint {
+  node: ANode;
+  /** position in a chain (1 = highest) */
+  occ?: number;
+}
+
+/** Add an arrow between two nodes (or chain positions), giving them ids where needed. */
+export function addArrow(src: string, doc: ADoc, from: Endpoint, to: Endpoint, extra: Partial<AArrow> = {}): Edit {
   const reserved = new Set<string>();
-  const a = ensureId(doc, from, reserved);
-  const b = from === to ? a : ensureId(doc, to, reserved);
+  const a = ensureId(doc, from.node, reserved);
+  const b = from.node === to.node ? a : ensureId(doc, to.node, reserved);
   const changes: TextChange[] = [];
   if (a.change) changes.push(a.change);
   if (b.change && b !== a) changes.push(b.change);
-  const line = arrowLine({ from: a.id, to: b.id, head: 'end', line: 'solid', route: 'under', ...extra });
+  const line = arrowLine({ from: a.id, to: b.id, fromOcc: from.occ, toOcc: to.occ, head: 'end', line: 'solid', route: 'under', ...extra });
   const trimmedEnd = src.replace(/\s+$/, '').length;
   changes.push({ from: trimmedEnd, to: src.length, insert: '\n' + line + '\n' });
   return { changes };

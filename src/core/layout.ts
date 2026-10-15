@@ -29,6 +29,8 @@ export interface Block {
   featureH: number;
   glossW: number;
   glossH: number;
+  semW: number;
+  semH: number;
   /** label is empty: branches meet at a point */
   point: boolean;
 }
@@ -84,10 +86,24 @@ export function fontFor(n: DNode, style: TreeStyle): FontSpec {
 }
 
 export function displayLabel(n: DNode, style: TreeStyle): Runs {
-  if (n.copy && style.copyStyle === 'angle' && (n.kind === 'leaf' || n.trace)) {
+  if (n.copy && style.copyStyle === 'angle' && n.kind === 'leaf') {
     return [{ text: '⟨' }, ...n.label, { text: '⟩' }];
   }
   return n.label;
+}
+
+/** The meaning line under a node: formula, type, composition rule, or an error. */
+export function semDisplay(n: DNode): { runs: Runs; kind: 'given' | 'computed' | 'error'; title?: string } | null {
+  const s = n.sem;
+  if (!s) return null;
+  if (s.error) {
+    const short = s.error.replace(/^No composition rule applies to (.*?) \(.*$/, 'no rule for $1').replace(/ and /, ' + ');
+    return { runs: [{ text: '✗ ' + (short.length > 70 ? short.slice(0, 68) + '…' : short) }], kind: 'error', title: s.error };
+  }
+  const runs: Runs = [...s.runs];
+  if (s.type) runs.push({ text: ' : ' + s.type });
+  if (s.computed && s.rule) runs.push({ text: '  ' + s.rule.toLowerCase(), sc: true });
+  return { runs, kind: s.computed ? 'computed' : 'given' };
 }
 
 export function measureBlock(n: DNode, style: TreeStyle, measure: Measure): Block {
@@ -109,10 +125,17 @@ export function measureBlock(n: DNode, style: TreeStyle, measure: Measure): Bloc
     for (const g of n.gloss) glossW = Math.max(glossW, runsWidth(g, { font: style.font, size: m.glossFs }, measure));
     glossH = n.gloss.length * m.glossLineH;
   }
-  const point = empty && !n.features?.length && n.kind === 'phrase';
-  const w = Math.max(labelW, featureW, glossW, point ? 2 : 0);
-  const h = labelH + featureH;
-  return { w, h, fullH: h + glossH, labelW, labelH, featureW, featureH, glossW, glossH, point };
+  let semW = 0;
+  let semH = 0;
+  const sem = semDisplay(n);
+  if (sem) {
+    semW = runsWidth(sem.runs, { font: style.font, size: m.semFs }, measure);
+    semH = m.semLineH;
+  }
+  const point = empty && !n.features?.length && !sem && n.kind === 'phrase';
+  const w = Math.max(labelW, featureW, glossW, semW, point ? 2 : 0);
+  const h = labelH + featureH + semH;
+  return { w, h, fullH: h + glossH, labelW, labelH, featureW, featureH, glossW, glossH, semW, semH, point };
 }
 
 type Contour = Map<number, [number, number]>;

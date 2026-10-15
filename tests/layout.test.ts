@@ -91,7 +91,7 @@ describe('layout', () => {
 
   test('multidominated node: one vertex, below both mothers, between them, edges avoid labels', () => {
     const src = '[&P [TP [DP John] [VP [V likes] #1]] [&′ [& and] [TP [DP Mary] [VP [V hates] [DP#1 bagels]]]]]';
-    const { t, l } = layout(src);
+    const { t, l } = layout(src, { chains: 'multidominance' });
     const shared = t.nodes.find((n) => n.id === '1')!;
     expect(shared.parents).toHaveLength(2);
     const ls = l.nodes.get(shared)!;
@@ -114,5 +114,22 @@ describe('layout performance', () => {
     const ms = performance.now() - t0;
     expect(l.list.length).toBeGreaterThan(380);
     expect(ms).toBeLessThan(1500);
+  });
+});
+
+import { buildScene } from '../src/core/scene';
+import { approxMeasure as am } from '../src/core/measure';
+import { defaultStyle as ds } from '../src/core/style';
+import { tree as mkTree } from './helpers';
+describe('colours', () => {
+  test('a coloured branch does not colour the edge above it', () => {
+    const t = mkTree('[S [VP@@#ff0000 [V see] [DP it]] [X y]]');
+    const sc = buildScene(t, ds, am);
+    const edgeTo = (label: string) => {
+      const n = t.nodes.find((x) => x.label.map((r) => r.text).join('') === label)!;
+      return sc.prims.find((p) => p.t === 'path' && p.role === 'edge' && p.node === n.key) as { stroke: string };
+    };
+    expect(edgeTo('VP').stroke).toBe(ds.lineColor);
+    expect(edgeTo('V').stroke).toBe('#ff0000');
   });
 });
