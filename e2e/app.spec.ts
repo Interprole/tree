@@ -92,14 +92,14 @@ test('share link restores tree and settings', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('./');
   await setCode(page, '[XP [Y share me]]');
-  await page.locator('.mode-switch button', { hasText: 'BPS' }).click();
+  await page.locator('.mode-switch button', { hasText: 'X-bar' }).click();
   await page.getByTestId('share').click();
   const url = page.url();
   expect(url).toContain('#t=');
   const p2 = await context.newPage();
   await p2.goto(url);
   await expect(p2.locator('.cm-content')).toContainText('[XP [Y share me]]');
-  await expect(p2.locator('.mode-switch:not(.chain-switch) button.on')).toHaveText('BPS');
+  await expect(p2.locator('.mode-switch:not(.chain-switch) button.on')).toHaveText('X-bar');
 });
 
 test('LaTeX export shows forest code', async ({ page }) => {
@@ -177,4 +177,59 @@ test('guide opens', async ({ page }) => {
   await page.getByTestId('guide').click();
   await page.locator('.guide-nav button', { hasText: 'Semantics' }).click();
   await expect(page.locator('.guide-body')).toContainText('Event Identification');
+});
+
+test('arrow: colour, reverse, several labels, drag a label', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP#a what] [C′ did [VP see [DP#b t]]]]\n#b -> #a');
+  const mid = await page.locator('.arrow-hit').first().evaluate((el) => {
+    const p = el as SVGPathElement;
+    const pt = p.getPointAtLength(p.getTotalLength() / 2);
+    const m = p.getScreenCTM()!;
+    return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
+  });
+  await page.mouse.click(mid.x, mid.y);
+  await expect(page.locator('.arrow-bar')).toBeVisible();
+  await page.locator('.arrow-bar .swatch[title="#1d4ed8"]').click();
+  await expect.poll(() => code(page)).toContain('@#1d4ed8');
+  await page.locator('.arrow-bar button', { hasText: 'Reverse' }).click();
+  await expect.poll(() => code(page)).toContain('#a -> #b');
+  await page.locator('.arrow-bar .label-list input').first().fill('wh');
+  await page.locator('.arrow-bar .label-list button', { hasText: '+ Add' }).click();
+  await page.locator('.arrow-bar .label-list input').nth(1).fill('**A**');
+  await page.locator('.arrow-bar .label-list select').nth(1).selectOption('above');
+  await page.locator('.arrow-bar .label-list button', { hasText: 'Apply' }).click();
+  await expect.poll(() => code(page)).toContain('"wh" above"**A**"');
+  await page.keyboard.press('Escape');
+  const box = await page.locator('.label-hit').first().boundingBox();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width / 2 + 40, box!.y + box!.height / 2 + 20, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => code(page)).toMatch(/"wh"@\d+,\d+/);
+});
+
+test('node: notes, edge style, restructure', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [DP she] [VP [V saw] [DP him]]]');
+  const node = (label: string) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label}$`) }) });
+  await node('VP').click();
+  await page.locator('.node-bar button[aria-label="Notes next to the node"]').click();
+  await page.locator('.label-list input').first().fill('focus');
+  await page.locator('.label-list button', { hasText: 'Apply' }).click();
+  await expect.poll(() => code(page)).toContain('[VP [V saw] [DP him] &"focus"]');
+  await node('VP').click();
+  await page.locator('.node-bar button[aria-label="Colours and edge"]').click();
+  await page.locator('.style-pop .seg button', { hasText: 'Edge' }).click();
+  await page.locator('.style-pop .swatch[title="#b91c1c"]').click();
+  await expect.poll(() => code(page)).toContain('[VP;edge=#b91c1c');
+  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').fill('3');
+  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').press('Tab');
+  await expect.poll(() => code(page)).toContain(';width=3');
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('Escape');
+  await node('S').click();
+  await page.locator('.node-bar button[aria-label^="More"]').click();
+  await page.locator('.menu-list button', { hasText: 'left' }).click();
+  await expect.poll(() => code(page)).toMatch(/\[S \[\S* \[DP she\] \[V saw\]\] \[DP him\]\]/);
 });
