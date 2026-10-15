@@ -9,7 +9,7 @@ import type { DTree } from '../src/core/model';
 import { plain } from '../src/core/richtext';
 
 export function opts(o: Partial<BuildOptions> = {}): BuildOptions {
-  return { ...defaultBuildOptions, ...o, xbar: { ...defaultBuildOptions.xbar, ...(o.xbar ?? {}) }, bps: { ...defaultBuildOptions.bps, ...(o.bps ?? {}) }, semantics: { ...defaultBuildOptions.semantics, ...(o.semantics ?? {}) } };
+  return { ...defaultBuildOptions, ...o, xbar: { ...defaultBuildOptions.xbar, ...(o.xbar ?? {}) }, semantics: { ...defaultBuildOptions.semantics, ...(o.semantics ?? {}) } };
 }
 
 export function tree(src: string, o: Partial<BuildOptions> = {}): DTree {

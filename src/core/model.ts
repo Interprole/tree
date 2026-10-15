@@ -1,9 +1,9 @@
-import type { AArrow, ALeaf, ANode, ArrowHead, ArrowLine, ArrowRoute } from './ast';
+import type { AArrow, ALeaf, ANode, ArrowHead, ArrowLine, ArrowRoute, LabelSide } from './ast';
 import type { Runs } from './richtext';
 
 /**
  * Display tree: what is actually laid out and drawn. Produced from the AST by
- * build.ts and then rewritten by the labelling modes (X-bar, BPS).
+ * build.ts and then rewritten by the X-bar labelling mode.
  * A node may have several parents (multidominance).
  */
 export interface DNode {
@@ -31,8 +31,6 @@ export interface DNode {
   color?: string;
   /** colour inherited from a branch colouring */
   branchColor?: string;
-  /** head daughter marked with * (BPS) */
-  head?: boolean;
   /** coindices from subscripts */
   indices: string[];
   /** for nodes duplicated from a multidominated node (copies view): key of the original */
@@ -41,6 +39,14 @@ export interface DNode {
   chainRef?: { id: string; occ: number };
   /** source of a head-movement arrow: drawn struck through */
   struck?: boolean;
+  /** per-node styling from ;edge= ;width= ;len= ;spread= ;sem= */
+  edgeColor?: string;
+  edgeWidth?: number;
+  edgeLen?: number;
+  spread?: number;
+  semColor?: string;
+  /** notes next to the node */
+  notes?: DLabel[];
   /** semantic value shown under the node */
   sem?: DSem;
   /** pronunciation marks of the occurrences (aligned with children): from #id! / #id? */
@@ -60,13 +66,22 @@ export interface DSem {
   error?: string;
 }
 
+/** a label of an arrow or a note of a node */
+export interface DLabel {
+  runs: Runs;
+  side: LabelSide;
+  off?: [number, number];
+  /** position in the source list (for edits) */
+  index: number;
+}
+
 export interface DArrow {
   from: DNode;
   to: DNode;
   head: ArrowHead;
   line: ArrowLine;
   route: ArrowRoute;
-  label?: string;
+  labels: DLabel[];
   color?: string;
   bend: [number, number];
   /** drawn automatically between the positions of a chain */

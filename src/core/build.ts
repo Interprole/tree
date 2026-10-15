@@ -1,14 +1,14 @@
 import type { ADoc, ALeaf, ANode } from './ast';
-import { analyseLabel, applyBps, applyXbar } from './modes';
-import type { BpsOptions, XbarOptions } from './modes';
+import { analyseLabel, applyXbar } from './modes';
+import type { XbarOptions } from './modes';
 import { collectNodes, relink } from './model';
 import type { DArrow, DNode, DSem, DTree } from './model';
 import { baseText, cloneRuns, indicesOf, parseRich, plain } from './richtext';
 import type { Runs } from './richtext';
-import { compose, parseMeaning, SemError, showRuns, showTy, toSource } from './semantics';
+import { abstractOver, compose, parseMeaning, SemError, showRuns, showTy, splitMeaning, toSource } from './semantics';
 import type { Meaning } from './semantics';
 
-export type LabelMode = 'manual' | 'xbar' | 'bps';
+export type LabelMode = 'manual' | 'xbar';
 /** how a movement chain (one node with several #positions) is drawn */
 export type ChainView = 'multidominance' | 'copies' | 'traces';
 
@@ -19,12 +19,13 @@ export interface SemanticsOptions {
   compute: boolean;
   /** show types and typed variables */
   types: boolean;
+  /** show the composition rule (FA, PC, EI, FC, PA) */
+  rules: boolean;
 }
 
 export interface BuildOptions {
   mode: LabelMode;
   xbar: XbarOptions;
-  bps: BpsOptions;
   chains: ChainView;
   /** arrows between the positions of a chain (copies / traces) */
   chainArrows: boolean;
@@ -38,12 +39,11 @@ export interface BuildOptions {
 export const defaultBuildOptions: BuildOptions = {
   mode: 'manual',
   xbar: { bar: 'always', headLabel: 'X', emptySpecs: false, barStyle: 'prime', expandWords: true },
-  bps: { label: 'category' },
   chains: 'copies',
   chainArrows: true,
   chainIndices: false,
   showEmpty: true,
-  semantics: { show: true, compute: true, types: false },
+  semantics: { show: true, compute: true, types: false, rules: true },
 };
 
 const EMPTY_WORDS = new Set(['∅', 'Ø', 'ø', 'e', '0']);
@@ -80,19 +80,13 @@ function yieldOf(a: ANode, doc: ADoc, seen = new Set<ANode>()): string[] {
 
 /** "formula : type" → display runs (as written) */
 function formulaRuns(src: string): Runs {
-  let depth = 0;
-  let cut = -1;
-  for (let i = 0; i < src.length; i++) {
-    const c = src[i];
-    if ('(<⟨['.includes(c)) depth++;
-    else if (')>⟩]'.includes(c)) depth--;
-    else if (c === ':' && depth === 0 && i > 0 && /\s/.test(src[i - 1])) cut = i;
-  }
-  const f = (cut >= 0 ? src.slice(0, cut) : src)
-    .trim()
+  const [formula] = splitMeaning(src);
+  const f = formula
     .replace(/\\lambda\b\s*/g, 'λ')
+    .replace(/\b(lambda|iota|exists|forall)\s*(?=[\p{L}][\p{L}\p{N}′']*\s*[._:])/gu, (_, w: string) => ({ lambda: 'λ', iota: 'ι', exists: '∃', forall: '∀' })[w as 'lambda']!)
     .replace(/->/g, '→')
     .replace(/&/g, '∧')
+    .replace(/\*/g, '×')
     // typed binders: λP_<e,t>. → λP with subscript ⟨e,t⟩
     .replace(/([λ∃∀ι]\s*[\p{L}][\p{L}\p{N}′']*)[_:]\s*([<⟨][^.]*[>⟩]|[a-z]\w*)(?=\s*\.)/gu, (_, v: string, ty: string) => `${v}_{${ty.replace(/</g, '⟨').replace(/>/g, '⟩')}}`);
   return parseRich(f);
@@ -104,10 +98,10 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
   const byAst = new Map<ANode, DNode>();
   const meanings = new Map<DNode, Meaning>();
   /** pronunciation of each occurrence: source mother → shared node → flag */
-  const occFlags = new Map<ANode, Map<DNode, boolean | undefined>>();
-  const setOcc = (mother: ANode, child: DNode, flag: boolean | undefined) => {
+  const occFlags = new Map<ANode, Map<DNode, OccInfo>>();
+  const setOcc = (mother: ANode, child: DNode, info: OccInfo) => {
     if (!occFlags.has(mother)) occFlags.set(mother, new Map());
-    occFlags.get(mother)!.set(child, flag);
+    occFlags.get(mother)!.set(child, info);
   };
 
   const mkLeaf = (l: ALeaf, key: string): DNode => {
@@ -130,8 +124,14 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     const d: DNode = { key: a.id ? `#${a.id}` : key, kind: 'phrase', label, children: [], parents: [], src: a, indices: indicesOf(label) };
     byAst.set(a, d);
     if (a.id) d.id = a.id;
-    if (a.head) d.head = true;
     if (a.triangle) d.triangle = true;
+    const o = a.opts ?? {};
+    if (o.edge) d.edgeColor = o.edge;
+    if (o.width && Number.isFinite(Number(o.width))) d.edgeWidth = Number(o.width);
+    if (o.len && Number.isFinite(Number(o.len))) d.edgeLen = Number(o.len);
+    if (o.spread && Number.isFinite(Number(o.spread))) d.spread = Number(o.spread);
+    if (o.sem) d.semColor = o.sem;
+    if (a.notes) d.notes = a.notes.map((n, index) => ({ runs: parseRich(n.text), side: n.side, off: n.off, index }));
     if (a.color) d.color = a.color;
     if (a.branchColor) {
       d.branchColor = a.branchColor;
@@ -157,12 +157,12 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
       if (c.kind === 'node') {
         const child = mk(c, `${key}.${i}`);
         d.children.push(child);
-        if (c.id) setOcc(a, child, c.pronounce);
+        if (c.id) setOcc(a, child, { flag: c.pronounce });
       } else if (c.kind === 'leaf') d.children.push(mkLeaf(c, `${key}.${i}`));
       else {
         const child = mk(doc.ids.get(c.id)!, `${key}.${i}`);
         d.children.push(child);
-        setOcc(a, child, c.pronounce);
+        setOcc(a, child, { flag: c.pronounce ?? (c.text !== undefined ? true : undefined), text: c.text, sem: c.sem });
       }
     });
     if (d.triangle) {
@@ -186,11 +186,10 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
 
   if (!opts.showEmpty) root = removeEmpty(root);
   if (opts.mode === 'xbar') root = applyXbar(root, opts.xbar);
-  else if (opts.mode === 'bps') root = applyBps(root, opts.bps);
   relink(root);
 
   // ---- movement chains
-  const chains = resolveChains(root, occFlags, opts);
+  const chains = resolveChains(root, occFlags, opts, meanings);
   const nodes = relink(root);
 
   // ---- arrows
@@ -211,7 +210,8 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
       hidden.push([from, to]);
       return;
     }
-    arrows.push({ from, to, head: a.head, line: a.line, route: a.route, label: a.label, color: a.color, bend: a.bend ?? [0, 0], src: a, index });
+    const labels = a.labels.map((l, i) => ({ runs: parseRich(l.text), side: l.side, off: l.off, index: i }));
+    arrows.push({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], src: a, index });
   });
   if (opts.chains !== 'multidominance' && opts.chainArrows) {
     const covered = (x: DNode, y: DNode) =>
@@ -221,7 +221,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
         const from = ch.instances[k];
         const to = ch.instances[k - 1];
         if (covered(from, to)) continue;
-        arrows.push({ from, to, head: 'end', line: 'solid', route: 'under', bend: [0, 0], auto: true, chain: { id, from: k + 1, to: k } });
+        arrows.push({ from, to, head: 'end', line: 'solid', route: 'under', labels: [], bend: [0, 0], auto: true, chain: { id, from: k + 1, to: k } });
       }
     }
   }
@@ -229,7 +229,10 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
   applyHeadMovement(arrows);
   if (opts.semantics.show) {
     computeSemantics(root, meanings, opts.semantics);
-    if (!opts.semantics.types) for (const n of collectNodes(root)) if (n.sem?.type) n.sem = { ...n.sem, type: undefined };
+    for (const n of collectNodes(root)) {
+      if (n.sem?.type && !opts.semantics.types) n.sem = { ...n.sem, type: undefined };
+      if (n.sem?.rule && !opts.semantics.rules) n.sem = { ...n.sem, rule: undefined };
+    }
   } else for (const n of collectNodes(root)) delete n.sem;
   return { root, arrows, nodes };
 }
@@ -285,7 +288,16 @@ const INDEX_LETTERS = 'ijklmnopqrsuvwxyzabcdfgh'.split('');
  * position gets its own copy; only pronounced positions (the highest one by default, or those
  * marked #id!) are drawn normally.
  */
-function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, boolean | undefined>>, opts: BuildOptions): Map<string, Chain> {
+interface OccInfo {
+  /** true = pronounced, false = silent, undefined = default */
+  flag?: boolean;
+  /** pronounced with other words */
+  text?: string;
+  /** meaning of this position */
+  sem?: string;
+}
+
+function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, opts: BuildOptions, meanings: Map<DNode, Meaning>): Map<string, Chain> {
   const chains = new Map<string, Chain>();
   relink(root);
   const all = collectNodes(root);
@@ -313,16 +325,16 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, boolean | un
     relink(root);
     const d = depthMap(root);
     const ord = new Map(collectNodes(root).map((n, i) => [n, i]));
-    const slots: { parent: DNode; index: number; flag: boolean | undefined }[] = [];
+    const slots: { parent: DNode; index: number; info: OccInfo }[] = [];
     for (const p of [...new Set(s.parents)]) {
       p.children.forEach((c, index) => {
         if (c !== s) return;
         const mother = nearestSrc(p);
-        slots.push({ parent: p, index, flag: mother ? occFlags.get(mother)?.get(s) : undefined });
+        slots.push({ parent: p, index, info: (mother ? occFlags.get(mother)?.get(s) : undefined) ?? {} });
       });
     }
     slots.sort((a, b) => (d.get(a.parent) ?? 0) - (d.get(b.parent) ?? 0) || (ord.get(a.parent) ?? 0) - (ord.get(b.parent) ?? 0));
-    const overt = slots.map((sl, i) => sl.flag ?? i === 0);
+    const overt = slots.map((sl, i) => sl.info.flag ?? i === 0);
     const chain: Chain = { instances: [], overt };
     if (opts.chainIndices) chain.index = pickIndex(s.id!);
     const indexRun = chain.index ? [{ text: chain.index, sub: true }] : [];
@@ -334,7 +346,16 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, boolean | un
       continue;
     }
     // clone before marking anything silent
-    const clones = slots.map((_, i) => (i === 0 ? s : cloneSubtree(s, `~c${++cloneCounter}`)));
+    const clones = slots.map((_, i) => {
+      if (i === 0) return s;
+      // notes and the edge above belong to the position where they are written
+      const c = cloneSubtree(s, `~c${++cloneCounter}`);
+      delete c.notes;
+      delete c.edgeColor;
+      delete c.edgeWidth;
+      delete c.edgeLen;
+      return c;
+    });
     slots.forEach((sl, i) => {
       let inst: DNode;
       if (overt[i] || opts.chains === 'copies') {
@@ -345,6 +366,21 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, boolean | un
         // trace: the category with a "t"
         const t: DNode = { key: `${s.key}~t${++cloneCounter}`, kind: 'leaf', label: [{ text: 't' }, ...indexRun], children: [], parents: [], indices: [], trace: true, synthetic: true };
         inst = { key: `${s.key}~tp${cloneCounter}`, kind: 'phrase', label: cloneRuns(s.label), children: [t], parents: [], indices: [], src: s.src, trace: true, copyOf: s.key, color: s.color, branchColor: s.branchColor };
+      }
+      // pronounced with other words: #wh!"whom"
+      if (sl.info.text !== undefined && overt[i]) {
+        inst.children = [{ key: `${inst.key}~w`, kind: 'leaf', label: parseRich(sl.info.text), children: [], parents: [], indices: [], synthetic: true }];
+        inst.triangle = false;
+      }
+      // meaning of this position: #wh$x : e$ (e.g. a trace as a variable)
+      if (sl.info.sem !== undefined) {
+        try {
+          const m = parseMeaning(sl.info.sem);
+          meanings.set(inst, m);
+          inst.sem = { runs: formulaRuns(sl.info.sem), type: showTy(m.ty) };
+        } catch (e) {
+          inst.sem = { runs: formulaRuns(sl.info.sem), error: (e as Error).message };
+        }
       }
       inst.chainRef = { id: s.id!, occ: i + 1 };
       sl.parent.children[sl.index] = inst;
@@ -389,11 +425,35 @@ function applyHeadMovement(arrows: DArrow[]) {
     memo.set(n, r);
     return r;
   };
+  // the words move along: sing+s at the target
+  const NULL = /^[∅Øø]$/;
+  const originalWords = new Map<DNode, string[]>();
+  for (const m of moves) for (const n of [m.from, m.to]) if (!originalWords.has(n)) originalWords.set(n, n.children.filter((c) => c.kind === 'leaf').map((c) => plain(c.label).trim()));
+  const wordsMemo = new Map<DNode, string[]>();
+  const words = (n: DNode, seen = new Set<DNode>()): string[] => {
+    if (wordsMemo.has(n)) return wordsMemo.get(n)!;
+    if (seen.has(n)) return originalWords.get(n)!;
+    seen.add(n);
+    const r = [...(into.get(n) ?? []).flatMap((s) => words(s, seen)), ...originalWords.get(n)!];
+    wordsMemo.set(n, r);
+    return r;
+  };
   for (const m of moves) {
     m.from.struck = true;
     for (const c of m.from.children) c.struck = true;
   }
-  for (const n of into.keys()) n.label = complex(n);
+  for (const n of into.keys()) {
+    n.label = complex(n);
+    const all = words(n).filter(Boolean);
+    const overt = all.filter((w) => !NULL.test(w));
+    const text = (overt.length ? overt : all).join('+');
+    if (!text) continue;
+    const leaf = n.children.find((c) => c.kind === 'leaf');
+    if (leaf) {
+      leaf.label = parseRich(text);
+      n.children = n.children.filter((c) => c.kind !== 'leaf' || c === leaf);
+    } else n.children = [{ key: `${n.key}~hm`, kind: 'leaf', label: parseRich(text), children: [], parents: [n], indices: [], synthetic: true }];
+  }
 }
 
 /* ------------------------------------------------------------ semantics */
@@ -418,9 +478,30 @@ function computeSemantics(root: DNode, explicit: Map<DNode, Meaning>, o: Semanti
         if (o.compute) n.sem = describe(result);
       } else if (known.length === 2 && kids.length === 2) {
         try {
-          const c = compose(known[0], known[1]);
+          // Predicate Abstraction: a moved constituent and a sister that contains a lower position
+          // of its chain whose meaning is a variable (#wh$x : e$)
+          let [m1, m2] = [known[0], known[1]];
+          let pa = false;
+          for (const [i, j] of [
+            [0, 1],
+            [1, 0],
+          ]) {
+            const mover = kids[i];
+            const ref = mover.chainRef;
+            if (!ref) continue;
+            const lower = collectNodes(kids[j]).find((x) => x.chainRef?.id === ref.id && x.chainRef.occ > ref.occ && explicit.has(x));
+            const v = lower && explicit.get(lower)!;
+            if (v && (v.term.k === 'const' || v.term.k === 'var')) {
+              const abstracted = abstractOver(i === 0 ? m2 : m1, v.term.name, v.ty);
+              if (i === 0) m2 = abstracted;
+              else m1 = abstracted;
+              pa = true;
+              break;
+            }
+          }
+          const c = compose(m1, m2);
           result = c;
-          if (o.compute) n.sem = describe(c, c.rule);
+          if (o.compute) n.sem = describe(c, pa ? `PA+${c.rule}` : c.rule);
         } catch (e) {
           if (o.compute && e instanceof SemError) n.sem = { runs: [], error: e.message, computed: true };
         }

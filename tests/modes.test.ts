@@ -1,3 +1,4 @@
+import { examples } from '../src/examples';
 import { describe, expect, test } from 'vitest';
 import { show, tree } from './helpers';
 import { plain } from '../src/core/richtext';
@@ -38,33 +39,8 @@ describe('X-bar mode', () => {
     expect(t.nodes.some((n) => n.label.some((r) => r.over && r.text === 'T'))).toBe(true);
   });
   test('switching modes does not change the source tree', () => {
-    for (const mode of ['xbar', 'bps', 'manual'] as const) tree(src, { mode });
+    for (const mode of ['xbar', 'manual'] as const) tree(src, { mode });
     expect(show(tree(src))).toBe('[TP [DP the cat] [T will] [VP [V eat] [DP fish]]]');
-  });
-});
-
-describe('BPS mode', () => {
-  const src = '[ [ [D* the] [N cat]] [* [T* will] [ [V* eat] [N fish]]]]';
-  test('category labels', () => {
-    expect(show(tree(src, { mode: 'bps' }))).toBe('[T [D [D the] [N cat]] [T [T will] [V [V eat] [N fish]]]]');
-  });
-  test('head labels', () => {
-    expect(show(tree(src, { mode: 'bps', bps: { label: 'head' } }))).toBe('[will [the [D the] [N cat]] [will [T will] [eat [V eat] [N fish]]]]');
-  });
-  test('set labels', () => {
-    const t = tree('[ [D* the] [N cat]]', { mode: 'bps', bps: { label: 'set' } });
-    expect(plain(t.root.label)).toBe('{the, {the, cat}}');
-  });
-  test('without marks: the written label decides, then a head daughter', () => {
-    expect(plain(tree('[VP [DP [D the] [N cat]] [V eat]]', { mode: 'bps' }).root.label)).toBe('V');
-    expect(plain(tree('[ [D the] [NP [N cat] [PP [P of] [N mine]]]]', { mode: 'bps' }).root.label)).toBe('D');
-  });
-  test('primes vanish', () => {
-    const t = tree("[TP [DP she] [T' [T* will] [VP go]]]", { mode: 'bps' });
-    expect(t.nodes.every((n) => !plain(n.label).includes('′'))).toBe(true);
-  });
-  test('indices survive relabelling', () => {
-    expect(plain(tree('[DP_i [D* the] [N cat]]', { mode: 'bps' }).root.label)).toBe('Di');
   });
 });
 
@@ -113,13 +89,32 @@ describe('movement chains (# positions)', () => {
   test('an explicit line restyles one automatic arrow, "hide" removes it', () => {
     const t = tree(src + '\n#wh/2 -> #wh/1 dashed "wh"');
     expect(t.arrows).toHaveLength(1);
-    expect(t.arrows[0]).toMatchObject({ line: 'dashed', label: 'wh' });
+    expect(t.arrows[0]).toMatchObject({ line: 'dashed' });
+    expect(t.arrows[0].labels.map((l) => l.runs[0].text)).toEqual(['wh']);
     expect(t.arrows[0].auto).toBeFalsy();
     expect(tree(src + '\n#wh/2 -> #wh/1 hide').arrows).toHaveLength(0);
   });
-  test('works together with X-bar and BPS', () => {
+  test('works together with X-bar', () => {
     expect(tree(src, { mode: 'xbar', ...md }).nodes.find((n) => n.id === 'wh')!.parents).toHaveLength(2);
-    expect(tree(src, { mode: 'bps', ...md }).nodes.find((n) => n.id === 'wh')!.parents).toHaveLength(2);
+  });
+});
+
+describe('copies with their own words', () => {
+  test('#id"text" pronounces a position differently', () => {
+    const t = tree('[S [DP#a the man] [VP saw #a"him"]]', { chains: 'copies' });
+    const words = t.nodes.filter((n) => n.kind === 'leaf').map((n) => plain(n.label));
+    expect(words).toContain('him');
+    expect(words).toContain('the man');
+  });
+});
+
+describe('per-node options and notes', () => {
+  test(';edge ;width ;len ;spread ;sem and notes reach the display tree', () => {
+    const t = tree('[S;spread=10 [DP;edge=red;width=2;len=12;sem=blue &"focus" &left"x" she] [VP runs]]');
+    const dp = t.nodes.find((n) => plain(n.label) === 'DP')!;
+    expect(dp).toMatchObject({ edgeColor: 'red', edgeWidth: 2, edgeLen: 12, semColor: 'blue' });
+    expect(dp.notes!.map((x) => [plain(x.runs), x.side])).toEqual([['focus', 'auto'], ['x', 'left']]);
+    expect(t.root.spread).toBe(10);
   });
 });
 
@@ -130,6 +125,20 @@ describe('head movement', () => {
     expect(lab('v')).toBe('V+v');
     expect(lab('t')).toBe('V+v+T');
     expect(t.nodes.find((n) => n.id === 'r')!.struck).toBe(true);
+  });
+  test('the words of the moved heads appear at the target, joined by +', () => {
+    const t = tree('[TP [T#t -s] [vP [v#v ∅] [VP [V#r sing] [DP songs]]]]\n#r -> #v\n#v -> #t');
+    const word = (id: string) => plain(t.nodes.find((n) => n.id === id)!.children[0].label);
+    expect(word('v')).toBe('sing');
+    expect(word('t')).toBe('sing+-s');
+  });
+  test('T-to-C example: C shows T+C and did, no edge between C and T', () => {
+    const ex = examples.find((e) => e.id === 'wh')!;
+    const t = tree(ex.src);
+    const c = t.nodes.find((n) => n.id === 'c')!;
+    expect(plain(c.label)).toBe('T+C');
+    expect(plain(c.children[0].label)).toBe('did');
+    expect(t.nodes.find((n) => n.id === 't')!.parents).toHaveLength(1);
   });
   test('arrows between phrases are not head movement', () => {
     const t = tree('[CP [DP#a what] [VP see [DP#b it]]]\n#b -> #a');
@@ -159,6 +168,20 @@ describe('semantics in the tree', () => {
     const t = tree('[S [C that] [VP sleeps $λx. sleep(x)$]]');
     expect(plain(t.root.sem!.runs)).toBe('λx. sleep(x)');
   });
+  test('a lower position with its own meaning triggers Predicate Abstraction', () => {
+    const t = tree('[S [DP#d everyone $λP. ∀x. P(x) : <<e,t>,t>$] [S\' [DP John $john : e$] [VP [V saw $λy.λx. saw(x,y) : <e,<e,t>>$] #d$z : e$]]]');
+    // the sister S′ is abstracted over z where the moved DP composes with it
+    expect(t.root.sem!.rule).toBe('PA+FA');
+    expect(plain(t.root.sem!.runs)).toBe('∀x. saw(john, x)');
+  });
+  test('the rule can be hidden', () => {
+    const t = tree('[S [DP Mary $mary : e$] [VP sleeps $λx. sleep(x)$]]', { semantics: { show: true, compute: true, types: false, rules: false } });
+    expect(t.root.sem!.rule).toBeUndefined();
+  });
+  test('any type names work', () => {
+    const t = tree('[S [DP tall $λx. height(x) > 3 : <e,t>$] [DP d $d : e$]]');
+    expect(plain(t.root.sem!.runs)).toBe('height(d) > 3');
+  });
   test('bad formulas are reported', () => {
     const t = tree('[N cat $λx. cat(x$]');
     expect(t.root.sem!.error).toBeTruthy();
@@ -170,7 +193,7 @@ import { parse } from '../src/core/parser';
 describe('serialize (as displayed)', () => {
   test('round-trips through the parser', () => {
     for (const src of ['[TP [DP the cat] [T will] [VP [V eat] [DP fish]]]', '[CP [DP#wh what] [C′ [C did] [TP you [VP [V see] #wh]]]]', '[T{uφ, EPP} [V čitaet | read.PRS] [DP ^big cats]]']) {
-      for (const mode of ['manual', 'xbar', 'bps'] as const) {
+      for (const mode of ['manual', 'xbar'] as const) {
         const tr = tree(src, { mode });
         const out = serialize(tr);
         const r = parse(out);

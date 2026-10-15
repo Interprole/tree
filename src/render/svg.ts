@@ -7,10 +7,11 @@ export function esc(s: string): string {
 
 const r2 = (n: number) => (Math.round(n * 100) / 100).toString();
 
-function pieceAttrs(p: TextPiece, baseSize: number, baseItalic: boolean): string {
+function pieceAttrs(p: TextPiece, baseSize: number, baseItalic: boolean, baseBold: boolean): string {
   let a = ` x="${r2(p.x)}" y="${r2(p.y)}"`;
   if (Math.abs(p.size - baseSize) > 0.01) a += ` font-size="${r2(p.size)}"`;
   if (!!p.italic !== baseItalic) a += ` font-style="${p.italic ? 'italic' : 'normal'}"`;
+  if (!!p.bold !== baseBold) a += ` font-weight="${p.bold ? 700 : 400}"`;
   return a;
 }
 
@@ -32,7 +33,7 @@ export function primToSvg(p: Prim): string {
   const baseItalic = !!first.italic;
   const weight = first.bold ? ' font-weight="700"' : '';
   const op = p.opacity !== undefined && p.opacity < 1 ? ` fill-opacity="${p.opacity}"` : '';
-  const spans = p.pieces.map((q) => `<tspan${pieceAttrs(q, baseSize, baseItalic)}>${esc(q.text)}</tspan>`).join('');
+  const spans = p.pieces.map((q) => `<tspan${pieceAttrs(q, baseSize, baseItalic, !!first.bold)}>${esc(q.text)}</tspan>`).join('');
   return `<text font-family="${esc(fontCss(p.font))}" font-size="${r2(baseSize)}"${baseItalic ? ' font-style="italic"' : ''}${weight} fill="${esc(p.color)}"${op}>${spans}</text>`;
 }
 

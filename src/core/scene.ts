@@ -1,8 +1,8 @@
 import { layoutArrows } from './arrows';
 import type { ArrowGeom } from './arrows';
-import { displayLabel, fontFor, layoutTree, semDisplay } from './layout';
+import { displayLabel, fontFor, layoutTree, NOTE_SCALE, noteSide, semDisplay } from './layout';
 import type { Box, Layout, LNode } from './layout';
-import { SC_SCALE, SCRIPT_SCALE } from './measure';
+import { runsWidth, SC_SCALE, SCRIPT_SCALE } from './measure';
 import type { Measure } from './measure';
 import type { DNode, DTree } from './model';
 import type { Runs } from './richtext';
@@ -29,7 +29,7 @@ export interface TextPiece {
 
 export type Prim =
   | { t: 'path'; d: string; stroke?: string; width?: number; dash?: number[]; fill?: string; role: 'edge' | 'triangle' | 'arrow' | 'arrowhead' | 'bracket' | 'deco'; node?: string; arrow?: number; join?: 'round' | 'miter' }
-  | { t: 'text'; pieces: TextPiece[]; color: string; font: FontId; role: 'label' | 'leaf' | 'feature' | 'gloss' | 'sem' | 'arrowlabel'; node?: string; opacity?: number };
+  | { t: 'text'; pieces: TextPiece[]; color: string; font: FontId; role: 'label' | 'leaf' | 'feature' | 'gloss' | 'sem' | 'note' | 'arrowlabel'; node?: string; opacity?: number };
 
 export interface NodeHit {
   key: string;
@@ -38,6 +38,15 @@ export interface NodeHit {
   /** centre x, label top */
   x: number;
   y: number;
+}
+
+/** a draggable label: a note of a node or a label of an arrow */
+export interface LabelHit {
+  kind: 'note' | 'arrow';
+  /** node key or arrow index */
+  owner: string | number;
+  index: number;
+  box: Box;
 }
 
 export interface ArrowHit {
@@ -53,6 +62,7 @@ export interface Scene {
   prims: Prim[];
   hits: NodeHit[];
   arrows: ArrowHit[];
+  labels: LabelHit[];
   layout: Layout;
   /** translation applied to layout coordinates */
   dx: number;
@@ -61,7 +71,6 @@ export interface Scene {
 }
 
 const GRAY = '#8a8a8a';
-const SEM_COMPUTED = '#2f5d8a';
 const SEM_ERROR = '#c0392b';
 
 const f = (n: number) => (Math.round(n * 100) / 100).toString();
@@ -107,11 +116,14 @@ export function smoothPath(pts: [number, number][]): string {
 }
 
 /** Lay out rich runs starting at x (left) on baseline y. */
-export function runsPieces(runs: Runs, x: number, y: number, size: number, italic: boolean, bold: boolean, measure: Measure, font: FontId): { pieces: TextPiece[]; overlines: [number, number][]; width: number } {
+export function runsPieces(runs: Runs, x: number, y: number, size: number, baseItalic: boolean, baseBold: boolean, measure: Measure, font: FontId): { pieces: TextPiece[]; overlines: [number, number][]; strikes: [number, number][]; width: number } {
   const pieces: TextPiece[] = [];
   const overlines: [number, number][] = [];
+  const strikes: [number, number][] = [];
   let cx = x;
   for (const r of runs) {
+    const italic = baseItalic !== !!r.i;
+    const bold = baseBold || !!r.b;
     let sz = size;
     let by = y;
     let text = r.text;
@@ -131,15 +143,17 @@ export function runsPieces(runs: Runs, x: number, y: number, size: number, itali
     const w = measure(text, { font, size: sz, italic, bold });
     pieces.push({ x: cx, y: by, text: upper ? text : r.text, size: sz, italic, bold, upper, width: w });
     if (r.over) overlines.push([cx, cx + w]);
+    if (r.s) strikes.push([cx, cx + w]);
     cx += w;
   }
-  return { pieces, overlines, width: cx - x };
+  return { pieces, overlines, strikes, width: cx - x };
 }
 
 export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layoutIn?: Layout): Scene {
   const layout = layoutIn ?? layoutTree(tree, style, measure);
   const m = metricsFor(style);
-  const { geoms, box } = layoutArrows(layout, tree.arrows);
+  const arrowFs = metricsFor(style).fs * 0.8;
+  const { geoms, box } = layoutArrows(layout, tree.arrows, (runs) => runsWidth(runs, { font: style.font, size: arrowFs, italic: true }, measure));
   const pad = style.padding;
   const dx = pad - box.x1;
   const dy = pad - box.y1;
@@ -154,24 +168,34 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     if (grayCopy(n)) return GRAY;
     return n.color ?? (n.kind === 'leaf' ? style.leafColor : style.nodeColor);
   };
-  /** a coloured branch colours the edges inside it, not the edge above it */
+  /** ;edge= colours the edge above a node; a coloured branch colours the edges inside it, not the one above it */
   const edgeColour = (parent: DNode, child: DNode) => {
     if (grayCopy(child)) return GRAY;
+    if (child.edgeColor) return child.edgeColor;
     if (child.branchColor && parent.branchColor === child.branchColor) return child.branchColor;
     return style.lineColor;
+  };
+  const labelHits: LabelHit[] = [];
+  /** draw rich runs with their decorations (overline, strike-through) */
+  const drawRuns = (runs: Runs, x: number, y: number, size: number, italic: boolean, bold: boolean, color: string, role: Extract<Prim, { t: 'text' }>['role'], node?: string, opacity?: number) => {
+    const r = runsPieces(runs, x, y, size, italic, bold, measure, style.font);
+    prims.push({ t: 'text', pieces: r.pieces, color, font: style.font, role, node, opacity });
+    for (const [a, z] of r.strikes) prims.push({ t: 'path', d: `M${f(a)} ${f(y - size * 0.3)}L${f(z)} ${f(y - size * 0.3)}`, stroke: color, width: Math.max(0.7, size * 0.06), role: 'deco', node });
+    return r;
   };
 
   // edges first (labels on top)
   for (const e of layout.edges) {
     const stroke = edgeColour(e.parent.node, e.child.node);
+    const ew = e.child.node.edgeWidth ?? style.lineWidth;
     const dash = grayCopy(e.child.node) ? [3, 2.5] : undefined;
     if (e.kind === 'triangle') {
       const d = `M${f(X(e.x1))} ${f(Y(e.y1))}L${f(X(e.bx2!))} ${f(Y(e.y2))}L${f(X(e.bx1!))} ${f(Y(e.y2))}Z`;
-      prims.push({ t: 'path', d: hand ? linePath(X(e.x1), Y(e.y1), X(e.bx2!), Y(e.y2), true) + linePath(X(e.bx2!), Y(e.y2), X(e.bx1!), Y(e.y2), true) + linePath(X(e.bx1!), Y(e.y2), X(e.x1), Y(e.y1), true) : d, stroke, width: style.lineWidth, role: 'triangle', node: e.child.node.key, join: 'round' });
+      prims.push({ t: 'path', d: hand ? linePath(X(e.x1), Y(e.y1), X(e.bx2!), Y(e.y2), true) + linePath(X(e.bx2!), Y(e.y2), X(e.bx1!), Y(e.y2), true) + linePath(X(e.bx1!), Y(e.y2), X(e.x1), Y(e.y1), true) : d, stroke, width: ew, role: 'triangle', node: e.child.node.key, join: 'round' });
     } else if (e.pts) {
-      prims.push({ t: 'path', d: smoothPath(e.pts.map(([x, y]) => [X(x), Y(y)])), stroke, width: style.lineWidth, dash, role: 'edge', node: e.child.node.key });
+      prims.push({ t: 'path', d: smoothPath(e.pts.map(([x, y]) => [X(x), Y(y)])), stroke, width: ew, dash, role: 'edge', node: e.child.node.key });
     } else {
-      prims.push({ t: 'path', d: linePath(X(e.x1), Y(e.y1), X(e.x2), Y(e.y2), hand), stroke, width: style.lineWidth, dash, role: 'edge', node: e.child.node.key });
+      prims.push({ t: 'path', d: linePath(X(e.x1), Y(e.y1), X(e.x2), Y(e.y2), hand), stroke, width: ew, dash, role: 'edge', node: e.child.node.key });
     }
   }
 
@@ -186,8 +210,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     const left = X(ln.x) - b.labelW / 2;
     const base = Y(ln.y) + m.ascent;
     if (b.labelW > 0) {
-      const { pieces, overlines } = runsPieces(label, left, base, font.size, !!font.italic, !!font.bold, measure, style.font);
-      prims.push({ t: 'text', pieces, color, font: style.font, role: n.kind === 'leaf' ? 'leaf' : 'label', node: n.key });
+      const { overlines } = drawRuns(label, left, base, font.size, !!font.italic, !!font.bold, color, n.kind === 'leaf' ? 'leaf' : 'label', n.key);
       for (const [a, z] of overlines) {
         const oy = base - font.size * 0.78;
         prims.push({ t: 'path', d: `M${f(a + 0.5)} ${f(oy)}L${f(z - 0.5)} ${f(oy)}`, stroke: color, width: Math.max(0.7, font.size * 0.055), role: 'deco', node: n.key });
@@ -220,7 +243,9 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
       const ss = m.semFs;
       const w = runsPieces(sem.runs, 0, 0, ss, false, false, measure, style.font).width;
       const { pieces } = runsPieces(sem.runs, X(ln.x) - w / 2, y + ss * 1.05, ss, false, false, measure, style.font);
-      prims.push({ t: 'text', pieces, color: sem.kind === 'error' ? SEM_ERROR : sem.kind === 'computed' ? SEM_COMPUTED : color, font: style.font, role: 'sem', node: n.key });
+      // the node's own colour (also from a coloured branch) wins over the meaning colours
+      const own = n.semColor ?? (n.color && !grayCopy(n) ? n.color : undefined);
+      prims.push({ t: 'text', pieces, color: sem.kind === 'error' ? SEM_ERROR : own ?? (sem.kind === 'computed' ? style.semComputedColor : style.semColor), font: style.font, role: 'sem', node: n.key });
       y += b.semH;
     }
     if (n.gloss?.length) {
@@ -231,6 +256,38 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
         const { pieces } = runsPieces(g, X(ln.x) - w / 2, y + gs * 1.02 + i * m.glossLineH, gs, false, false, measure, style.font);
         prims.push({ t: 'text', pieces, color: grayCopy(n) ? GRAY : quoted ? style.leafColor : style.leafColor, font: style.font, role: 'gloss', node: n.key, opacity: 0.88 });
       });
+    }
+    // notes: beside, above or below the label; dragged notes keep their offset
+    if (n.notes?.length) {
+      const ns = style.fontSize * NOTE_SCALE;
+      const stack: Record<string, number> = { left: 0, right: 0, above: 0, below: 0 };
+      const belowTop = Y(ln.y) + b.fullH - b.notesBelowH;
+      for (const note of n.notes) {
+        const side = noteSide(n, note.side);
+        const w = runsWidth(note.runs, { font: style.font, size: ns }, measure);
+        const k = stack[side]++;
+        let nx: number;
+        let ny: number;
+        if (side === 'left') {
+          nx = X(ln.x) - b.labelW / 2 - 6 - w;
+          ny = base + k * ns * 1.25;
+        } else if (side === 'right') {
+          nx = X(ln.x) + b.labelW / 2 + 6;
+          ny = base + k * ns * 1.25;
+        } else if (side === 'above') {
+          nx = X(ln.x) - w / 2;
+          ny = Y(ln.y) - 2 - k * ns * 1.25;
+        } else {
+          nx = X(ln.x) - w / 2;
+          ny = belowTop + ns * 1.05 + k * ns * 1.25;
+        }
+        if (note.off) {
+          nx += note.off[0];
+          ny += note.off[1];
+        }
+        drawRuns(note.runs, nx, ny, ns, false, false, n.color ?? style.nodeColor, 'note', n.key, 0.92);
+        labelHits.push({ kind: 'note', owner: n.key, index: note.index, box: { x1: nx - 2, y1: ny - ns, x2: nx + w + 2, y2: ny + ns * 0.3 } });
+      }
     }
     hits.push({
       key: n.key,
@@ -274,10 +331,12 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     };
     if (a.head === 'end' || a.head === 'both') prims.push({ t: 'path', d: head(g.p3, near(0.93)), fill: color, role: 'arrowhead', arrow: i });
     if (a.head === 'start' || a.head === 'both') prims.push({ t: 'path', d: head(g.p0, near(0.07)), fill: color, role: 'arrowhead', arrow: i });
-    if (a.label && g.labelAt) {
-      const size = m.fs * 0.8;
-      const w = measure(a.label, { font: style.font, size, italic: true });
-      prims.push({ t: 'text', pieces: [{ x: X(g.labelAt[0]) - w / 2, y: Y(g.labelAt[1]), text: a.label, size, italic: true, width: w }], color, font: style.font, role: 'arrowlabel' });
+    for (const l of g.labels) {
+      const runs = a.labels.find((x) => x.index === l.index)!.runs;
+      const lx = X(l.x) - l.w / 2;
+      const ly = Y(l.y);
+      drawRuns(runs, lx, ly, arrowFs, true, false, color, 'arrowlabel');
+      labelHits.push({ kind: 'arrow', owner: i, index: l.index, box: { x1: lx - 2, y1: ly - arrowFs, x2: lx + l.w + 2, y2: ly + arrowFs * 0.3 } });
     }
     arrowHits.push({ index: i, geom: { ...g, p0: [X(g.p0[0]), Y(g.p0[1])], p1: [X(g.p1[0]), Y(g.p1[1])], p2: [X(g.p2[0]), Y(g.p2[1])], p3: [X(g.p3[0]), Y(g.p3[1])], handle: [X(g.handle[0]), Y(g.handle[1])] }, d });
   });
@@ -289,6 +348,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     prims,
     hits,
     arrows: arrowHits,
+    labels: labelHits,
     layout,
     dx,
     dy,

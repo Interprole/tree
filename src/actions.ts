@@ -216,25 +216,56 @@ export function completePick(target: DNode) {
   applyEdit(E.addCopy(doc.value!, t, p.kind === 'daughter' ? { kind: 'daughter', of: placeSrc as ANode } : { kind: 'sister', of: placeSrc }));
 }
 
-/** Bundle a head with its right (or else left) sister: [X a] [Y b] → [X.Y a b]. */
-export function bundleWithSister(n: DNode | null = selectedNode()) {
-  if (!guard(n) || n.src!.kind !== 'node') return;
-  const me = n.src as ANode;
-  const mother = parentSrc(n);
-  if (!mother) return;
-  const sisters = mother.children;
-  const i = sisters.indexOf(me);
-  const other = [sisters[i + 1], sisters[i - 1]].find((c): c is ANode => c?.kind === 'node');
-  if (!other) {
-    showToast('Bundling needs a sister node next to this one.');
-    return;
-  }
-  applyEdit(E.bundle(source.value, me, other));
-}
-
 export function restructure(n: DNode | null, shape: 'flat' | 'right' | 'left') {
   if (!guard(n) || n.src!.kind !== 'node') return;
-  applyEdit(E.restructure(source.value, n.src as ANode, shape));
+  const edit = E.restructure(source.value, n.src as ANode, shape);
+  if (!edit.changes.length) {
+    showToast(shape === 'flat' ? 'Nothing to flatten here.' : `Already ${shape}-branching (or nothing to rotate).`);
+    return;
+  }
+  applyEdit(edit);
+}
+
+/** Edge colour / width / length, spread of daughters, meaning colour of a node. */
+export function setOption(n: DNode | null, key: 'edge' | 'width' | 'len' | 'spread' | 'sem', value: string | null) {
+  if (!guard(n)) return;
+  const s = nodeSrc(n);
+  if (s) applyEdit(E.setOption(s, key, value));
+}
+
+export function setNotes(n: DNode | null, notes: E.LabelSpec[]) {
+  if (!guard(n)) return;
+  const s = nodeSrc(n);
+  if (s) applyEdit(E.setNotes(source.value, s, notes));
+}
+
+/** Drag a note or an arrow label to a new offset. */
+export function moveLabel(kind: 'note' | 'arrow', owner: string | number, index: number, off: [number, number]) {
+  if (!editable.value) return;
+  if (kind === 'note') {
+    const n = nodeByKey(owner as string);
+    const s = n && nodeSrc(n);
+    const note = s?.notes?.[index];
+    if (note) applyEdit(E.setNoteOffset(note, off));
+    return;
+  }
+  const a = tree.value?.arrows[owner as number];
+  if (!a?.src) return;
+  const labels = a.src.labels.map((l, i) => (i === index ? { ...l, off } : l));
+  applyEdit(E.updateArrow(a.src, { labels }));
+}
+
+export function reverseArrow(a: DArrow | null = selectedArrow()) {
+  if (!a) return;
+  if (a.auto || !a.src) {
+    // an automatic chain arrow becomes an explicit one, pointing the other way
+    if (a.chain) {
+      const def = doc.value?.ids.get(a.chain.id);
+      if (def) applyEdit(E.addArrow(source.value, doc.value!, { node: def, occ: a.chain.to }, { node: def, occ: a.chain.from }));
+    }
+    return;
+  }
+  applyEdit(E.reverseArrow(a.src));
 }
 
 export function setColor(n: DNode | null, color: string | null, branch: boolean) {
@@ -243,16 +274,10 @@ export function setColor(n: DNode | null, color: string | null, branch: boolean)
   if (!s) return;
   if (color === null) {
     // clearing removes both node and branch colour
-    applyEdit({ changes: [{ from: s.labelSpan.to, to: s.headerSpan.to, insert: E.modifiers({ id: s.id, head: s.head }) }] });
+    applyEdit({ changes: [{ from: s.labelSpan.to, to: s.headerSpan.to, insert: E.modifiers({ id: s.id, pronounce: s.pronounce, opts: s.opts }) }] });
     return;
   }
   applyEdit(E.setColor(s, color, branch));
-}
-
-export function toggleHead(n: DNode | null = selectedNode()) {
-  if (!guard(n)) return;
-  if (n.src!.kind !== 'node') return;
-  applyEdit(E.setHead(n.src as ANode, parentSrc(n), !(n.src as ANode).head));
 }
 
 /* ------------------------------------------------------------ arrows */

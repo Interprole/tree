@@ -1533,3 +1533,95 @@ textarea.code {
     white-space: normal;
   }
 }
+
+/* ------------------------------------------------------------ labels, notes, per-node style */
+
+.label-hit {
+  fill: transparent;
+  cursor: move;
+}
+
+.tool-select .label-hit:hover {
+  fill: rgba(37, 99, 235, 0.06);
+  stroke: rgba(37, 99, 235, 0.35);
+  stroke-dasharray: 3 2;
+}
+
+.label-ghost {
+  fill: rgba(37, 99, 235, 0.08);
+  stroke: #2563eb;
+  stroke-dasharray: 3 2;
+  pointer-events: none;
+}
+
+.label-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label-list .row.tight {
+  gap: 4px;
+}
+
+.label-list input {
+  padding: 3px 7px;
+  font-size: 13px;
+}
+
+.label-list select {
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.icon-btn.small {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.style-pop {
+  width: 290px;
+}
+
+.style-pop .seg {
+  align-self: stretch;
+}
+
+.style-pop .seg button {
+  flex: 1;
+}
+
+.num-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.num-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.num-field input {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
+.swatches.small {
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+}
+
+.swatches.small .swatch {
+  height: 18px;
+}
+
+.swatch.on {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 1px;
+}
