@@ -124,10 +124,6 @@ function useShortcuts() {
           handled();
           A.toggleTriangle();
           break;
-        case 'h':
-          handled();
-          A.toggleHead();
-          break;
         case 'm':
           handled();
           A.startArrow();
@@ -244,7 +240,6 @@ export function App() {
           <Seg value={b.mode} onChange={(v) => setBuild({ mode: v })} options={[
             { v: 'manual', label: t('modeManual'), title: t('modeManualHint') },
             { v: 'xbar', label: t('modeXbar'), title: t('modeXbarHint') },
-            { v: 'bps', label: t('modeBps'), title: t('modeBpsHint') },
           ]} />
         </div>
         <div class="mode-switch chain-switch hide-md" title="Movement chains">

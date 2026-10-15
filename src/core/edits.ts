@@ -1,4 +1,4 @@
-import type { AArrow, AChild, ADoc, ALeaf, ANode, ARef } from './ast';
+import type { AArrow, AChild, ADoc, ALabel, ALeaf, ANode, ARef, LabelSide } from './ast';
 import { walkAst } from './parser';
 
 /**
@@ -46,20 +46,62 @@ export function escapeText(s: string): string {
   return t;
 }
 
-type Mods = Pick<ANode, 'id' | 'head' | 'color' | 'branchColor' | 'pronounce'>;
+type Mods = Pick<ANode, 'id' | 'color' | 'branchColor' | 'pronounce' | 'opts'>;
+
+const OPT_ORDER = ['edge', 'width', 'len', 'spread', 'sem'];
 
 export function modifiers(n: Mods): string {
   const voice = n.id && n.pronounce !== undefined ? (n.pronounce ? '!' : '?') : '';
-  return (n.id ? '#' + n.id : '') + voice + (n.head ? '*' : '') + (n.color ? '@' + n.color : '') + (n.branchColor ? '@@' + n.branchColor : '');
+  const opts = Object.entries(n.opts ?? {})
+    .filter(([, v]) => v !== undefined && v !== '')
+    .sort(([a], [b]) => OPT_ORDER.indexOf(a) - OPT_ORDER.indexOf(b))
+    .map(([k, v]) => `;${k}=${v}`)
+    .join('');
+  return (n.id ? '#' + n.id : '') + voice + (n.color ? '@' + n.color : '') + (n.branchColor ? '@@' + n.branchColor : '') + opts;
 }
 
 function setModifiers(n: ANode, patch: Partial<Mods>): TextChange {
-  const next = { id: n.id, head: n.head, color: n.color, branchColor: n.branchColor, pronounce: n.pronounce, ...patch };
+  const next = { id: n.id, color: n.color, branchColor: n.branchColor, pronounce: n.pronounce, opts: n.opts, ...patch };
   const ins = modifiers(next);
   // a node without a header token: the header starts right after "["; an empty label followed
   // directly by a child needs a separating space
   const needsSpace = n.labelSpan.to === n.headerSpan.to && n.headerSpan.from === n.headerSpan.to && ins !== '';
   return { from: n.labelSpan.to, to: n.headerSpan.to, insert: ins + (needsSpace ? ' ' : '') };
+}
+
+/** Set (or remove, with null) a node option: edge colour, edge width, length, spread, meaning colour. */
+export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem', value: string | null): Edit {
+  const opts = { ...(n.opts ?? {}) };
+  if (value === null || value === '') delete opts[key];
+  else opts[key] = value;
+  return { changes: [setModifiers(n, { opts })] };
+}
+
+/** A label of an arrow or a note: side"text"@dx,dy */
+export function labelToken(l: { text: string; side?: string; off?: [number, number] }): string {
+  const side = l.side && l.side !== 'auto' ? l.side : '';
+  const off = l.off && (Math.round(l.off[0]) || Math.round(l.off[1])) ? `@${Math.round(l.off[0])},${Math.round(l.off[1])}` : '';
+  return `${side}"${l.text.replace(/(["\\])/g, '\\$1')}"${off}`;
+}
+
+export interface LabelSpec {
+  text: string;
+  side: LabelSide;
+  off?: [number, number];
+}
+
+/** Replace all notes of a node. */
+export function setNotes(src: string, n: ANode, notes: LabelSpec[]): Edit {
+  const changes: TextChange[] = (n.notes ?? []).map((x) => removeRange(src, x.span.from, x.span.to));
+  const ins = notes.filter((x) => x.text.trim()).map((x) => ' &' + labelToken(x)).join('');
+  const at = n.span.to - 1;
+  if (ins) changes.push({ from: at, to: at, insert: ins });
+  return { changes };
+}
+
+/** Move one note (drag on the canvas). */
+export function setNoteOffset(note: ALabel, off: [number, number]): Edit {
+  return { changes: [{ from: note.span.from, to: note.span.to, insert: '&' + labelToken({ ...note, off }) }] };
 }
 
 export function renameNode(src: string, n: ANode, label: string): Edit {
@@ -121,53 +163,57 @@ export function setPronounce(occurrence: { node: ANode } | { ref: ARef }, value:
   return { changes: [{ from: r.span.from, to: r.span.to, insert: `#${id}${value === undefined ? '' : value ? '!' : '?'}` }] };
 }
 
-/** Bundle two sister heads [X a] [Y b] into [X.Y a b] (Distributed Morphology). */
-export function bundle(src: string, x: ANode, y: ANode): Edit {
-  const [first, second] = x.span.from < y.span.from ? [x, y] : [y, x];
-  const content = (n: ANode) => src.slice(n.headerSpan.to, n.span.to - 1).trim();
-  const label = `${first.label}.${second.label}`;
-  const body = [content(first), content(second)].filter(Boolean).join(' ');
-  const merged = `[${label}${E_mods(first)}${body ? ' ' + body : ''}]`;
-  return {
-    changes: [
-      { from: first.span.from, to: first.span.to, insert: merged },
-      removeRange(src, second.span.from, second.span.to),
-    ],
-  };
-}
-
-function E_mods(n: ANode): string {
-  return modifiers({ id: n.id, head: n.head, color: n.color, branchColor: n.branchColor, pronounce: n.pronounce });
-}
-
-/** Re-bracket the daughters of a node: flat, right-branching or left-branching. */
+/**
+ * Change the branching of a node: flat, right-branching or left-branching. With three or more
+ * daughters it re-brackets them; with two it rotates ([X [Y a b] c] ↔ [X a [Y b c]]).
+ */
 export function restructure(src: string, n: ANode, shape: 'flat' | 'right' | 'left'): Edit {
   const kids = n.children;
   if (!kids.length) return { changes: [] };
-  const spanOf = (c: AChild) => (c.kind === 'leaf' ? c.fullSpan : c.span);
-  const plainLabel = n.label;
-  // flatten: intermediate nodes that repeat the mother's label (or have none) and carry nothing else
+  const text = (c: AChild) => {
+    const sp = c.kind === 'leaf' ? c.fullSpan : c.span;
+    return src.slice(sp.from, sp.to);
+  };
+  const header = (c: ANode) => src.slice(c.span.from + 1, c.headerSpan.to);
   const isIntermediate = (c: AChild): c is ANode =>
-    c.kind === 'node' && (c.label === plainLabel || c.label === '') && !c.id && !c.features && !c.sem && !c.triangle && !c.color && !c.branchColor && c.children.length > 0;
+    c.kind === 'node' && (c.label === n.label || c.label === '') && !c.id && !c.features && !c.sem && !c.triangle && !c.notes && c.children.length > 0;
   const items: string[] = [];
   const collect = (list: AChild[]) => {
     for (const c of list) {
       if (isIntermediate(c)) collect(c.children);
-      else {
-        const sp = spanOf(c);
-        items.push(src.slice(sp.from, sp.to));
-      }
+      else items.push(text(c));
     }
   };
   collect(kids);
-  const lab = plainLabel || '';
-  const wrap = (inner: string) => `[${lab} ${inner}]`;
-  const right = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${xs[0]} ${wrap(right(xs.slice(1)))}`);
-  const left = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${wrap(left(xs.slice(0, -1)))} ${xs[xs.length - 1]}`);
-  const body = shape === 'flat' ? items.join(' ') : shape === 'right' ? right(items) : left(items);
-  const from = spanOf(kids[0]).from;
-  const to = spanOf(kids[kids.length - 1]).to;
-  return { changes: [{ from, to, insert: body }] };
+  const from = (kids[0].kind === 'leaf' ? kids[0].fullSpan : kids[0].span).from;
+  const last = kids[kids.length - 1];
+  const to = (last.kind === 'leaf' ? last.fullSpan : last.span).to;
+  const replace = (body: string): Edit => (body === src.slice(from, to) ? { changes: [] } : { changes: [{ from, to, insert: body }] });
+  const wrap = (inner: string) => `[${n.label} ${inner}]`;
+
+  if (shape === 'flat') {
+    if (items.length > kids.length) return replace(items.join(' '));
+    // nothing intermediate: lift the daughters of every branching daughter one level up
+    const lifted = kids.flatMap((c) => (c.kind === 'node' && c.children.length > 1 && !c.id ? c.children.map(text) : [text(c)]));
+    return replace(lifted.join(' '));
+  }
+  if (items.length > 2) {
+    const right = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${xs[0]} ${wrap(right(xs.slice(1)))}`);
+    const left = (xs: string[]): string => (xs.length <= 2 ? xs.join(' ') : `${wrap(left(xs.slice(0, -1)))} ${xs[xs.length - 1]}`);
+    return replace(shape === 'right' ? right(items) : left(items));
+  }
+  if (kids.length === 2) {
+    const [a, b] = kids;
+    if (shape === 'right' && a.kind === 'node' && a.children.length === 2 && !a.id) {
+      // [X [Y p q] r] → [X p [Y q r]]
+      return replace(`${text(a.children[0])} [${header(a)} ${text(a.children[1])} ${text(b)}]`);
+    }
+    if (shape === 'left' && b.kind === 'node' && b.children.length === 2 && !b.id) {
+      // [X p [Y q r]] → [X [Y p q] r]
+      return replace(`[${header(b)} ${text(a)} ${text(b.children[0])}] ${text(b.children[1])}`);
+    }
+  }
+  return { changes: [] };
 }
 
 export function addSister(n: ANode | ALeaf, label = 'X'): Edit {
@@ -229,13 +275,6 @@ export function setColor(n: ANode, color: string | null, branch: boolean): Edit 
   return { changes: [setModifiers(n, branch ? { branchColor: color ?? undefined, color: undefined } : { color: color ?? undefined })] };
 }
 
-/** Mark n as the projecting daughter (removes the mark from its sisters). */
-export function setHead(n: ANode, parent: ANode | null, on: boolean): Edit {
-  const changes: TextChange[] = [setModifiers(n, { head: on })];
-  if (on && parent) for (const c of parent.children) if (c.kind === 'node' && c !== n && c.head) changes.push(setModifiers(c, { head: false }));
-  return { changes };
-}
-
 export function freshId(doc: ADoc, label: string): string {
   const base = label.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '').slice(0, 6) || 'n';
   let id = base;
@@ -260,7 +299,7 @@ export function arrowLine(a: Omit<AArrow, 'span'>): string {
   if (a.line !== 'solid') parts.push(a.line);
   if (a.route !== 'under') parts.push(a.route);
   if (a.color) parts.push('@' + a.color);
-  if (a.label) parts.push(`"${a.label.replace(/(["\\])/g, '\\$1')}"`);
+  for (const l of a.labels ?? []) parts.push(labelToken(l));
   if (a.bend && (Math.round(a.bend[0]) !== 0 || Math.round(a.bend[1]) !== 0)) parts.push(`bend=${Math.round(a.bend[0])},${Math.round(a.bend[1])}`);
   return parts.join(' ');
 }
@@ -279,10 +318,15 @@ export function addArrow(src: string, doc: ADoc, from: Endpoint, to: Endpoint, e
   const changes: TextChange[] = [];
   if (a.change) changes.push(a.change);
   if (b.change && b !== a) changes.push(b.change);
-  const line = arrowLine({ from: a.id, to: b.id, fromOcc: from.occ, toOcc: to.occ, head: 'end', line: 'solid', route: 'under', ...extra });
+  const line = arrowLine({ from: a.id, to: b.id, fromOcc: from.occ, toOcc: to.occ, head: 'end', line: 'solid', route: 'under', labels: [], ...extra });
   const trimmedEnd = src.replace(/\s+$/, '').length;
   changes.push({ from: trimmedEnd, to: src.length, insert: '\n' + line + '\n' });
   return { changes };
+}
+
+/** Point the arrow the other way. */
+export function reverseArrow(a: AArrow): Edit {
+  return updateArrow(a, { from: a.to, to: a.from, fromOcc: a.toOcc, toOcc: a.fromOcc });
 }
 
 export function updateArrow(a: AArrow, patch: Partial<AArrow>): Edit {

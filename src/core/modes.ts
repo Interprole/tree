@@ -16,10 +16,6 @@ export interface XbarOptions {
   expandWords: boolean;
 }
 
-export interface BpsOptions {
-  /** what a computed label shows: category (D), head word (the) or set {the, {the, cat}} */
-  label: 'category' | 'head' | 'set';
-}
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -139,75 +135,6 @@ export function applyXbar(root: DNode, o: XbarOptions): DNode {
 
 function emptySpec(n: DNode, k: number): DNode {
   return synth(`${n.key}~spec${k}`, [{ text: '∅' }], [], { empty: true });
-}
-
-/* ---------------------------------------------------------------- BPS */
-
-/** Which daughter projects: marked with *, else the one matching the written label, else a head, else the first. */
-export function projector(n: DNode, headOf: (d: DNode) => DNode): DNode | null {
-  const kids = n.children.filter(isPhrase);
-  if (kids.length === 0) return null;
-  const marked = kids.find((k) => k.head);
-  if (marked) return marked;
-  const written = analyseLabel(n.label).cat;
-  if (written) {
-    const match = kids.find((k) => analyseLabel(headOf(k).label).cat === written);
-    if (match) return match;
-  }
-  const head = kids.find(isHeadLike);
-  return head ?? kids[0];
-}
-
-/**
- * Bare Phrase Structure: every non-terminal gets the label of its projecting head.
- */
-export function applyBps(root: DNode, o: BpsOptions): DNode {
-  relink(root);
-  const headMemo = new Map<DNode, DNode>();
-  const headOf = (n: DNode): DNode => {
-    if (headMemo.has(n)) return headMemo.get(n)!;
-    headMemo.set(n, n); // cycle guard
-    let h = n;
-    if (isPhrase(n) && hasPhraseChild(n)) {
-      const p = projector(n, headOf);
-      if (p) h = headOf(p);
-    }
-    headMemo.set(n, h);
-    return h;
-  };
-  const catOf = (h: DNode): Runs => {
-    const a = analyseLabel(h.label);
-    if (a.cat) return [{ text: a.cat }];
-    return [{ text: wordOf(h) }];
-  };
-  const wordOf = (h: DNode): string => {
-    const leaf = h.children.find((c) => c.kind === 'leaf');
-    if (leaf) return plain(leaf.label).trim();
-    return plain(h.label).trim();
-  };
-  const setMemo = new Map<DNode, string>();
-  const setRep = (n: DNode): string => {
-    if (setMemo.has(n)) return setMemo.get(n)!;
-    let s: string;
-    if (!isPhrase(n)) s = plain(n.label).trim();
-    else if (!hasPhraseChild(n)) s = wordOf(n);
-    else {
-      const parts = n.children.filter(isPhrase).map(setRep);
-      s = `{${wordOf(headOf(n))}, {${parts.join(', ')}}}`;
-    }
-    setMemo.set(n, s);
-    return s;
-  };
-  for (const n of collectNodes(root)) {
-    if (!isPhrase(n) || !hasPhraseChild(n)) continue;
-    const h = headOf(n);
-    let label: Runs;
-    if (o.label === 'category') label = catOf(h);
-    else if (o.label === 'head') label = [{ text: wordOf(h) }];
-    else label = [{ text: setRep(n) }];
-    n.label = [...label, ...subs(n.label)];
-  }
-  return root;
 }
 
 export { cloneRuns };

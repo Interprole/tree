@@ -77,10 +77,6 @@ describe('canvas edits keep the text valid', () => {
     expect(E.applyChanges(s3, E.setPronounce({ ref }, true).changes)).toBe('[CP [DP#wh what] [VP see #wh!]]');
     expect(E.applyChanges(s3, E.setPronounce({ node: find(d, 'DP') }, false).changes)).toBe('[CP [DP#wh? what] [VP see #wh]]');
   });
-  test('bundling sister heads', () => {
-    const s4 = '[TP [T -s] [Agr 3sg] [VP go]]';
-    expect(run(s4, (d) => E.bundle(s4, find(d, 'T'), find(d, 'Agr')))).toBe('[TP [T.Agr -s 3sg] [VP go]]');
-  });
   test('re-bracketing', () => {
     const s5 = '[VP [V give] [DP a] [PP b]]';
     const right = run(s5, (d) => E.restructure(s5, d.root!, 'right'));
@@ -88,21 +84,38 @@ describe('canvas edits keep the text valid', () => {
     expect(run(s5, (d) => E.restructure(s5, d.root!, 'left'))).toBe('[VP [VP [V give] [DP a]] [PP b]]');
     expect(run(right, (d) => E.restructure(right, d.root!, 'flat'))).toBe(s5);
   });
+  test('binary nodes rotate', () => {
+    const s6 = '[S [A x] [B [C y] [D z]]]';
+    const l = run(s6, (d) => E.restructure(s6, d.root!, 'left'));
+    expect(l).toBe('[S [B [A x] [C y]] [D z]]');
+    expect(run(l, (d) => E.restructure(l, d.root!, 'right'))).toBe(s6);
+    expect(run(s6, (d) => E.restructure(s6, d.root!, 'flat'))).toBe('[S [A x] [C y] [D z]]');
+  });
+  test('node options and notes', () => {
+    expect(run(src, (d) => E.setOption(find(d, 'VP'), 'edge', 'red'))).toBe('[S [NP John] [VP;edge=red [V saw] [NP Mary]]]');
+    const o = '[S [VP;edge=red;width=2 x]]';
+    expect(run(o, (d) => E.setOption(find(d, 'VP'), 'edge', null))).toBe('[S [VP;width=2 x]]');
+    const withNote = run(src, (d) => E.setNotes(src, find(d, 'VP'), [{ text: 'focus "x"', side: 'right' }]));
+    expect(withNote).toBe('[S [NP John] [VP [V saw] [NP Mary] &right"focus \\"x\\""]]');
+    const d2 = doc(withNote);
+    expect(E.applyChanges(withNote, E.setNoteOffset(find(d2, 'VP').notes![0], [5, -3]).changes)).toContain('&right"focus \\"x\\""@5,-3');
+  });
+  test('reverse an arrow', () => {
+    const s7 = '[S [A#a x] [B#b y]]\n#a -> #b dashed';
+    const d = doc(s7);
+    expect(E.applyChanges(s7, E.reverseArrow(d.arrows[0]).changes)).toContain('#b -> #a dashed');
+  });
   test('colours', () => {
     expect(run(src, (d) => E.setColor(find(d, 'VP'), 'red', false))).toBe('[S [NP John] [VP@red [V saw] [NP Mary]]]');
     expect(run(src, (d) => E.setColor(find(d, 'VP'), '#06c', true))).toBe('[S [NP John] [VP@@#06c [V saw] [NP Mary]]]');
     const c = '[S [VP#v@red x]]';
     expect(run(c, (d) => E.setColor(find(d, 'VP'), null, false))).toBe('[S [VP#v x]]');
   });
-  test('head marks move between sisters', () => {
-    const s = '[ [D* the] [N cat]]';
-    expect(run(s, (d) => E.setHead(find(d, 'N'), d.root, true))).toBe('[ [D the] [N* cat]]');
-  });
   test('arrows: add (with ids), restyle, delete', () => {
     const withArrow = run(src, (d) => E.addArrow(src, d, { node: find(d, 'V') }, { node: find(d, 'S') }));
     expect(withArrow).toBe('[S#s [NP John] [VP [V#v saw] [NP Mary]]]\n#v -> #s\n');
     const d2 = doc(withArrow);
-    const restyled = E.applyChanges(withArrow, E.updateArrow(d2.arrows[0], { line: 'dashed', label: 'head mvt', bend: [0, 20] }).changes);
+    const restyled = E.applyChanges(withArrow, E.updateArrow(d2.arrows[0], { line: 'dashed', labels: [{ text: 'head mvt', side: 'auto', span: { from: 0, to: 0 } }], bend: [0, 20] }).changes);
     expect(restyled).toContain('#v -> #s dashed "head mvt" bend=0,20');
     const d3 = doc(restyled);
     expect(E.applyChanges(restyled, E.deleteArrow(restyled, d3.arrows[0]).changes).trim()).toBe('[S#s [NP John] [VP [V#v saw] [NP Mary]]]');

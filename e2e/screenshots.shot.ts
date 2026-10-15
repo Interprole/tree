@@ -54,8 +54,19 @@ test('interactions', async ({ page }) => {
   await page.keyboard.press('Escape');
   await page.getByTestId('examples-button').click();
   await page.locator('[data-example="wh"]').click();
-  await page.locator('.arrow-hit').first().click({ force: true });
+  await page.keyboard.press('Escape');
+  const mid = await page.locator('.arrow-hit').first().evaluate((el) => {
+    const p = el as SVGPathElement;
+    const pt = p.getPointAtLength(p.getTotalLength() / 2);
+    const m = p.getScreenCTM()!;
+    return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
+  });
+  await page.mouse.click(mid.x, mid.y);
   await page.screenshot({ path: `${OUT}/ui-arrow-selected.png` });
+  await page.keyboard.press('Escape');
+  await page.locator('[data-node]').nth(4).click();
+  await page.locator('.node-bar button[aria-label="Colours and edge"]').click();
+  await page.screenshot({ path: `${OUT}/ui-node-style.png` });
 });
 
 test('presets and modes', async ({ page }) => {
@@ -75,11 +86,6 @@ test('presets and modes', async ({ page }) => {
   await page.locator('.settings button', { hasText: 'X⁰' }).click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/xbar-overline.png` });
-  await page.getByTestId('examples-button').click();
-  await page.locator('[data-example="bps"]').click();
-  await page.locator('.settings button', { hasText: 'Set {the' }).click();
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: `${OUT}/bps-set.png` });
   await page.getByTestId('examples-button').click();
   await page.locator('[data-example="atb"]').click();
   await page.locator('.settings button', { hasText: 'Traces' }).click();

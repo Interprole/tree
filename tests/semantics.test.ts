@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { compose, parseMeaning, parseTerm, reduce, show, showTy, typeOf, SemError } from '../src/core/semantics';
+import { abstractOver, compose, parseMeaning, parseTerm, parseTy, reduce, show, showTy, typeOf, SemError } from '../src/core/semantics';
 
 const m = (s: string) => parseMeaning(s);
 const c = (a: string, b: string) => {
@@ -47,5 +47,20 @@ describe('composition rules', () => {
   });
   test('type mismatch error', () => {
     expect(() => compose(m('mary : e'), m('john : e'))).toThrow(/No composition rule applies to e and e/);
+  });
+});
+
+describe('more formula syntax', () => {
+  test('lambda / iota words, numbers, any base types', () => {
+    expect(c('lambda x. tall(x)', 'iota y. dog(y)')).toBe('FA: tall(ιy. dog(y)) : t');
+    expect(showTy(m('λd_d. λx. height(x) >= d : <d,<e,t>>').ty)).toBe('⟨d,⟨e,t⟩⟩');
+    expect(show(m('λx. height(x) > 3').term)).toBe('λx. height(x) > 3');
+    expect(showTy(m('λw_s. λx. P(w)(x) : <s,<e,t>>').ty)).toBe('⟨s,⟨e,t⟩⟩');
+    expect(showTy(m('kim : ent').ty)).toBe('ent');
+  });
+  test('Predicate Abstraction helper', () => {
+    const a = abstractOver(m('see(x)(mary) : t'), 'x', parseTy('e'));
+    expect(show(a.term)).toBe('λx. see(x)(mary)');
+    expect(showTy(a.ty)).toBe('⟨e,t⟩');
   });
 });

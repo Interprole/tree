@@ -13,27 +13,28 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 - **Labelling modes:**
   - *Manual*: as written.
   - *X-bar*: shorthand gets X′ levels filled in.
-  - *Bare Phrase Structure*: labels come from the projecting daughter (`*`), shown as category, head or set.
 - **Movement chains.** A chain is one constituent in several positions (`[DP#wh what] … #wh`). It can be drawn three ways:
   - **copies**: unpronounced copies regular, gray, struck through or ⟨in angle brackets⟩;
   - **traces**: `t`;
   - **multidominance**: one node, several mothers.
 
-  Several copies can be pronounced (`#wh!`). Arrows between positions are drawn automatically and each can be edited. Movement indices are separate from the indices you type for binding.
-- **Head movement.** An arrow between two heads strikes out the source and labels the target as a complex head (V+v, V+v+T).
-- **Compositional semantics.** Write meanings as `$λx. cat(x) : <e,t>$`. The meanings of the other nodes are computed bottom-up with Functional Application, Predicate Conjunction, Event Identification and Function Composition. Type errors are shown at the node.
+  Several copies can be pronounced (`#wh!`), a copy can be pronounced with different words (`#wh"whom"`), and a lower position can get its own meaning (`#wh$x : e$`, triggering Predicate Abstraction). Arrows between positions are drawn automatically and each can be edited. Movement indices are separate from the indices you type for binding.
+- **Head movement.** An arrow between two heads strikes out the source and turns the target into a complex head written as text: the labels (V+v, V+v+T, T+C) and the words (sing+-s) are joined with +. No extra edges are drawn.
+- **Compositional semantics.** Write meanings as `$λx. cat(x) : <e,t>$` (or `lambda x.`, `iota x.`, `exists`, `forall`; numbers and comparisons work; types can be any names). The meanings of the other nodes are computed bottom-up with Functional Application, Predicate Conjunction, Event Identification and Function Composition. Type errors are shown at the node; the rule used can be shown or hidden, and meaning colours are configurable.
 - **Canvas editing:**
   - rename, add daughters or sisters;
   - add an existing constituent again by clicking it (a new chain position);
   - triangles that keep the structure in the code;
-  - features, meanings, colours (a node or its branch);
-  - bundling sister heads into X.Y;
-  - re-bracketing a node (flat, right- or left-branching);
+  - features, meanings, notes next to a node (several, positioned automatically or by side, draggable);
+  - colours of the label, the edge above, the whole branch (edges, labels and meanings) or the meaning; edge width and length, spread of the daughters;
+  - arrows: line, head direction, reverse, colour, route, several labels at chosen sides (draggable);
+  - Markdown (`**bold**`, `*italic*`, `~~struck~~`) in labels, words, notes and arrow labels;
+  - re-bracketing a node (flat, right- or left-branching; a binary node is rotated);
   - c-command and dominance highlighting;
   - undo and redo.
 - **Export and sharing:**
   - SVG and PDF with embedded fonts, PNG up to 576 dpi;
-  - LaTeX code, tested by compiling it with `pdflatex`/`lualatex`;
+  - LaTeX code, tested by compiling it with `pdflatex`, `xelatex` and `lualatex`;
   - share links, autosave, a list of saved trees.
 - **Interface:** every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
 
@@ -42,17 +43,21 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | Write | Meaning |
 |---|---|
 | `[TP [DP the cat] [VP sleeps]]` | node = `[Label daughters…]`; words become terminals |
-| `[ [D the] [N cat]]` | empty label (computed in BPS mode) |
+| `[ [D the] [N cat]]` | empty label |
+| `**bold** *italic* ~~struck~~` | Markdown (escape with `\*`, `\~`) |
 | `T'` `DP_i` `X^0` `\phi` `\0` | prime, subscript, superscript, φ, ∅ |
 | `[V liest \| read.PRS.3SG]` | gloss line under the terminal (ALL-CAPS → small caps) |
 | `[T{uφ, iT, EPP} will]` | feature stack |
 | `[DP ^the big cat]` / `[DP ^ [D the] [N cat]]` | triangle (over words / over a structure, which stays in the code) |
 | `[DP@red …]`, `[DP@@#06c …]` | colour a node / its whole branch |
-| `[V* eat]` | projecting daughter (BPS) |
+| `[DP;edge=red;width=2;len=20 …]` | colour / width / extra length of the edge above |
+| `[VP;spread=30;sem=blue …]` | wider gaps between daughters; meaning colour |
+| `[DP &"focus" &right"✓"@4,-2 …]` | notes next to the node (side, drag offset) |
 | `[DP#wh what] … #wh` | a chain: the same constituent in two positions |
 | `#wh!`, `[DP#wh? what]` | pronounce / silence a position |
+| `#wh"whom"`, `#wh$x : e$` | a position with its own words / meaning |
 | `$λx_e.λe_s. agent(e)(x)$` | a meaning (optionally `: <type>`) |
-| `#a -> #b dashed "label" @red` | an arrow (after the tree); between heads it is head movement |
+| `#a -> #b dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; between heads it is head movement |
 | `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
 | `% comment` | comment to the end of the line |
 
@@ -72,7 +77,7 @@ Example: head movement, together with a subject chain.
 
 ## Semantics
 
-Types are `e`, `t`, `s` (events) and `<a,b>`. A variable without a type is `e` (x, y, z), `s` (e, e′) or `<e,t>` (P, Q); write `λx_e.` to be explicit. For a node with two daughters, the first rule that applies is used:
+Types can be anything: `e`, `t`, `s` (events), `d`, `n`, any other name, and `<a,b>`. A variable without a type is `e` (x, y, z), `s` (e, e′) or `<e,t>` (P, Q); write `λx_e.` to be explicit. For a node with two daughters, the first rule that applies is used:
 
 | Rule | Applies to | Result |
 |---|---|---|
@@ -81,11 +86,11 @@ Types are `e`, `t`, `s` (events) and `<a,b>`. A variable without a type is `e` (
 | EI | ⟨e,⟨s,t⟩⟩ and ⟨s,t⟩ | λx.λe. β(x)(e) ∧ γ(e) |
 | FC | ⟨b,c⟩ and ⟨a,b⟩ | λx. β(γ(x)) |
 
-A daughter without any meaning below it counts as vacuous. If no rule applies, the node shows the failing types.
+A daughter without any meaning below it counts as vacuous. If a moved phrase is sister to a node containing its own lower position with a variable meaning (`#q$x : e$`), that node is first abstracted over the variable (Predicate Abstraction, shown as PA+FA). If no rule applies, the node shows the failing types.
 
 ## LaTeX
 
-The `forest` export is plain bracket code. Arrows and extra multidominance branches are TikZ `\draw` commands after the tree. Meanings and features are added as extra lines in the node. The test suite compiles every example in every format with `pdflatex`.
+The `forest` export is plain bracket code. Arrows and extra multidominance branches are TikZ `\draw` commands after the tree. Meanings and features are added as extra lines in the node. The test suite compiles every example in every format with `pdflatex`, and checks `xelatex` and `lualatex` as well.
 
 Limitation: in `forest`, a multidominated node is written under one of its mothers; the other branches are drawn as straight lines. Use the *TikZ (exact layout)* export to reproduce the app's placement.
 
@@ -103,7 +108,7 @@ npm run screenshots  # screenshots of all examples → screenshots/out
 src/core/      no DOM, tested on its own
   parser.ts    bracket notation → AST with source spans and errors
   build.ts     AST → display tree: chains (copies/traces/MD), head movement, triangles, meanings
-  modes.ts     X-bar projection and BPS labelling
+  modes.ts     X-bar projection
   semantics.ts typed λ-calculus, β-reduction, composition rules
   layout.ts    tidy layout, multidominance placement and routing
   arrows.ts    movement arrows
