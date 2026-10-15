@@ -296,16 +296,6 @@ export function Canvas() {
     };
   });
 
-  // a selected node near the top edge: pan down so its toolbar fits above it
-  const selKey = selection.value?.kind === 'node' ? selection.value.key : null;
-  useEffect(() => {
-    if (!selKey) return;
-    const h = hitByKey.get(selKey);
-    if (!h) return;
-    const top = h.box.y1 * view.value.zoom + view.value.y;
-    if (top < 60) view.value = { ...view.value, y: view.value.y + (60 - top) };
-  }, [selKey, hitByKey]);
-
   // ---------- render
   const sel = selection.value;
   const selHit = sel?.kind === 'node' ? hitByKey.get(sel.key) : undefined;
@@ -408,7 +398,7 @@ export function Canvas() {
       {hint && <div class="canvas-hint">{hint}</div>}
 
       {selHit && tool.value === 'select' && !renaming.value && !pick.value && tr && (
-        <NodeBar key={selHit.key} hit={selHit} pos={toScreen((selHit.box.x1 + selHit.box.x2) / 2, selHit.box.y1)} box={{ ...toScreen(selHit.box.x1, selHit.box.y1), x2: toScreen(selHit.box.x2, 0).x, y2: toScreen(0, selHit.box.y2).y }} width={wrap.current?.clientWidth ?? 1200} pop={popover.value} setPop={(p) => (popover.value = popover.value === p ? null : p)} onRename={() => startRename(selHit.key)} />
+        <NodeBar key={selHit.key} hit={selHit} pos={toScreen((selHit.box.x1 + selHit.box.x2) / 2, selHit.box.y1)} width={wrap.current?.clientWidth ?? 1200} onNeedRoom={(dy) => (view.value = { ...view.value, y: view.value.y + dy })} pop={popover.value} setPop={(p) => (popover.value = popover.value === p ? null : p)} onRename={() => startRename(selHit.key)} />
       )}
       {labelEdit.value && (
         <LabelEditor
@@ -517,35 +507,47 @@ function LabelList({ initial, onApply, placeholder }: { initial: E.LabelSpec[]; 
 }
 
 function NumField({ label, value, onCommit, placeholder }: { label: string; value?: number; onCommit: (v: string | null) => void; placeholder: string }) {
+  // an uncontrolled input: re-renders of the toolbar (e.g. while the canvas pans) never touch what is
+  // being typed; it is re-created only when the stored value changes
+  const current = value === undefined ? '' : String(value);
+  const commit = (el: HTMLInputElement) => {
+    const v = el.value.trim();
+    if (v !== current) onCommit(v === '' ? null : v);
+  };
   return (
     <label class="num-field">
       <span>{label}</span>
       <input
+        key={current}
         type="number"
         step="1"
-        value={value ?? ''}
+        defaultValue={current}
         placeholder={placeholder}
-        onKeyDown={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const v = (e.target as HTMLInputElement).value.trim();
-          onCommit(v === '' ? null : v);
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') commit(e.currentTarget as HTMLInputElement);
         }}
+        onBlur={(e) => commit(e.currentTarget as HTMLInputElement)}
       />
     </label>
   );
 }
 
-/** Room needed above the node for the toolbar and the tallest popover opening above it. */
-const ROOM_ABOVE = 360;
 const NODE_BAR_W = 470;
 
-function NodeBar({ hit, pos, box, width, pop, setPop, onRename }: { hit: NodeHit; pos: { x: number; y: number }; box: { x: number; y: number; x2: number; y2: number }; width: number; pop: Pop; setPop: (p: Pop) => void; onRename: () => void }) {
-  // The toolbar sits above the node (the canvas pans down to make room for it) and its popovers
-  // open further up; without room for a popover above, it opens below the node, skipping over it.
-  // So neither ever covers the node itself.
-  const popsAbove = pos.y >= ROOM_ABOVE;
-  const skip = box.y2 - pos.y;
+function NodeBar({ hit, pos, width, pop, setPop, onRename, onNeedRoom }: { hit: NodeHit; pos: { x: number; y: number }; width: number; pop: Pop; setPop: (p: Pop) => void; onRename: () => void; onNeedRoom: (dy: number) => void }) {
+  // The toolbar sits above the node and its popovers always open further up, so neither covers
+  // the node; when a popover does not fit above, the canvas pans down to make room for it.
   const left = Math.min(Math.max(pos.x, NODE_BAR_W / 2 + 8), Math.max(NODE_BAR_W / 2 + 8, width - NODE_BAR_W / 2 - 8));
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = barRef.current;
+    const popEl = bar?.querySelector('.color-pop') ?? bar;
+    const host = bar?.closest('.canvas');
+    if (!popEl || !host) return;
+    const need = host.getBoundingClientRect().top + 8 - popEl.getBoundingClientRect().top;
+    if (need > 0) onNeedRoom(need);
+  }, [pop, pos.y]);
   const n = hit.node;
   const target = useSignal<'label' | 'edge' | 'branch' | 'meaning'>('label');
   const disabled = !n.src;
@@ -566,8 +568,9 @@ function NodeBar({ hit, pos, box, width, pop, setPop, onRename }: { hit: NodeHit
   };
   return (
     <div
-      class={`floating node-bar ${popsAbove ? 'pops-above' : 'pops-below'}`}
-      style={{ left: `${left}px`, top: `${pos.y}px`, '--skip': `${skip + 10}px` }} onPointerDown={(e) => e.stopPropagation()}>
+      ref={barRef}
+      class="floating node-bar"
+      style={{ left: `${left}px`, top: `${pos.y}px` }} onPointerDown={(e) => e.stopPropagation()}>
       {btn(t('rename'), <IEdit />, onRename)}
       {btn(t('addChild'), <IChild />, () => A.addChild(n))}
       {btn(t('addSister'), <ISister />, () => A.addSister(n))}
