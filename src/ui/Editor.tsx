@@ -49,7 +49,7 @@ const bracketLang = StreamLanguage.define<St>({
       return 'escape';
     }
     if (s.arrowLine) {
-      if (stream.match(/^#[\p{L}\p{N}_\-.:]+/u)) return 'link';
+      if (stream.match(/^#[\p{L}\p{N}_\-.:]+(\/\d+)?/u)) return 'link';
       if (stream.match(/^(<->|<-|->|--|<=>|=>|<=)/)) return 'operator';
       if (stream.match(/^"(?:[^"\\]|\\.)*"?/)) return 'string';
       if (stream.match(/^@#?[A-Za-z0-9]+/)) return 'color';
@@ -102,7 +102,7 @@ const bracketLang = StreamLanguage.define<St>({
     if (s.expectLabel || s.inLabel) {
       s.expectLabel = false;
       s.inLabel = true;
-      if (stream.match(/^#[\p{L}\p{N}_\-.:]+/u)) return 'link';
+      if (stream.match(/^#[\p{L}\p{N}_\-.:]+[!?]?/u)) return 'link';
       if (stream.match(/^@@?#?[A-Za-z0-9]+/)) return 'color';
       if (ch === '*') {
         stream.next();
@@ -112,12 +112,18 @@ const bracketLang = StreamLanguage.define<St>({
       stream.match(/^[^\s[\]{}|#*@%\\_^]+/) || stream.next();
       return 'typeName';
     }
+    if (ch === '$') {
+      stream.next();
+      while (!stream.eol() && stream.peek() !== '$') stream.next();
+      if (stream.peek() === '$') stream.next();
+      return 'meaning';
+    }
     if (s.gloss) {
       stream.match(/^[^[\]|{\\%]+/) || stream.next();
       return 'string';
     }
     if (ch === '#') {
-      stream.match(/^#[\p{L}\p{N}_\-.:]*/u);
+      stream.match(/^#[\p{L}\p{N}_\-.:]*[!?]?/u);
       return 'link';
     }
     if (ch === '^') {
@@ -151,6 +157,7 @@ const bracketLang = StreamLanguage.define<St>({
     keyword: tags.keyword,
     punctuation: tags.punctuation,
     deleted: tags.deleted,
+    meaning: tags.monospace,
   },
 });
 
@@ -169,6 +176,7 @@ const highlight = HighlightStyle.define([
   { tag: tags.comment, color: 'var(--cm-comment)', fontStyle: 'italic' },
   { tag: tags.keyword, color: 'var(--cm-keyword)' },
   { tag: tags.deleted, color: 'var(--cm-comment)' },
+  { tag: tags.monospace, color: 'var(--cm-meaning)' },
 ]);
 
 function macroCompletions(ctx: CompletionContext) {
@@ -186,7 +194,8 @@ const External = Annotation.define<boolean>();
 const editorTheme = EditorView.theme({
   '&': { height: '100%', fontSize: '14px', backgroundColor: 'var(--editor-bg)', color: 'var(--cm-text)' },
   '.cm-scroller': { fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', lineHeight: '1.6' },
-  '.cm-content': { caretColor: 'var(--accent)', padding: '10px 0' },
+  '.cm-content': { caretColor: 'var(--caret)', padding: '10px 0' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--caret)', borderLeftWidth: '2px' },
   '.cm-gutters': { backgroundColor: 'var(--editor-bg)', color: 'var(--muted)', border: 'none' },
   '.cm-activeLine': { backgroundColor: 'var(--editor-active)' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--text)' },

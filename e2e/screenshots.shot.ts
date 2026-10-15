@@ -49,10 +49,9 @@ test('interactions', async ({ page }) => {
   await page.getByRole('tab', { name: 'LaTeX' }).click();
   await page.screenshot({ path: `${OUT}/ui-export-latex.png` });
   await page.keyboard.press('Escape');
-  await page.getByTestId('examples-button').click();
-  await page.locator('[data-example="binding"]').click();
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: `${OUT}/ui-binding.png` });
+  await page.getByTestId('guide').click();
+  await page.screenshot({ path: `${OUT}/ui-guide.png` });
+  await page.keyboard.press('Escape');
   await page.getByTestId('examples-button').click();
   await page.locator('[data-example="wh"]').click();
   await page.locator('.arrow-hit').first().click({ force: true });
@@ -83,7 +82,7 @@ test('presets and modes', async ({ page }) => {
   await page.screenshot({ path: `${OUT}/bps-set.png` });
   await page.getByTestId('examples-button').click();
   await page.locator('[data-example="atb"]').click();
-  await page.locator('.settings button', { hasText: 'Copies instead' }).click();
+  await page.locator('.settings button', { hasText: 'Traces' }).click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/atb-copies.png` });
 });

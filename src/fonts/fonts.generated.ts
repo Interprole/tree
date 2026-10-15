@@ -265,5 +265,5 @@ export const FACES: FontFace[] = [
   { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'normal', range: '', woff2: f160, sfnt: f161 },
   { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'italic', range: '', woff2: f162, sfnt: f163 },
   { id: 'cmu', family: 'CMU Serif', weight: 700, style: 'normal', range: '', woff2: f164, sfnt: f165 },
-  { id: 'symbols', family: 'Treeform Symbols', weight: 400, style: 'normal', range: 'U+0370-03FF,U+2000-2BFF', woff2: f166, sfnt: f167 },
+  { id: 'symbols', family: 'NanoTrees Symbols', weight: 400, style: 'normal', range: 'U+0370-03FF,U+2000-2BFF', woff2: f166, sfnt: f167 },
 ];
