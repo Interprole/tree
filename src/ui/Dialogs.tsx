@@ -100,7 +100,7 @@ const GUIDE: GuideSection[] = [
             <strong>Export</strong> it as SVG, PNG, PDF or LaTeX (forest), or copy a <em>Share</em> link that opens the same tree.
           </li>
         </ol>
-        <p class="hint">Start from <em>Examples</em> in the top bar: each one shows a feature (X-bar, chains, head movement, BPS, multidominance, nanosyntax, glosses, semantics).</p>
+        <p class="hint">Start from <em>Examples</em> in the top bar: each one shows a feature (X-bar, chains, head movement, multidominance, nanosyntax, glosses, semantics).</p>
       </>
     ),
   },
@@ -114,7 +114,7 @@ const GUIDE: GuideSection[] = [
           ['[DP the cat]', 'A node: [Label contents]. Words become one terminal (“the cat”).'],
           ['[DP [D the] [N cat]]', 'Daughters are nested brackets.'],
           ['[VP eat [DP fish]]', 'Terminals and nodes can be mixed.'],
-          ['[ [D the] [N cat]]', 'A node without a label (BPS computes it).'],
+          ['[ [D the] [N cat]]', 'A node without a label.'],
           ['% comment', 'Everything after % on a line is ignored.'],
         ]} />
         <h4>Inside labels and words</h4>
@@ -124,7 +124,8 @@ const GUIDE: GuideSection[] = [
           ['X^0   X^{max}', 'Superscripts: X⁰.'],
           ['\\phi  \\alpha  \\0', 'Symbols: φ α ∅ (type \\ in the code for the full list).'],
           ['big~label', '~ is a space inside a label.'],
-          ['\\[  \\#  "a [b]"', 'Escape a special character, or quote literal text.'],
+          ['**bold**  *italic*  ~~struck~~', 'Markdown in labels, words, notes and arrow labels. A lone * or ~~ stays as it is.'],
+          ['\\[  \\#  \\*  "a [b]"', 'Escape a special character, or quote literal text.'],
         ]} />
         <h4>Decorations</h4>
         <Table rows={[
@@ -132,7 +133,11 @@ const GUIDE: GuideSection[] = [
           ['[T{uφ, iT, EPP} will]', 'Feature stack under the node.'],
           ['[DP ^the big cat]', 'Triangle over an unanalysed constituent.'],
           ['[DP ^ [D the] [N cat]]', 'Triangle over a structure: the picture shows “the cat”, the code keeps the structure; remove ^ to get it back.'],
-          ['[DP@red …]   [DP@@#06c …]', 'Colour the node, or the whole branch below it (the edge above stays black).'],
+          ['[DP@red …]   [DP@@#06c …]', 'Colour the label, or the whole branch below it: labels, edges and meanings (the edge above stays black).'],
+          ['[DP;edge=red;width=2 …]', 'Colour / width (px) of the edge above this node.'],
+          ['[VP;len=20;spread=30 …]', 'Make the edge above longer (px); widen the gaps between the daughters (px).'],
+          ['[DP;sem=#06c …]', 'Colour of this node’s meaning formula.'],
+          ['[DP &"focus" &right"✓" …]', 'Notes next to the node: & then optional left/right/above/below and the text in quotes. auto = left of the first daughter, right otherwise. Drag a note on the canvas to move it (writes @dx,dy).'],
           ['[DP <what>]', 'Mark any text as an unpronounced copy by hand.'],
           ['[N cat $λx. cat(x)$]', 'A meaning (see Semantics).'],
         ]} />
@@ -148,7 +153,6 @@ const GUIDE: GuideSection[] = [
         <Table rows={[
           ['Manual', 'Everything exactly as written.'],
           ['X-bar', <>Write shorthand <code>[VP [V eat] [DP fish]]</code>; the tree adds V′. Options: X′ always / only with a specifier / never, X vs X⁰, prime vs overline, empty specifiers, expansion of one-word phrases.</>],
-          ['BPS', <>Bare Phrase Structure: non-terminals are labelled by their projecting head. Mark the projecting daughter with <code>*</code>: <code>[ [D* the] [N cat]]</code>. Labels can show the category (D), the head (the) or the set {'{the, {the, cat}}'}.</>],
         ]} />
       </>
     ),
@@ -173,6 +177,8 @@ const GUIDE: GuideSection[] = [
         <Table rows={[
           ['#wh!', 'Pronounce this position too (multiple spell-out).'],
           ['[DP#wh? what]', 'Do not pronounce this position.'],
+          ['#wh"whom"', 'Pronounce this copy differently (e.g. a resumptive or a partial copy): the position shows the given words.'],
+          ['#wh$x : e$', 'Give a lower position its own meaning (a trace as a variable). Its sister is then abstracted over it (Predicate Abstraction, shown as PA+…).'],
         ]} />
         <p>On the canvas: select a position → ⋯ → <em>Pronounce / Silence this position</em>.</p>
         <h4>Arrows and indices</h4>
@@ -183,7 +189,7 @@ const GUIDE: GuideSection[] = [
           <em>Movement indices</em> adds subscripts to all positions of each chain. They are separate from indices you type yourself (<code>DP_i</code>, used for binding): movement indices come from the # ids and never reuse a letter you already typed.
         </p>
         <h4>Head movement</h4>
-        <p>An arrow from one head to another (e.g. V to v) is head movement: the source is struck through and the target shows the complex head. Several steps add up: V+v, then V+v+T.</p>
+        <p>An arrow from one head to another (e.g. V to v) is head movement: the source is struck through and the target shows the complex head as text, with the words joined by + too. Several steps add up: V+v, then V+v+T (sing+∅+-s). ∅ is left out of the words.</p>
         <Pre>{'[TP [T#t -s] [vP [v#v ∅] [VP [V#root sing] [DP songs]]]]\n#root -> #v\n#v -> #t'}</Pre>
         <h4>Arrow lines</h4>
         <Table rows={[
@@ -191,7 +197,8 @@ const GUIDE: GuideSection[] = [
           ['<->   <-   --', 'Two heads, reversed, no head.'],
           ['dashed  dotted', 'Line style.'],
           ['curve', 'A direct curve instead of the route under the tree.'],
-          ['"label"   @red', 'A label, a colour.'],
+          ['"label"   @red', 'A label, a colour. Several labels are allowed.'],
+          ['above"x"  below"y"  left"z"', 'Label position (default: auto = under an arrow below the tree, outside a curve). Drag a label to move it: writes "x"@dx,dy.'],
           ['bend=0,20', 'Offset of the bend (set by dragging the handle).'],
           ['#wh/2 -> #wh/1 hide', 'Hide one automatic arrow of a chain.'],
         ]} />
@@ -204,17 +211,18 @@ const GUIDE: GuideSection[] = [
     body: () => (
       <>
         <p>
-          Write a meaning between <code>$…$</code> in a node, optionally followed by its type after “ : ”. Meanings of the other nodes are computed bottom-up and shown in blue with the rule used.
+          Write a meaning between <code>$…$</code> in a node, optionally followed by its type after “ : ”. Meanings of the other nodes are computed bottom-up and shown in blue, optionally with the rule used (Appearance → Semantics → Show the rule).
         </p>
         <Pre>{'[S [DP Mary $mary : e$] [VP sleeps $λx. sleep(x) : <e,t>$]]'}</Pre>
         <h4>Formulas</h4>
         <Table rows={[
-          ['λx. cat(x)', 'λ-abstraction (type λ, or \\x. or \\lambda x.).'],
+          ['λx. cat(x)', 'λ-abstraction: type λ, or lambda x., or \\x., or \\lambda x.'],
           ['λx_e.λe_s. agent(e)(x)', 'Typed variables: x_e or x:e. Without a type, x y z are e, e e′ e1 are s (events), P Q are ⟨e,t⟩.'],
           ['∧ ∨ ¬ → =', 'Connectives (also & -> \\land \\neg).'],
-          ['∃x. φ   ∀x. φ   ιx. φ', 'Quantifiers and the iota operator.'],
+          ['∃x. φ   ∀x. φ   ιx. φ', 'Quantifiers and the iota operator: also exists x., forall x., iota x.'],
+          ['size(x) > 3   n + 1', 'Numbers and comparison / arithmetic: = ≠ < > ≤ ≥ + − × (also != <= >= - *).'],
           ['mary : e   dog : <e,t>', 'A constant with a declared type.'],
-          ['<e,<s,t>>', 'Types: e, t, s (events), ⟨a,b⟩ written <a,b>.'],
+          ['<e,<s,t>>', 'Types can be anything: e, t, s, d, i, n, or any name you like, and ⟨a,b⟩ written <a,b>. Only the function structure matters for composition.'],
         ]} />
         <h4>Composition rules</h4>
         <p>For a node with two daughters β and γ, the first rule that fits applies:</p>
@@ -243,8 +251,9 @@ const GUIDE: GuideSection[] = [
           ['△', 'Triangle on/off. The structure stays in the code.'],
           ['[f]', 'Features (comma-separated).'],
           ['λ', 'Meaning; or keep the computed meaning.'],
-          ['palette', 'Colour the node or its whole branch.'],
-          ['⋯', <>Bundle with a sister into X.Y (DM fusion); re-bracket the daughters: flat, right- or left-branching; pronounce or silence a chain position; mark the projecting daughter (BPS); draw an arrow.</>],
+          ['“ ”', 'Notes next to the node: several, each with a position (auto, left, right, above, below). Drag them on the canvas.'],
+          ['palette', 'Colour the label, the edge above, the whole branch or the meaning; edge width and length; spread of the daughters.'],
+          ['⋯', <>Re-bracket the daughters: flat, right- or left-branching (with two daughters it rotates [X [Y a b] c] ↔ [X a [Y b c]]); pronounce or silence a chain position; draw an arrow.</>],
           ['🗑', 'Delete the node (its #references and arrows go too).'],
         ]} />
         <h4>Tools (bottom of the canvas)</h4>
@@ -254,7 +263,7 @@ const GUIDE: GuideSection[] = [
           ['C-command', 'Click a node: green shows what it c-commands.'],
           ['Dominance', 'Click a node: blue shows what it dominates.'],
         ]} />
-        <p>Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the tree.</p>
+        <p>Click an arrow to change its line, head direction (→ ← ↔ —), colour, route and labels, or to reverse it. Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the tree.</p>
       </>
     ),
   },
@@ -272,7 +281,7 @@ const GUIDE: GuideSection[] = [
           ['SVG', 'Vector, with the fonts embedded.'],
           ['PNG', '1× to 6× (up to 576 dpi), optionally transparent.'],
           ['PDF', 'Vector, fonts embedded.'],
-          ['LaTeX', 'forest code (also tikz-qtree, or TikZ with the exact layout). Compiles with pdfLaTeX and LuaLaTeX.'],
+          ['LaTeX', 'forest code (also tikz-qtree, or TikZ with the exact layout). Compiles with pdfLaTeX, XeLaTeX and LuaLaTeX.'],
           ['Share', 'A link with the tree and its settings.'],
           ['My trees', 'Save trees in this browser. The current tree is saved automatically.'],
         ]} />
@@ -317,7 +326,6 @@ const KEYS: [string, string][] = [
   ['S', 'Add a sister'],
   ['Delete, Backspace', 'Delete the node or arrow'],
   ['T', 'Triangle on/off'],
-  ['H', 'Projecting daughter (BPS)'],
   ['M', 'Arrow from the selected node'],
   ['← → ↑ ↓', 'Move between sisters / mother / daughter'],
   ['V · W · C · D', 'Tools: select, arrow, c-command, dominance'],

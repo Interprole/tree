@@ -13,7 +13,7 @@ function rs<K extends keyof TreeStyle>(k: K): (() => void) | undefined {
   return style.value[k] === defaultStyle[k] ? undefined : () => setStyle({ [k]: defaultStyle[k] } as Partial<TreeStyle>);
 }
 
-type Path = [keyof BuildOptions] | ['xbar', keyof BuildOptions['xbar']] | ['bps', keyof BuildOptions['bps']] | ['semantics', keyof BuildOptions['semantics']];
+type Path = [keyof BuildOptions] | ['xbar', keyof BuildOptions['xbar']] | ['semantics', keyof BuildOptions['semantics']];
 
 function getPath(o: BuildOptions, p: Path): unknown {
   return p.length === 1 ? o[p[0]] : (o[p[0]] as unknown as Record<string, unknown>)[p[1]];
@@ -47,15 +47,6 @@ export function ModeOptions() {
         <Toggle label={t('xbarEmptySpecs')} checked={b.xbar.emptySpecs} reset={rb('xbar', 'emptySpecs')} onChange={(v) => setBuild({ xbar: { emptySpecs: v } })} />
         <Toggle label={t('xbarExpand')} checked={b.xbar.expandWords} reset={rb('xbar', 'expandWords')} onChange={(v) => setBuild({ xbar: { expandWords: v } })} />
       </>
-    );
-  }
-  if (b.mode === 'bps') {
-    return (
-      <Seg label={t('bpsLabel')} small value={b.bps.label} reset={rb('bps', 'label')} onChange={(v) => setBuild({ bps: { label: v } })} options={[
-        { v: 'category', label: t('bpsCategory') },
-        { v: 'head', label: t('bpsHead') },
-        { v: 'set', label: t('bpsSet') },
-      ]} />
     );
   }
   return <p class="hint">{t('modeManualHint')}</p>;
@@ -184,7 +175,6 @@ export function SettingsPanel() {
         <Seg value={b.mode} reset={rb('mode')} label="Mode" onChange={(v) => setBuild({ mode: v })} options={[
           { v: 'manual', label: t('modeManual'), title: t('modeManualHint') },
           { v: 'xbar', label: t('modeXbar'), title: t('modeXbarHint') },
-          { v: 'bps', label: t('modeBps'), title: t('modeBpsHint') },
         ]} />
         <ModeOptions />
         <Toggle label={t('showEmpty')} checked={b.showEmpty} reset={rb('showEmpty')} onChange={(v) => setBuild({ showEmpty: v })} />
@@ -198,6 +188,11 @@ export function SettingsPanel() {
         <Toggle label="Show meanings ($…$)" checked={b.semantics.show} reset={rb('semantics', 'show')} onChange={(v) => setBuild({ semantics: { show: v } })} />
         <Toggle label="Compute missing meanings (FA, PC, EI, FC)" checked={b.semantics.compute} reset={rb('semantics', 'compute')} onChange={(v) => setBuild({ semantics: { compute: v } })} />
         <Toggle label="Show types" checked={b.semantics.types} reset={rb('semantics', 'types')} onChange={(v) => setBuild({ semantics: { types: v } })} />
+        <Toggle label="Show the composition rule (FA, PC, …)" checked={b.semantics.rules} reset={rb('semantics', 'rules')} onChange={(v) => setBuild({ semantics: { rules: v } })} />
+        <div class="colors">
+          <ColorField label="Written meanings" value={s.semColor} reset={rs('semColor')} onChange={(v) => setStyle({ semColor: v })} />
+          <ColorField label="Computed meanings" value={s.semComputedColor} reset={rs('semComputedColor')} onChange={(v) => setStyle({ semComputedColor: v })} />
+        </div>
       </Section>
 
       <Section title={t('typography')}>

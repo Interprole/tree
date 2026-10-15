@@ -1,13 +1,14 @@
 import { useComputed, useSignal, useSignalEffect } from '@preact/signals';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import * as A from '../actions';
+import type * as E from '../core/edits';
 import { cCommandDomain, dominated } from '../core/analysis';
 import { plain } from '../core/richtext';
 import type { NodeHit, Scene } from '../core/scene';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
 import {
-  arrowSource, bendOverride, build, editable, fitRequest, fontEpoch, pick, relationOf, scene, selection, showToast, tool, tree,
+  arrowSource, bendOverride, editable, fitRequest, fontEpoch, pick, relationOf, scene, selection, showToast, tool, tree,
 } from '../state';
 import type { Tool } from '../state';
 import {
@@ -80,7 +81,8 @@ export function Canvas() {
   const hitByKey = useMemo(() => new Map((sc?.hits ?? []).map((h) => [h.key, h])), [sc]);
 
   // ---------- pointer handling (pan, pinch, bend drag)
-  const drag = useRef<null | { kind: 'pan' | 'bend'; sx: number; sy: number; vx: number; vy: number; moved: boolean; index?: number; bend?: [number, number]; target?: Element }>(null);
+  const labelGhost = useSignal<null | { box: { x1: number; y1: number; x2: number; y2: number }; dx: number; dy: number }>(null);
+  const drag = useRef<null | { kind: 'pan' | 'bend' | 'label'; label?: { kind: 'note' | 'arrow'; owner: string | number; index: number; off: [number, number]; box: { x1: number; y1: number; x2: number; y2: number } }; sx: number; sy: number; vx: number; vy: number; moved: boolean; index?: number; bend?: [number, number]; target?: Element }>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<null | { d: number; zoom: number; cx: number; cy: number; vx: number; vy: number }>(null);
 
@@ -104,6 +106,21 @@ export function Canvas() {
       drag.current = { kind: 'bend', sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false, index, bend: [...a.bend] as [number, number] };
       return;
     }
+    const labEl = target.closest('[data-label]');
+    if (labEl && editable.value) {
+      const [kind, owner, idx] = labEl.getAttribute('data-label')!.split('|');
+      const index = Number(idx);
+      const own = kind === 'note' ? owner : Number(owner);
+      const base =
+        kind === 'note'
+          ? A.nodeByKey(owner)?.notes?.find((x) => x.index === index)?.off
+          : tree.value?.arrows[Number(owner)]?.labels.find((x) => x.index === index)?.off;
+      const hitBox = scene.value?.labels.find((l) => l.kind === kind && l.owner === own && l.index === index)?.box;
+      if (hitBox) {
+        drag.current = { kind: 'label', sx: e.clientX, sy: e.clientY, vx: 0, vy: 0, moved: false, label: { kind: kind as 'note', owner: own, index, off: base ?? [0, 0], box: hitBox } };
+        return;
+      }
+    }
     drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, vx: view.value.x, vy: view.value.y, moved: false, target };
   };
 
@@ -124,6 +141,7 @@ export function Canvas() {
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
     if (!d.moved) return;
     if (d.kind === 'pan') view.value = { ...view.value, x: d.vx + dx, y: d.vy + dy };
+    else if (d.kind === 'label') labelGhost.value = { box: d.label!.box, dx: dx / view.value.zoom, dy: dy / view.value.zoom };
     else bendOverride.value = { index: d.index!, bend: [d.bend![0] + dx / view.value.zoom, d.bend![1] + dy / view.value.zoom] };
   };
 
@@ -133,6 +151,15 @@ export function Canvas() {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
+    if (d.kind === 'label') {
+      const g = labelGhost.value;
+      labelGhost.value = null;
+      if (g && d.moved) {
+        const l = d.label!;
+        A.moveLabel(l.kind, l.owner, l.index, [Math.round(l.off[0] + g.dx), Math.round(l.off[1] + g.dy)]);
+      }
+      return;
+    }
     if (d.kind === 'bend') {
       const o = bendOverride.value;
       if (o && d.moved) {
@@ -326,6 +353,14 @@ export function Canvas() {
                 <title>{plain(h.node.label)}</title>
               </rect>
             ))}
+            {sc.labels.map((l) => (
+              <rect key={`lab${l.kind}${l.owner}${l.index}`} x={l.box.x1} y={l.box.y1} width={l.box.x2 - l.box.x1} height={l.box.y2 - l.box.y1} rx="3" class="label-hit" data-label={`${l.kind}|${l.owner}|${l.index}`}>
+                <title>Drag to move</title>
+              </rect>
+            ))}
+            {labelGhost.value && (
+              <rect x={labelGhost.value.box.x1 + labelGhost.value.dx} y={labelGhost.value.box.y1 + labelGhost.value.dy} width={labelGhost.value.box.x2 - labelGhost.value.box.x1} height={labelGhost.value.box.y2 - labelGhost.value.box.y1} rx="3" class="label-ghost" />
+            )}
             {selArrow && (
               <circle cx={selArrow.geom.handle[0]} cy={selArrow.geom.handle[1]} r={6 / Math.sqrt(v.zoom)} class="bend-handle" data-handle={selArrow.index} />
             )}
@@ -356,9 +391,9 @@ export function Canvas() {
       {hint && <div class="canvas-hint">{hint}</div>}
 
       {selHit && tool.value === 'select' && !renaming.value && !pick.value && tr && (
-        <NodeBar key={selHit.key} hit={selHit} pos={toScreen((selHit.box.x1 + selHit.box.x2) / 2, selHit.box.y1)} pop={popover.value} setPop={(p) => (popover.value = popover.value === p ? null : p)} onRename={() => startRename(selHit.key)} bps={build.value.mode === 'bps'} />
+        <NodeBar key={selHit.key} hit={selHit} pos={toScreen((selHit.box.x1 + selHit.box.x2) / 2, selHit.box.y1)} pop={popover.value} setPop={(p) => (popover.value = popover.value === p ? null : p)} onRename={() => startRename(selHit.key)} />
       )}
-      {selArrow && tr?.arrows[selArrow.index] && <ArrowBar index={selArrow.index} pos={toScreen(selArrow.geom.handle[0], selArrow.geom.handle[1])} />}
+      {selArrow && tr?.arrows[selArrow.index] && <ArrowBar index={selArrow.index} pos={toScreen(selArrow.geom.handle[0], selArrow.geom.handle[1])} up={toScreen(0, selArrow.geom.handle[1]).y > (wrap.current?.clientHeight ?? 800) - 340} />}
 
       {renaming.value && hitByKey.get(renaming.value.key) && (() => {
         const h = hitByKey.get(renaming.value!.key)!;
@@ -412,13 +447,74 @@ function ToolBtn({ id, icon, label }: { id: Tool; icon: preact.JSX.Element; labe
   );
 }
 
-type Pop = null | 'color' | 'features' | 'meaning' | 'copy' | 'more';
+type Pop = null | 'style' | 'features' | 'meaning' | 'notes' | 'copy' | 'more';
 
-function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: { x: number; y: number }; pop: Pop; setPop: (p: Pop) => void; onRename: () => void; bps: boolean }) {
+const SIDES = ['auto', 'left', 'right', 'above', 'below'] as const;
+
+/** An editable list of labels (notes of a node, labels of an arrow). */
+function LabelList({ initial, onApply, placeholder }: { initial: E.LabelSpec[]; onApply: (l: E.LabelSpec[]) => void; placeholder: string }) {
+  const items = useSignal<E.LabelSpec[]>(initial.length ? initial : [{ text: '', side: 'auto' }]);
+  const set = (i: number, patch: Partial<E.LabelSpec>) => (items.value = items.value.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  return (
+    <form
+      class="label-list"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onApply(items.value);
+      }}
+    >
+      {items.value.map((it, i) => (
+        <div class="row tight" key={i}>
+          <input class="grow" value={it.text} placeholder={placeholder} onInput={(e) => set(i, { text: (e.target as HTMLInputElement).value })} onKeyDown={(e) => e.stopPropagation()} />
+          <select value={it.side} onChange={(e) => set(i, { side: (e.target as HTMLSelectElement).value as E.LabelSpec['side'], off: undefined })} title="Position">
+            {SIDES.map((sd) => (
+              <option key={sd} value={sd}>
+                {sd}
+              </option>
+            ))}
+          </select>
+          <button type="button" class="icon-btn small" title="Remove" aria-label="Remove" onClick={() => (items.value = items.value.filter((_, k) => k !== i))}>
+            ✕
+          </button>
+        </div>
+      ))}
+      <div class="row">
+        <button type="button" class="btn small" onClick={() => (items.value = [...items.value, { text: '', side: 'auto' }])}>
+          + Add
+        </button>
+        <button class="btn small primary" type="submit">
+          Apply
+        </button>
+      </div>
+      <p class="pop-hint">Markdown works: **bold**, *italic*, ~~struck~~. Drag a label on the tree to move it.</p>
+    </form>
+  );
+}
+
+function NumField({ label, value, onCommit, placeholder }: { label: string; value?: number; onCommit: (v: string | null) => void; placeholder: string }) {
+  return (
+    <label class="num-field">
+      <span>{label}</span>
+      <input
+        type="number"
+        step="1"
+        value={value ?? ''}
+        placeholder={placeholder}
+        onKeyDown={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          const v = (e.target as HTMLInputElement).value.trim();
+          onCommit(v === '' ? null : v);
+        }}
+      />
+    </label>
+  );
+}
+
+function NodeBar({ hit, pos, pop, setPop, onRename }: { hit: NodeHit; pos: { x: number; y: number }; pop: Pop; setPop: (p: Pop) => void; onRename: () => void }) {
   const n = hit.node;
-  const branch = useSignal(false);
+  const target = useSignal<'label' | 'edge' | 'branch' | 'meaning'>('label');
   const disabled = !n.src;
-  const srcNode = n.src?.kind === 'node' ? n.src : (n.parents[0]?.src?.kind === 'node' ? n.parents[0].src : null);
+  const srcNode = n.src?.kind === 'node' ? n.src : n.parents[0]?.src?.kind === 'node' ? n.parents[0].src : null;
   const feats = useSignal(srcNode?.features?.join(', ') ?? '');
   const meaning = useSignal(srcNode?.sem ?? '');
   const inChain = !!(n.chainRef || n.id);
@@ -428,6 +524,11 @@ function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: 
       {icon}
     </button>
   );
+  const applyColor = (c: string | null) => {
+    if (target.value === 'label') A.setColor(n, c, false);
+    else if (target.value === 'branch') A.setColor(n, c, true);
+    else A.setOption(n, target.value === 'edge' ? 'edge' : 'sem', c);
+  };
   return (
     <div class="floating node-bar" style={{ left: `${pos.x}px`, top: `${pos.y}px` }} onPointerDown={(e) => e.stopPropagation()}>
       {btn(t('rename'), <IEdit />, onRename)}
@@ -437,21 +538,31 @@ function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: 
       {btn(t('triangle'), <ITriangle />, () => A.toggleTriangle(n), { active: !!n.triangle || !!n.parents[0]?.triangle })}
       {btn('Features [ … ]', <span class="txt-icon">[f]</span>, () => setPop('features'), { active: pop === 'features' })}
       {btn('Meaning ⟦ ⟧', <span class="txt-icon">λ</span>, () => setPop('meaning'), { active: pop === 'meaning' })}
-      {btn(t('color'), <IPalette />, () => setPop('color'), { active: pop === 'color' })}
-      {btn('More: bundle, re-bracket, pronounce, arrow', <IMore />, () => setPop('more'), { active: pop === 'more', disabled: false })}
+      {btn('Notes next to the node', <span class="txt-icon">“ ”</span>, () => setPop('notes'), { active: pop === 'notes' })}
+      {btn('Colours and edge', <IPalette />, () => setPop('style'), { active: pop === 'style' })}
+      {btn('More: branching, pronunciation, arrow', <IMore />, () => setPop('more'), { active: pop === 'more', disabled: false })}
       {btn(t('delete'), <ITrash />, () => A.deleteNode(n), { danger: true })}
-      {pop === 'color' && (
-        <div class="color-pop">
+      {pop === 'style' && (
+        <div class="color-pop style-pop">
           <div class="seg small">
-            <button class={!branch.value ? 'on' : ''} onClick={() => (branch.value = false)}>{t('colorNode')}</button>
-            <button class={branch.value ? 'on' : ''} onClick={() => (branch.value = true)}>{t('colorBranch')}</button>
+            {(['label', 'edge', 'branch', 'meaning'] as const).map((k) => (
+              <button key={k} class={target.value === k ? 'on' : ''} onClick={() => (target.value = k)} title={{ label: 'The label', edge: 'The edge above the node', branch: 'Everything below (labels and edges)', meaning: 'The meaning formula' }[k]}>
+                {{ label: 'Label', edge: 'Edge', branch: 'Branch', meaning: 'Meaning' }[k]}
+              </button>
+            ))}
           </div>
           <div class="swatches">
             {PALETTE.map((c) => (
-              <button key={c} class="swatch" style={{ background: c }} title={c} aria-label={c} onClick={() => A.setColor(n, c, branch.value)} />
+              <button key={c} class="swatch" style={{ background: c }} title={c} aria-label={c} onClick={() => applyColor(c)} />
             ))}
-            <button class="swatch none" title={t('colorNone')} aria-label={t('colorNone')} onClick={() => A.setColor(n, null, false)} />
+            <button class="swatch none" title="Default colour" aria-label="Default colour" onClick={() => applyColor(null)} />
           </div>
+          <div class="num-row">
+            <NumField label="Edge width" value={n.edgeWidth} placeholder="1" onCommit={(v) => A.setOption(n, 'width', v)} />
+            <NumField label="Extra length" value={n.edgeLen} placeholder="0" onCommit={(v) => A.setOption(n, 'len', v)} />
+            <NumField label="Spread daughters" value={n.spread} placeholder="0" onCommit={(v) => A.setOption(n, 'spread', v)} />
+          </div>
+          <p class="pop-hint">Width and length apply to the edge above this node; spread widens the gaps between its daughters (px).</p>
         </div>
       )}
       {pop === 'copy' && (
@@ -477,6 +588,14 @@ function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: 
           <button class="btn small primary" type="submit">Apply</button>
         </form>
       )}
+      {pop === 'notes' && (
+        <div class="color-pop field-pop wide">
+          <LabelList initial={(srcNode?.notes ?? []).map((x) => ({ text: x.text, side: x.side, off: x.off }))} placeholder="e.g. focus, [+wh], ✓" onApply={(l) => {
+            A.setNotes(n, l);
+            setPop(null);
+          }} />
+        </div>
+      )}
       {pop === 'meaning' && (
         <form
           class="color-pop field-pop wide"
@@ -488,10 +607,10 @@ function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: 
         >
           <label>
             Meaning: formula, optionally “ : type”
-            <input autoFocus value={meaning.value} placeholder="λx. cat(x) : <e,t>" onInput={(e) => (meaning.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.stopPropagation()} />
+            <input autoFocus value={meaning.value} placeholder="lambda x. cat(x) : <e,t>" onInput={(e) => (meaning.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.stopPropagation()} />
           </label>
           <p class="pop-hint">
-            λ: type <code>\\</code> or <code>λ</code>; types <code>e</code>, <code>t</code>, <code>s</code> (events), <code>&lt;e,t&gt;</code>; typed variables <code>λx_e.</code>
+            λ: <code>lambda x.</code> or <code>\x.</code>; ι: <code>iota x.</code>. Types can be anything: <code>e</code>, <code>t</code>, <code>s</code>, <code>d</code>, <code>&lt;e,&lt;s,t&gt;&gt;</code>… Typed variables: <code>λx_e.</code>
           </p>
           <div class="row">
             <button class="btn small primary" type="submit">Apply</button>
@@ -506,15 +625,13 @@ function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: 
       )}
       {pop === 'more' && (
         <div class="color-pop menu-list">
-          <button onClick={() => A.bundleWithSister(n)} disabled={disabled}>Bundle with sister (X.Y)</button>
           <div class="row tight">
             <span class="pop-hint">Branching:</span>
             <button onClick={() => A.restructure(n, 'flat')} disabled={disabled}>flat</button>
-            <button onClick={() => A.restructure(n, 'right')} disabled={disabled}>right</button>
             <button onClick={() => A.restructure(n, 'left')} disabled={disabled}>left</button>
+            <button onClick={() => A.restructure(n, 'right')} disabled={disabled}>right</button>
           </div>
           {inChain && <button onClick={() => A.togglePronounce(n)}>{overt ? 'Silence this position' : 'Pronounce this position'}</button>}
-          {bps && n.kind === 'phrase' && <button onClick={() => A.toggleHead(n)} disabled={disabled}>{n.head ? 'Unmark projecting daughter' : 'Mark as projecting daughter (*)'}</button>}
           <button onClick={() => A.startArrow(n)}>Draw an arrow from here</button>
         </div>
       )}
@@ -522,15 +639,12 @@ function NodeBar({ hit, pos, pop, setPop, onRename, bps }: { hit: NodeHit; pos: 
   );
 }
 
-function ArrowBar({ index, pos }: { index: number; pos: { x: number; y: number } }) {
+function ArrowBar({ index, pos, up: flip }: { index: number; pos: { x: number; y: number }; up?: boolean }) {
   const a = tree.value!.arrows[index];
-  const label = useSignal(a.label ?? '');
-  useEffect(() => {
-    label.value = a.label ?? '';
-  }, [a.label, index]);
   const up = (p: Parameters<typeof A.updateArrow>[1]) => A.updateArrow(a, p);
+  const initial = (a.src?.labels ?? []).map((l) => ({ text: l.text, side: l.side, off: l.off }));
   return (
-    <div class="floating arrow-bar" style={{ left: `${pos.x}px`, top: `${pos.y + 14}px` }} onPointerDown={(e) => e.stopPropagation()}>
+    <div class="floating arrow-bar" style={flip ? { left: `${pos.x}px`, top: `${pos.y - 14}px`, transform: 'translate(-50%, -100%)' } : { left: `${pos.x}px`, top: `${pos.y + 14}px` }} onPointerDown={(e) => e.stopPropagation()}>
       {a.auto && <div class="note">{t('autoArrow')}</div>}
       <div class="seg small">
         <button class={a.line === 'solid' ? 'on' : ''} onClick={() => up({ line: 'solid' })}>{t('arrowSolid')}</button>
@@ -541,30 +655,29 @@ function ArrowBar({ index, pos }: { index: number; pos: { x: number; y: number }
         <button class={a.route === 'under' ? 'on' : ''} onClick={() => up({ route: 'under', bend: [0, 0] })}>{t('arrowUnder')}</button>
         <button class={a.route === 'curve' ? 'on' : ''} onClick={() => up({ route: 'curve', bend: [0, 0] })}>{t('arrowCurve')}</button>
       </div>
-      <div class="seg small">
-        <button class={a.head === 'end' ? 'on' : ''} onClick={() => up({ head: 'end' })}>→</button>
-        <button class={a.head === 'both' ? 'on' : ''} onClick={() => up({ head: 'both' })}>↔</button>
-        <button class={a.head === 'none' ? 'on' : ''} onClick={() => up({ head: 'none' })}>—</button>
+      <div class="row tight">
+        <div class="seg small">
+          <button class={a.head === 'end' ? 'on' : ''} onClick={() => up({ head: 'end' })} title="Head at the target">→</button>
+          <button class={a.head === 'start' ? 'on' : ''} onClick={() => up({ head: 'start' })} title="Head at the source">←</button>
+          <button class={a.head === 'both' ? 'on' : ''} onClick={() => up({ head: 'both' })} title="Both ends">↔</button>
+          <button class={a.head === 'none' ? 'on' : ''} onClick={() => up({ head: 'none' })} title="No head">—</button>
+        </div>
+        <button class="btn small" title="Swap source and target" onClick={() => A.reverseArrow(a)}>⇄ Reverse</button>
       </div>
+      <div class="swatches small">
+        {PALETTE.map((c) => (
+          <button key={c} class={`swatch ${a.color === c ? 'on' : ''}`} style={{ background: c }} title={c} aria-label={c} onClick={() => up({ color: c })} />
+        ))}
+        <button class="swatch none" title="Default colour" aria-label="Default colour" onClick={() => up({ color: undefined })} />
+      </div>
+      <LabelList key={index + ':' + initial.length} initial={initial} placeholder={t('arrowLabel')} onApply={(l) => up({ labels: l.filter((x) => x.text.trim()).map((x) => ({ ...x, span: { from: 0, to: 0 } })) })} />
       <div class="row">
-        <input
-          placeholder={t('arrowLabel')}
-          value={label.value}
-          onInput={(e) => (label.value = (e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === 'Enter') up({ label: label.value || undefined });
-          }}
-          onBlur={() => label.value !== (a.label ?? '') && up({ label: label.value || undefined })}
-        />
         <button class="btn small" onClick={() => up({ bend: [0, 0] })} title={t('arrowResetBend')}>
-          ⟲
+          ⟲ {t('arrowResetBend')}
         </button>
-        {!a.auto && (
-          <button class="icon-btn danger" title={t('delete')} aria-label={t('delete')} onClick={() => A.deleteArrow(a)}>
-            <ITrash />
-          </button>
-        )}
+        <button class="icon-btn danger" title={t('delete')} aria-label={t('delete')} onClick={() => A.deleteArrow(a)}>
+          <ITrash />
+        </button>
       </div>
     </div>
   );
