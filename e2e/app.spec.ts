@@ -235,8 +235,25 @@ test('node: notes, edge style, restructure', async ({ page }) => {
   await expect.poll(() => code(page)).toContain('[VP;edge=#b91c1c');
   await page.locator('.node-bar button[aria-label^="Spacing"]').click();
   await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').fill('3');
-  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').press('Tab');
-  await expect.poll(() => code(page)).toContain(';width=3');
+  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').press('Enter');
+  await expect
+    .poll(async () => {
+      const c = await code(page);
+      if (c.includes(';width=3')) return c;
+      // diagnostics for a failure seen only in CI
+      return JSON.stringify(
+        await page.evaluate(() => ({
+          code: document.querySelector('.cm-content')?.textContent,
+          input: (document.querySelector('.num-field input') as HTMLInputElement | null)?.value,
+          active: document.activeElement?.outerHTML.slice(0, 120),
+          toast: document.querySelector('.toast')?.textContent,
+          bar: document.querySelector('.node-bar')?.getBoundingClientRect().toJSON(),
+          pop: document.querySelector('.node-bar .color-pop')?.getBoundingClientRect().toJSON(),
+          status: document.querySelector('.status')?.textContent,
+        })),
+      );
+    })
+    .toContain(';width=3');
   await page.locator('.canvas').focus();
   await page.keyboard.press('Escape');
   await node('S').click();

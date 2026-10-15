@@ -691,7 +691,7 @@ kbd {
   display: flex;
   gap: 1px;
   padding: 3px;
-  transform: translate(-50%, calc(-100% - 10px));
+  transform: translate(-50%, calc(-100% - 22px));
 }
 
 .color-pop {
@@ -1635,12 +1635,8 @@ textarea.code {
   outline-offset: 1px;
 }
 
-/* node toolbar popovers open above the toolbar, or below the node when there is no room above */
-.node-bar.pops-below .color-pop {
-  top: calc(100% + 6px + var(--skip, 0px));
-}
-
-.node-bar.pops-above .color-pop {
+/* node toolbar popovers always open above the toolbar */
+.node-bar .color-pop {
   top: auto;
   bottom: calc(100% + 6px);
 }
