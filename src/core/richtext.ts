@@ -26,7 +26,44 @@ export interface Run {
 
 export type Runs = Run[];
 
+/** Standard LaTeX (and amssymb) symbol commands, usable as \name anywhere. */
+export const LATEX_SYMBOLS: Record<string, string> = {
+  // Greek
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ϵ', varepsilon: 'ε', zeta: 'ζ', eta: 'η', theta: 'θ', vartheta: 'ϑ',
+  iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π', varpi: 'ϖ', rho: 'ρ', varrho: 'ϱ', sigma: 'σ',
+  varsigma: 'ς', tau: 'τ', upsilon: 'υ', phi: 'ϕ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+  // arrows
+  rightarrow: '→', to: '→', leftarrow: '←', gets: '←', leftrightarrow: '↔', uparrow: '↑', downarrow: '↓', updownarrow: '↕',
+  Rightarrow: '⇒', Leftarrow: '⇐', Leftrightarrow: '⇔', Uparrow: '⇑', Downarrow: '⇓', Updownarrow: '⇕',
+  longrightarrow: '⟶', longleftarrow: '⟵', longleftrightarrow: '⟷', Longrightarrow: '⟹', Longleftarrow: '⟸', Longleftrightarrow: '⟺',
+  implies: '⟹', impliedby: '⟸', iff: '⟺', mapsto: '↦', longmapsto: '⟼', hookrightarrow: '↪', hookleftarrow: '↩',
+  nearrow: '↗', searrow: '↘', swarrow: '↙', nwarrow: '↖', leadsto: '⇝', rightsquigarrow: '⇝', rightharpoonup: '⇀', leftharpoonup: '↼',
+  rightleftharpoons: '⇌', twoheadrightarrow: '↠', curvearrowright: '↷', curvearrowleft: '↶', circlearrowright: '↻', circlearrowleft: '↺',
+  // logic and sets
+  neg: '¬', lnot: '¬', land: '∧', wedge: '∧', lor: '∨', vee: '∨', forall: '∀', exists: '∃', nexists: '∄',
+  top: '⊤', bot: '⊥', vdash: '⊢', dashv: '⊣', models: '⊨', vDash: '⊨', Vdash: '⊩', therefore: '∴', because: '∵',
+  emptyset: '∅', varnothing: '∅', in: '∈', notin: '∉', ni: '∋', subset: '⊂', supset: '⊃', subseteq: '⊆', supseteq: '⊇',
+  subsetneq: '⊊', supsetneq: '⊋', cup: '∪', cap: '∩', bigcup: '⋃', bigcap: '⋂', setminus: '∖', complement: '∁', powerset: '℘', wp: '℘',
+  // relations
+  leq: '≤', le: '≤', geq: '≥', ge: '≥', neq: '≠', ne: '≠', equiv: '≡', approx: '≈', sim: '∼', simeq: '≃', cong: '≅',
+  propto: '∝', ll: '≪', gg: '≫', prec: '≺', succ: '≻', preceq: '⪯', succeq: '⪰', triangleleft: '◁', triangleright: '▷',
+  lhd: '⊲', rhd: '⊳', unlhd: '⊴', unrhd: '⊵', parallel: '∥', perp: '⊥', mid: '∣', coloneqq: '≔', doteq: '≐',
+  // operators
+  pm: '±', mp: '∓', times: '×', div: '÷', cdot: '·', circ: '∘', bullet: '•', ast: '∗', star: '⋆', oplus: '⊕', otimes: '⊗',
+  odot: '⊙', sqcup: '⊔', sqcap: '⊓', uplus: '⊎', sum: '∑', prod: '∏', coprod: '∐', int: '∫', oint: '∮', partial: '∂',
+  nabla: '∇', infty: '∞', surd: '√', sqrt: '√', angle: '∠', diamond: '⋄', Diamond: '◇', Box: '□', square: '□', blacksquare: '■',
+  triangle: '△', bigtriangleup: '△', bigtriangledown: '▽', lozenge: '◊', checkmark: '✓', dagger: '†', ddagger: '‡',
+  // letters and misc
+  aleph: 'ℵ', beth: 'ℶ', hbar: 'ℏ', ell: 'ℓ', Re: 'ℜ', Im: 'ℑ', prime: '′', backprime: '‵', S: '§', P: '¶', copyright: '©',
+  dots: '…', ldots: '…', cdots: '⋯', vdots: '⋮', ddots: '⋱', langle: '⟨', rangle: '⟩', lceil: '⌈', rceil: '⌉', lfloor: '⌊',
+  rfloor: '⌋', llbracket: '⟦', rrbracket: '⟧', sharp: '♯', flat: '♭', natural: '♮', clubsuit: '♣', diamondsuit: '♢',
+  heartsuit: '♡', spadesuit: '♠', textdagger: '†', textsection: '§', textbullet: '•', textendash: '–', textemdash: '—',
+  textasciitilde: '~', textbackslash: '\\', textbar: '|', textless: '<', textgreater: '>', textdegree: '°', degree: '°',
+};
+
 export const MACROS: Record<string, string> = {
+  ...LATEX_SYMBOLS,
   alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
   theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π', rho: 'ρ',
   sigma: 'σ', tau: 'τ', upsilon: 'υ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',

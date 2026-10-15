@@ -1,3 +1,4 @@
+import { LATEX_SYMBOLS } from './richtext';
 import type { Runs } from './richtext';
 
 /**
@@ -105,6 +106,10 @@ export function parseTerm(src: string): Term {
     .replace(/\\(neg|lnot)\b/g, '¬')
     .replace(/\\(to|rightarrow)\b/g, '→')
     .replace(/<->|\\leftrightarrow\b/g, '↔')
+    // any other LaTeX symbol command (\Rightarrow, \neq, …); single letters stay λ-shorthand (\x.)
+    .replace(/\\([A-Za-z]{2,})/g, (m, name: string) => LATEX_SYMBOLS[name] ?? m)
+    .replace(/[⇒⟹]/g, '→')
+    .replace(/[⇔⟺]/g, '↔')
     .replace(/->/g, '→')
     .replace(/<=/g, '≤')
     .replace(/>=/g, '≥')

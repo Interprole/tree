@@ -29,7 +29,8 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
   - colours of the label, the edge above, the whole branch (edges, labels and meanings) or the meaning; edge width and length, spread of the daughters;
   - arrows: line, head direction, reverse, colour, route, several labels at chosen sides (draggable);
   - Markdown (`**bold**`, `*italic*`, `~~struck~~`) in labels, words, notes and arrow labels;
-  - re-bracketing a node (flat, right- or left-branching; a binary node is rotated);
+  - changing the branching of a node with two daughters (left ↔ right swaps them: `[XP X [Z]]` ↔ `[XP [Z] X]`);
+  - click a note or an arrow label to rename or delete it, drag it to move it;
   - c-command and dominance highlighting;
   - undo and redo.
 - **Export and sharing:**
@@ -46,6 +47,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | `[ [D the] [N cat]]` | empty label |
 | `**bold** *italic* ~~struck~~` | Markdown (escape with `\*`, `\~`) |
 | `T'` `DP_i` `X^0` `\phi` `\0` | prime, subscript, superscript, φ, ∅ |
+| `\Rightarrow` `\Leftrightarrow` `\varnothing` … | any standard LaTeX symbol command (exported back as the same command) |
 | `[V liest \| read.PRS.3SG]` | gloss line under the terminal (ALL-CAPS → small caps) |
 | `[T{uφ, iT, EPP} will]` | feature stack |
 | `[DP ^the big cat]` / `[DP ^ [D the] [N cat]]` | triangle (over words / over a structure, which stays in the code) |

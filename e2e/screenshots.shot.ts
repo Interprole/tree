@@ -65,7 +65,7 @@ test('interactions', async ({ page }) => {
   await page.screenshot({ path: `${OUT}/ui-arrow-selected.png` });
   await page.keyboard.press('Escape');
   await page.locator('[data-node]').nth(4).click();
-  await page.locator('.node-bar button[aria-label="Colours and edge"]').click();
+  await page.locator('.node-bar button[aria-label="Colours"]').click();
   await page.screenshot({ path: `${OUT}/ui-node-style.png` });
 });
 

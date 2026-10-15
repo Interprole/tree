@@ -123,6 +123,7 @@ const GUIDE: GuideSection[] = [
           ['DP_i   DP_{i,j}', 'Subscripts, e.g. binding indices.'],
           ['X^0   X^{max}', 'Superscripts: X⁰.'],
           ['\\phi  \\alpha  \\0', 'Symbols: φ α ∅ (type \\ in the code for the full list).'],
+          ['\\Rightarrow  \\Leftrightarrow  \\varnothing  \\emptyset', 'Any standard LaTeX symbol command works anywhere: ⇒ ⇔ ∅ ∅, arrows, relations, set and logic symbols. The LaTeX export writes the same commands back.'],
           ['big~label', '~ is a space inside a label.'],
           ['**bold**  *italic*  ~~struck~~', 'Markdown in labels, words, notes and arrow labels. A lone * or ~~ stays as it is.'],
           ['\\[  \\#  \\*  "a [b]"', 'Escape a special character, or quote literal text.'],
@@ -217,6 +218,7 @@ const GUIDE: GuideSection[] = [
         <h4>Formulas</h4>
         <Table rows={[
           ['λx. cat(x)', 'λ-abstraction: type λ, or lambda x., or \\x., or \\lambda x.'],
+          ['\\lambda \\iota \\forall \\Rightarrow', 'Symbols are written either directly (λ ι ∀ ⇒) or as LaTeX commands; ⇒ and ⇔ mean → and ↔.'],
           ['λx_e.λe_s. agent(e)(x)', 'Typed variables: x_e or x:e. Without a type, x y z are e, e e′ e1 are s (events), P Q are ⟨e,t⟩.'],
           ['∧ ∨ ¬ → =', 'Connectives (also & -> \\land \\neg).'],
           ['∃x. φ   ∀x. φ   ιx. φ', 'Quantifiers and the iota operator: also exists x., forall x., iota x.'],
@@ -251,9 +253,11 @@ const GUIDE: GuideSection[] = [
           ['△', 'Triangle on/off. The structure stays in the code.'],
           ['[f]', 'Features (comma-separated).'],
           ['λ', 'Meaning; or keep the computed meaning.'],
-          ['“ ”', 'Notes next to the node: several, each with a position (auto, left, right, above, below). Drag them on the canvas.'],
-          ['palette', 'Colour the label, the edge above, the whole branch or the meaning; edge width and length; spread of the daughters.'],
-          ['⋯', <>Re-bracket the daughters: flat, right- or left-branching (with two daughters it rotates [X [Y a b] c] ↔ [X a [Y b c]]); pronounce or silence a chain position; draw an arrow.</>],
+          ['“ ”', 'Notes next to the node: several, each with a position (auto, left, right, above, below). Drag them on the canvas; click one to rename or delete it.'],
+          ['palette', 'Colour the label, the edge above, the whole branch or the meaning.'],
+          ['↔', 'Spacing: width and extra length of the edge above, spread of the daughters.'],
+          ['arrow', 'Draw an arrow from this node: then click the target.'],
+          ['⋯', <>Change the branching of a node with two daughters by swapping them: <em>left</em> turns [XP X [Z]] into [XP [Z] X], <em>right</em> turns [XP [Z] X] into [XP X [Z]]; pronounce or silence a chain position.</>],
           ['🗑', 'Delete the node (its #references and arrows go too).'],
         ]} />
         <h4>Tools (bottom of the canvas)</h4>
@@ -263,7 +267,7 @@ const GUIDE: GuideSection[] = [
           ['C-command', 'Click a node: green shows what it c-commands.'],
           ['Dominance', 'Click a node: blue shows what it dominates.'],
         ]} />
-        <p>Click an arrow to change its line, head direction (→ ← ↔ —), colour, route and labels, or to reverse it. Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the tree.</p>
+        <p>Click a note or an arrow label to rename or delete it; drag it to move it. Click an arrow to change its line, head direction (→ ← ↔ —), colour, route and labels, or to reverse it. Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the tree.</p>
       </>
     ),
   },
