@@ -216,11 +216,11 @@ export function completePick(target: DNode) {
   applyEdit(E.addCopy(doc.value!, t, p.kind === 'daughter' ? { kind: 'daughter', of: placeSrc as ANode } : { kind: 'sister', of: placeSrc }));
 }
 
-export function restructure(n: DNode | null, shape: 'flat' | 'right' | 'left') {
+export function restructure(n: DNode | null, shape: 'right' | 'left') {
   if (!guard(n) || n.src!.kind !== 'node') return;
   const edit = E.restructure(source.value, n.src as ANode, shape);
-  if (!edit.changes.length) {
-    showToast(shape === 'flat' ? 'Nothing to flatten here.' : `Already ${shape}-branching (or nothing to rotate).`);
+  if (edit.error) {
+    showToast(edit.error);
     return;
   }
   applyEdit(edit);
@@ -253,6 +253,30 @@ export function moveLabel(kind: 'note' | 'arrow', owner: string | number, index:
   if (!a?.src) return;
   const labels = a.src.labels.map((l, i) => (i === index ? { ...l, off } : l));
   applyEdit(E.updateArrow(a.src, { labels }));
+}
+
+/** Rename (text) or delete (null) one note of a node or one label of an arrow. */
+export function editLabel(kind: 'note' | 'arrow', owner: string | number, index: number, text: string | null) {
+  if (!editable.value) return;
+  const apply = <T extends { text: string }>(list: T[]) =>
+    list.flatMap((l, i) => (i !== index ? [l] : text === null || !text.trim() ? [] : [{ ...l, text }]));
+  if (kind === 'note') {
+    const n = nodeByKey(owner as string);
+    const s = n && nodeSrc(n);
+    if (s?.notes) applyEdit(E.setNotes(source.value, s, apply(s.notes)));
+    return;
+  }
+  const a = tree.value?.arrows[owner as number];
+  if (a?.src) applyEdit(E.updateArrow(a.src, { labels: apply(a.src.labels) }));
+}
+
+/** The source text of a note or an arrow label. */
+export function labelText(kind: 'note' | 'arrow', owner: string | number, index: number): string | undefined {
+  if (kind === 'note') {
+    const n = nodeByKey(owner as string);
+    return (n && nodeSrc(n))?.notes?.[index]?.text;
+  }
+  return tree.value?.arrows[owner as number]?.src?.labels[index]?.text;
 }
 
 export function reverseArrow(a: DArrow | null = selectedArrow()) {

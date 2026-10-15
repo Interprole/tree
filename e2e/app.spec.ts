@@ -207,6 +207,16 @@ test('arrow: colour, reverse, several labels, drag a label', async ({ page }) =>
   await page.mouse.move(box!.x + box!.width / 2 + 40, box!.y + box!.height / 2 + 20, { steps: 6 });
   await page.mouse.up();
   await expect.poll(() => code(page)).toMatch(/"wh"@\d+,\d+/);
+  // click a label: rename it, then delete it
+  const lab = await page.locator('.label-hit').first().boundingBox();
+  await page.mouse.click(lab!.x + lab!.width / 2, lab!.y + lab!.height / 2);
+  await page.locator('.label-editor input').fill('A-mvt');
+  await page.locator('.label-editor input').press('Enter');
+  await expect.poll(() => code(page)).toMatch(/"A-mvt"@\d+,\d+/);
+  const lab2 = await page.locator('.label-hit').first().boundingBox();
+  await page.mouse.click(lab2!.x + lab2!.width / 2, lab2!.y + lab2!.height / 2);
+  await page.locator('.label-editor button[aria-label="Delete this label"]').click();
+  await expect.poll(() => code(page)).not.toContain('A-mvt');
 });
 
 test('node: notes, edge style, restructure', async ({ page }) => {
@@ -219,10 +229,11 @@ test('node: notes, edge style, restructure', async ({ page }) => {
   await page.locator('.label-list button', { hasText: 'Apply' }).click();
   await expect.poll(() => code(page)).toContain('[VP [V saw] [DP him] &"focus"]');
   await node('VP').click();
-  await page.locator('.node-bar button[aria-label="Colours and edge"]').click();
+  await page.locator('.node-bar button[aria-label="Colours"]').click();
   await page.locator('.style-pop .seg button', { hasText: 'Edge' }).click();
   await page.locator('.style-pop .swatch[title="#b91c1c"]').click();
   await expect.poll(() => code(page)).toContain('[VP;edge=#b91c1c');
+  await page.locator('.node-bar button[aria-label^="Spacing"]').click();
   await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').fill('3');
   await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').press('Tab');
   await expect.poll(() => code(page)).toContain(';width=3');
@@ -231,5 +242,8 @@ test('node: notes, edge style, restructure', async ({ page }) => {
   await node('S').click();
   await page.locator('.node-bar button[aria-label^="More"]').click();
   await page.locator('.menu-list button', { hasText: 'left' }).click();
-  await expect.poll(() => code(page)).toMatch(/\[S \[\S* \[DP she\] \[V saw\]\] \[DP him\]\]/);
+  await expect.poll(() => code(page)).toMatch(/^\[S \[VP.*\] \[DP she\]\]$/);
+  // already left-branching: a message, no change (the menu is still open)
+  await page.locator('.menu-list button', { hasText: 'left' }).click();
+  await expect(page.locator('.toast')).toContainText('Already left-branching');
 });

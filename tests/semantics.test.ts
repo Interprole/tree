@@ -51,6 +51,11 @@ describe('composition rules', () => {
 });
 
 describe('more formula syntax', () => {
+  test('LaTeX commands in formulas', () => {
+    expect(show(parseTerm('\\lambda x. \\iota y. dog(y) \\land x \\neq y'))).toBe('λx. ιy. dog(y) ∧ x ≠ y');
+    expect(show(parseTerm('\\forall x. cat(x) \\Rightarrow sleep(x)'))).toBe('∀x. cat(x) → sleep(x)');
+    expect(show(parseTerm('p \\Leftrightarrow q'))).toBe('p ↔ q');
+  });
   test('lambda / iota words, numbers, any base types', () => {
     expect(c('lambda x. tall(x)', 'iota y. dog(y)')).toBe('FA: tall(ιy. dog(y)) : t');
     expect(showTy(m('λd_d. λx. height(x) >= d : <d,<e,t>>').ty)).toBe('⟨d,⟨e,t⟩⟩');

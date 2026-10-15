@@ -77,19 +77,23 @@ describe('canvas edits keep the text valid', () => {
     expect(E.applyChanges(s3, E.setPronounce({ ref }, true).changes)).toBe('[CP [DP#wh what] [VP see #wh!]]');
     expect(E.applyChanges(s3, E.setPronounce({ node: find(d, 'DP') }, false).changes)).toBe('[CP [DP#wh? what] [VP see #wh]]');
   });
-  test('re-bracketing', () => {
-    const s5 = '[VP [V give] [DP a] [PP b]]';
-    const right = run(s5, (d) => E.restructure(s5, d.root!, 'right'));
-    expect(right).toBe('[VP [V give] [VP [DP a] [PP b]]]');
-    expect(run(s5, (d) => E.restructure(s5, d.root!, 'left'))).toBe('[VP [VP [V give] [DP a]] [PP b]]');
-    expect(run(right, (d) => E.restructure(right, d.root!, 'flat'))).toBe(s5);
+  test('changing the branching swaps the two daughters', () => {
+    const r1 = '[XP X [Z a b]]';
+    expect(run(r1, (d) => E.restructure(r1, d.root!, 'left'))).toBe('[XP [Z a b] X]');
+    const r2 = '[XP [X] [Z [A a] b]]';
+    expect(run(r2, (d) => E.restructure(r2, d.root!, 'left'))).toBe('[XP [Z [A a] b] [X]]');
+    const l1 = '[XP [Z a b] X]';
+    expect(run(l1, (d) => E.restructure(l1, d.root!, 'right'))).toBe('[XP X [Z a b]]');
+    const l2 = '[XP [Z [A a]] [X]]';
+    expect(run(l2, (d) => E.restructure(l2, d.root!, 'right'))).toBe('[XP [X] [Z [A a]]]');
   });
-  test('binary nodes rotate', () => {
-    const s6 = '[S [A x] [B [C y] [D z]]]';
-    const l = run(s6, (d) => E.restructure(s6, d.root!, 'left'));
-    expect(l).toBe('[S [B [A x] [C y]] [D z]]');
-    expect(run(l, (d) => E.restructure(l, d.root!, 'right'))).toBe(s6);
-    expect(run(s6, (d) => E.restructure(s6, d.root!, 'flat'))).toBe('[S [A x] [C y] [D z]]');
+  test('changing the branching reports what does not fit', () => {
+    const three = '[VP [V give] [DP a] [PP b]]';
+    expect(E.restructure(three, doc(three).root!, 'left').error).toMatch(/exactly two daughters/);
+    const left = '[XP [Z a b] X]';
+    expect(E.restructure(left, doc(left).root!, 'left').error).toMatch(/Already left-branching/);
+    const right = '[XP X [Z a b]]';
+    expect(E.restructure(right, doc(right).root!, 'right').error).toMatch(/Already right-branching/);
   });
   test('node options and notes', () => {
     expect(run(src, (d) => E.setOption(find(d, 'VP'), 'edge', 'red'))).toBe('[S [NP John] [VP;edge=red [V saw] [NP Mary]]]');

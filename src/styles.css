@@ -483,6 +483,10 @@ kbd {
   z-index: 50;
   display: flex;
   flex-direction: column;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .menu-pop button {
@@ -770,6 +774,10 @@ kbd {
   border: 1.5px solid #2563eb;
   box-shadow: var(--shadow);
   padding: 2px 8px;
+  /* the box sits on the white paper: dark text and a clearly visible caret in both themes */
+  background: #fff;
+  color: #111;
+  caret-color: #c2410c;
 }
 
 
@@ -1624,4 +1632,23 @@ textarea.code {
 .swatch.on {
   outline: 2px solid var(--accent, #2563eb);
   outline-offset: 1px;
+}
+
+/* node toolbar popovers open above the toolbar (below it when the node is near the top) */
+.node-bar.pops-above .color-pop {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.label-editor {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 5px;
+  transform: translateX(-50%);
+}
+
+.label-editor input {
+  width: 170px;
+  padding: 3px 7px;
 }
