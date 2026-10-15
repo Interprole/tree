@@ -1,5 +1,5 @@
 import { layoutArrows } from './arrows';
-import { semDisplay } from './layout';
+import { noteSide, semDisplay } from './layout';
 import type { Layout } from './layout';
 import type { DArrow, DNode, DTree } from './model';
 import type { Run, Runs } from './richtext';
@@ -248,8 +248,10 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     if (n.edgeLen) opts.push(`l+=${px2pt(n.edgeLen)}pt`);
     if (n.spread) opts.push(`for children={s sep+=${px2pt(n.spread)}pt}`);
     for (const note of n.notes ?? []) {
-      const side = { left: 'left', right: 'right', above: 'above', below: 'below', auto: 'right' }[note.side];
-      opts.push(`label={[font=\\small]${side}:{${texRuns(note.runs)}}}`);
+      // same placement as on the canvas: auto = left of a first daughter, right otherwise; drag offset as a shift
+      const side = noteSide(n, note.side);
+      const shift = note.off ? `, xshift=${px2pt(note.off[0])}pt, yshift=${px2pt(-note.off[1])}pt` : '';
+      opts.push(`label={[font=\\small${shift}]${side}:{${texRuns(note.runs)}}}`);
     }
     if (n.copy && style.copyStyle === 'gray' && parent) opts.push('edge={gray, densely dashed}');
     if (!plain(n.label).trim() && !n.features?.length && n.kind === 'phrase') opts.push('coordinate');
