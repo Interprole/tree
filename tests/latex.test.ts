@@ -100,7 +100,7 @@ describe('forest export', () => {
   test('colours are defined', () => {
     const out = latex('[S [VP@@red x]]', 'forest');
     expect(out).toMatch(/\\definecolor\{tfA\}\{HTML\}\{D62828\}/);
-    expect(out).toContain('edge=tfA');
+    expect(out).toContain('edge={tfA}');
   });
 });
 
@@ -111,10 +111,10 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
   }
   cases.push({ name: 'atb-as-copies', src: examples.find((e) => e.id === 'atb')!.src, build: { chains: 'copies' } });
   cases.push({ name: 'xbar-bar-style', src: examples[0].src, build: { mode: 'xbar', xbar: { bar: 'always', headLabel: 'X0', emptySpecs: true, barStyle: 'bar', expandWords: true } } });
-  cases.push({ name: 'bps-sets', src: examples.find((e) => e.id === 'bps')!.src, build: { mode: 'bps', bps: { label: 'set' } } });
   cases.push({ name: 'atb-traces', src: examples.find((e) => e.id === 'atb')!.src, build: { chains: 'traces', chainIndices: true } });
   cases.push({ name: 'arrow-styles', src: '[CP#c [C′ [C#d did] [TP [DP#y you] [VP [V see] [DP#w what]]]]]\n#w -> #c dashed "wh"\n#y <-> #d curve dotted @blue\n#y -- #w @#2a7', style: { copyStyle: 'strike', leavesAtBottom: true } });
-  cases.push({ name: 'special-chars', src: '[S [A 50\\% & \\$ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
+  cases.push({ name: 'round3-decorations', src: '[TP;spread=20 [DP#s;edge=red;width=2 **she** &"focus" &left"✓"@5,-3] [T\' [T;len=15 ~~will~~ *x*] [VP #s"herself" [V sing]]]]\n#s/2 -> #s/1 @blue above"*A*-mvt" below"x"' });
+  cases.push({ name: 'special-chars', src: '[S [A 50\\% \\& \\$ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
 
   for (const c of cases) {
     for (const format of ['forest', 'qtree', 'tikz'] as LatexFormat[]) {
@@ -126,6 +126,17 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
       }, 120_000);
     }
   }
+
+  for (const ex of examples) {
+    test.skipIf(!which('xelatex'))(`${ex.id} (forest) also compiles with XeLaTeX`, async () => {
+      const r = await compile(latex(ex.src, 'forest', ex.build as Partial<BuildOptions>, true, ex.style), 'xelatex');
+      if (!r.ok) throw new Error(errorExcerpt(r.log));
+    }, 120_000);
+  }
+  test.skipIf(!which('xelatex'))('TikZ output compiles with XeLaTeX', async () => {
+    const r = await compile(latex(examples[1].src, 'tikz'), 'xelatex');
+    if (!r.ok) throw new Error(errorExcerpt(r.log));
+  }, 120_000);
 
   test.skipIf(!which('lualatex'))('forest output also compiles with LuaLaTeX', async () => {
     const r = await compile(latex(examples[1].src, 'forest'), 'lualatex');

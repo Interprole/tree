@@ -26,14 +26,15 @@ export const examples: Example[] = [
   },
   {
     id: 'wh',
-    title: 'Wh-movement and T-to-C as chains',
-    note: '[DP#wh …] and #wh are two positions of one constituent. Switch between copies, traces and multidominance.',
-    src: `% #wh and #t mark the positions of a moved constituent
+    title: 'Wh-movement (chain) and T-to-C (head movement)',
+    note: '[DP#wh …] and #wh are two positions of one constituent: switch between copies, traces and multidominance. T-to-C is head movement: an arrow between the heads makes C show T+C.',
+    src: `% #wh marks the positions of a moved phrase; the arrow #t -> #c is head movement
 [CP [DP#wh what]
-    [C' [C #t]
+    [C' [C#c ∅]
         [TP [DP Mary]
             [T' [T#t did]
-                [VP [V buy] #wh]]]]]`,
+                [VP [V buy] #wh]]]]]
+#t -> #c`,
   },
   {
     id: 'head',
@@ -46,16 +47,6 @@ export const examples: Example[] = [
                 [VP [V#root sing] [DP songs]]]]]]
 #root -> #v
 #v -> #t`,
-  },
-  {
-    id: 'bps',
-    title: 'Bare Phrase Structure: computed labels',
-    note: 'Non-terminals are unlabelled; * marks the projecting daughter. Try the label style switch.',
-    src: `% * marks the daughter that projects
-[ [ [D* the] [N cat]]
-  [* [T* will]
-     [ [V* eat] [N fish]]]]`,
-    build: { mode: 'bps', bps: { label: 'category' } },
   },
   {
     id: 'atb',
@@ -105,6 +96,28 @@ export const examples: Example[] = [
           [VP [V fed $λx_e.λe_s. feed(e) ∧ theme(e)(x)$]
               [DP [D the $λP_<e,t>. ιx. P(x)$]
                   [NP [A gray $λx. gray(x)$] [N cat $λx. cat(x)$]]]]]]`,
-    build: { semantics: { show: true, compute: true, types: true } },
+    build: { semantics: { show: true, compute: true, types: true, rules: true } },
+  },
+  {
+    id: 'qr',
+    title: 'Quantifier raising: a trace with a meaning',
+    note: '#q$x : e$ gives the lower position its own meaning (a variable); its sister is then abstracted over it (Predicate Abstraction, PA).',
+    src: `% the lower copy is interpreted as the variable x
+[S [DP#q [D every $lambda P. lambda Q. forall x. P(x) -> Q(x)$] [NP cat $lambda x. cat(x)$]]
+   [S' [DP Mary $mary : e$]
+       [VP [V likes $lambda y. lambda x. like(x, y)$] #q$x : e$]]]`,
+    build: { chains: 'traces', semantics: { show: true, compute: true, types: false, rules: true } },
+  },
+  {
+    id: 'decor',
+    title: 'Notes, colours, labels, markdown',
+    note: '&"…" adds notes next to a node; ;edge= ;width= ;len= ;spread= style one node; arrows take several labels at chosen sides; **bold**, *italic*, ~~struck~~ work everywhere. Drag notes and labels to move them.',
+    src: `[CP;spread=12 [DP#wh which **book** &left"*focus*"]
+    [C' [C;edge=#1d4ed8;width=2 ∅ &"[+wh]"]
+        [TP [DP Mary]
+            [T';len=14 [T will]
+                [VP [V read] #wh"which one"]]]]]
+#wh/2 -> #wh/1 @#1d4ed8 "wh-movement" "*A′*"`,
+    build: { chains: 'copies' },
   },
 ];
