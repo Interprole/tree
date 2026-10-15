@@ -1,5 +1,6 @@
 import { runsWidth } from './measure';
 import type { FontSpec, Measure } from './measure';
+import type { LabelSide } from './ast';
 import type { DNode, DTree } from './model';
 import { plain } from './richtext';
 import type { Runs } from './richtext';
@@ -31,6 +32,12 @@ export interface Block {
   glossH: number;
   semW: number;
   semH: number;
+  /** notes beside the label (they widen the node on that side) */
+  extraL: number;
+  extraR: number;
+  /** notes above the label and below the block */
+  notesAboveH: number;
+  notesBelowH: number;
   /** label is empty: branches meet at a point */
   point: boolean;
 }
@@ -92,6 +99,15 @@ export function displayLabel(n: DNode, style: TreeStyle): Runs {
   return n.label;
 }
 
+/** Which side a note goes to: explicit, or left for a first daughter and right otherwise. */
+export function noteSide(n: DNode, side: LabelSide): Exclude<LabelSide, 'auto'> {
+  if (side !== 'auto') return side;
+  const p = n.parents[0];
+  return p && p.children.length > 1 && p.children[0] === n ? 'left' : 'right';
+}
+
+export const NOTE_SCALE = 0.82;
+
 /** The meaning line under a node: formula, type, composition rule, or an error. */
 export function semDisplay(n: DNode): { runs: Runs; kind: 'given' | 'computed' | 'error'; title?: string } | null {
   const s = n.sem;
@@ -132,10 +148,28 @@ export function measureBlock(n: DNode, style: TreeStyle, measure: Measure): Bloc
     semW = runsWidth(sem.runs, { font: style.font, size: m.semFs }, measure);
     semH = m.semLineH;
   }
+  let extraL = 0;
+  let extraR = 0;
+  let notesAboveH = 0;
+  let notesBelowH = 0;
+  let belowW = 0;
+  const noteFs = style.fontSize * NOTE_SCALE;
+  for (const note of n.notes ?? []) {
+    const nw = runsWidth(note.runs, { font: style.font, size: noteFs }, measure);
+    const side = noteSide(n, note.side);
+    if (note.off) continue; // a dragged note does not take part in the layout
+    if (side === 'left') extraL = Math.max(extraL, nw + 6);
+    else if (side === 'right') extraR = Math.max(extraR, nw + 6);
+    else if (side === 'above') notesAboveH += noteFs * 1.25;
+    else {
+      notesBelowH += noteFs * 1.25;
+      belowW = Math.max(belowW, nw);
+    }
+  }
   const point = empty && !n.features?.length && !sem && n.kind === 'phrase';
-  const w = Math.max(labelW, featureW, glossW, semW, point ? 2 : 0);
+  const w = Math.max(labelW, featureW, glossW, semW, belowW, point ? 2 : 0);
   const h = labelH + featureH + semH;
-  return { w, h, fullH: h + glossH, labelW, labelH, featureW, featureH, glossW, glossH, semW, semH, point };
+  return { w, h, fullH: h + glossH + notesBelowH, labelW, labelH, featureW, featureH, glossW, glossH, semW, semH, extraL, extraR, notesAboveH, notesBelowH, point };
 }
 
 type Contour = Map<number, [number, number]>;
@@ -235,7 +269,7 @@ export function layoutTree(tree: DTree, style: TreeStyle, measure: Measure): Lay
     };
     const tidy = (n: DNode): Sub => {
       const b = blocks.get(n)!;
-      const contour: Contour = new Map([[row.get(n)!, [-b.w / 2, b.w / 2]]]);
+      const contour: Contour = new Map([[row.get(n)!, [-b.w / 2 - b.extraL, b.w / 2 + b.extraR]]]);
       if (n.kind === 'leaf') leafColumn(n, contour);
       // the feature stack / gloss hang below the label: they belong to the same row
       const kids = n.children.filter((c) => !isShared(c) || lowerMothers.get(c)!.includes(n));
@@ -258,9 +292,9 @@ export function layoutTree(tree: DTree, style: TreeStyle, measure: Measure): Lay
           let need = -Infinity;
           for (const [r, [l]] of ks.contour) {
             const t = merged.get(r);
-            if (t) need = Math.max(need, t[1] - l + gap);
+            if (t) need = Math.max(need, t[1] - l + gap + (n.spread ?? 0));
           }
-          pos = need === -Infinity ? pos + gap : need;
+          pos = need === -Infinity ? pos + gap + (n.spread ?? 0) : need;
         }
         if (isSlot) slotRel.set(slotKey(n, k), pos);
         else offsets.set(k, pos);
@@ -297,9 +331,9 @@ export function layoutTree(tree: DTree, style: TreeStyle, measure: Measure): Lay
     const boxes: { box: Box; node: DNode }[] = [];
     const segs: { x1: number; y1: number; x2: number; y2: number }[] = [];
     const boxOf = (ln: LNode, pad = 0): Box => ({
-      x1: ln.x - ln.block.w / 2 - pad,
+      x1: ln.x - ln.block.w / 2 - ln.block.extraL - pad,
       y1: ln.y - pad,
-      x2: ln.x + ln.block.w / 2 + pad,
+      x2: ln.x + ln.block.w / 2 + ln.block.extraR + pad,
       y2: ln.y + ln.block.fullH + pad,
     });
     const attachBottom = (ln: LNode) => (ln.block.point ? ln.y + style.edgeGap : ln.y + ln.block.h - m.bottomInset + style.edgeGap);
@@ -405,6 +439,20 @@ export function layoutTree(tree: DTree, style: TreeStyle, measure: Measure): Lay
       for (const mo of mothers) segs.push({ x1: mo.x, y1: attachBottom(mo), x2: ls.x, y2: attachTop(ls) });
     }
 
+    // ---- per-node extra edge length (;len=): the node and everything below it move down
+    if (nodes.some((n) => n.edgeLen)) {
+      const shifted = new Set<DNode>();
+      const shift = (n: DNode, acc: number) => {
+        if (shifted.has(n)) return;
+        shifted.add(n);
+        const total = acc + (n.edgeLen ?? 0);
+        const ln = lnodes.get(n);
+        if (ln && total) ln.y += total;
+        for (const c of n.children) shift(c, total);
+      };
+      shift(tree.root, 0);
+    }
+
     // ---- edges
     const edges: LEdge[] = [];
     for (const n of nodes) {
@@ -475,8 +523,9 @@ export function layoutTree(tree: DTree, style: TreeStyle, measure: Measure): Lay
     }
     const box: Box = { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity };
     for (const ln of list) {
-      box.x1 = Math.min(box.x1, ln.x - ln.block.w / 2);
-      box.x2 = Math.max(box.x2, ln.x + ln.block.w / 2);
+      box.x1 = Math.min(box.x1, ln.x - ln.block.w / 2 - ln.block.extraL);
+      box.x2 = Math.max(box.x2, ln.x + ln.block.w / 2 + ln.block.extraR);
+      box.y1 = Math.min(box.y1, ln.y - ln.block.notesAboveH);
       box.y1 = Math.min(box.y1, ln.y);
       box.y2 = Math.max(box.y2, ln.y + ln.block.fullH);
     }

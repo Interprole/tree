@@ -42,7 +42,7 @@ function randomTree(seed: number, depth = 0): string {
 
 describe('layout', () => {
   for (const ex of examples) {
-    for (const mode of ['manual', 'xbar', 'bps'] as LabelMode[]) {
+    for (const mode of ['manual', 'xbar'] as LabelMode[]) {
       for (const bottom of [false, true]) {
         test(`${ex.id} / ${mode} / leavesAtBottom=${bottom}: no overlapping nodes`, () => {
           const { l } = layout(ex.src, { mode }, { leavesAtBottom: bottom });

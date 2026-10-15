@@ -122,11 +122,11 @@ type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]>
 export function mergeBuild(base: BuildOptions, p: DeepPartial<BuildOptions> | undefined): BuildOptions {
   if (!p) return base;
   const known = Object.fromEntries(Object.entries(p).filter(([k]) => k in base)) as Partial<BuildOptions>;
+  if ((known.mode as string) === 'bps') known.mode = 'manual';
   return {
     ...base,
     ...known,
     xbar: { ...base.xbar, ...(p.xbar ?? {}) },
-    bps: { ...base.bps, ...(p.bps ?? {}) },
     semantics: { ...base.semantics, ...(p.semantics ?? {}) },
   };
 }

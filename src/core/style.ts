@@ -37,6 +37,9 @@ export interface TreeStyle {
   copyStyle: 'regular' | 'gray' | 'strike' | 'angle';
   /** colour of movement arrows */
   arrowColor: string;
+  /** colour of meanings written in the code, and of computed meanings */
+  semColor: string;
+  semComputedColor: string;
   /** gap between a label and the branches */
   edgeGap: number;
   /** slightly irregular "hand-drawn" lines */
@@ -61,6 +64,8 @@ export const defaultStyle: TreeStyle = {
   leavesAtBottom: false,
   copyStyle: 'gray',
   arrowColor: '#1a1a1a',
+  semColor: '#111111',
+  semComputedColor: '#2f5d8a',
   edgeGap: 3,
   handDrawn: false,
   nodeBold: false,
