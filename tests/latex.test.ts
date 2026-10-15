@@ -97,6 +97,12 @@ describe('forest export', () => {
     expect(out).toContain('\\begin{tabular}{@{}l@{}}u$\\varphi$\\\\ EPP\\end{tabular}');
     expect(out).toContain('{\\small read.\\textsc{prs}}');
   });
+  test('notes become forest labels on the same side as on the canvas, with drag offsets', () => {
+    const out = latex('[S [DP &"focus" she] [VP &"x"@8,-4 &above"y" runs]]', 'forest');
+    expect(out).toContain('label={[font=\\small]left:{focus}}');
+    expect(out).toContain('label={[font=\\small, xshift=6pt, yshift=3pt]right:{x}}');
+    expect(out).toContain('label={[font=\\small]above:{y}}');
+  });
   test('colours are defined', () => {
     const out = latex('[S [VP@@red x]]', 'forest');
     expect(out).toMatch(/\\definecolor\{tfA\}\{HTML\}\{D62828\}/);
