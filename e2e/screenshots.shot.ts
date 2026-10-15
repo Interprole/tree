@@ -67,6 +67,11 @@ test('interactions', async ({ page }) => {
   await page.locator('[data-node]').nth(4).click();
   await page.locator('.node-bar button[aria-label="Colours"]').click();
   await page.screenshot({ path: `${OUT}/ui-node-style.png` });
+  // a node at the top: the toolbar stays above it, the popover opens below the node
+  await page.keyboard.press('Escape');
+  await page.locator('[data-node]').first().click();
+  await page.locator('.node-bar button[aria-label="Meaning ⟦ ⟧"]').click();
+  await page.screenshot({ path: `${OUT}/ui-node-top-popover.png` });
 });
 
 test('presets and modes', async ({ page }) => {

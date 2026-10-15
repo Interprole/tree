@@ -1635,7 +1635,11 @@ textarea.code {
   outline-offset: 1px;
 }
 
-/* node toolbar popovers open above the toolbar (below it when the node is near the top) */
+/* node toolbar popovers open above the toolbar, or below the node when there is no room above */
+.node-bar.pops-below .color-pop {
+  top: calc(100% + 6px + var(--skip, 0px));
+}
+
 .node-bar.pops-above .color-pop {
   top: auto;
   bottom: calc(100% + 6px);
