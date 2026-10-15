@@ -1,0 +1,12 @@
+import { chromium } from '@playwright/test';
+const [,, out, w, h, extra] = process.argv;
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: Number(w), height: Number(h) } });
+const errs = [];
+p.on('pageerror', e => errs.push(String(e)));
+p.on('console', m => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://localhost:4173/tree/' + (extra || ''));
+await p.waitForTimeout(1500);
+await p.screenshot({ path: out });
+console.log(errs.join('\n'));
+await b.close();
