@@ -47,7 +47,7 @@ export function parseTy(src: string): Ty {
       i++;
       return fn(a, b);
     }
-    const m = /^[a-z][a-z0-9]*/i.exec(s.slice(i));
+    const m = /^[\p{L}][\p{L}\p{N}_]*/u.exec(s.slice(i));
     if (!m) throw new SemError(`Malformed type "${src}"`);
     i += m[0].length;
     return { k: 'base', n: m[0] };
@@ -76,7 +76,10 @@ export type Term =
   | { k: 'app'; f: Term; args: Term[] }
   | { k: 'bind'; op: 'λ' | '∃' | '∀' | 'ι'; v: string; ty: Ty; body: Term }
   | { k: 'not'; a: Term }
-  | { k: 'bin'; op: '∧' | '∨' | '→' | '↔' | '='; a: Term; b: Term };
+  | { k: 'bin'; op: BinOp; a: Term; b: Term };
+
+export type BinOp = '∧' | '∨' | '→' | '↔' | '=' | '≠' | '<' | '>' | '≤' | '≥' | '+' | '−' | '×';
+const ARITH = new Set(['+', '−', '×']);
 
 export class SemError extends Error {}
 
@@ -103,8 +106,15 @@ export function parseTerm(src: string): Term {
     .replace(/\\(to|rightarrow)\b/g, '→')
     .replace(/<->|\\leftrightarrow\b/g, '↔')
     .replace(/->/g, '→')
+    .replace(/<=/g, '≤')
+    .replace(/>=/g, '≥')
+    .replace(/!=/g, '≠')
+    .replace(/(?<=\s)-(?=\s)/g, '−')
+    .replace(/\*/g, '×')
     .replace(/&/g, '∧')
-    .replace(/\\(?=[a-zA-Z]\s*[._:])/g, 'λ');
+    .replace(/\\(?=[a-zA-Z]\s*[._:])/g, 'λ')
+    // words for binders: lambda x. / iota x. / exists x. / forall x.
+    .replace(/(?<![\p{L}\\])(lambda|iota|exists|forall)\s*(?=[\p{L}][\p{L}\p{N}′']*\s*[._:])/gu, (_, w: string) => ({ lambda: 'λ', iota: 'ι', exists: '∃', forall: '∀' })[w as 'lambda']!);
   let i = 0;
   const ws = () => {
     while (i < s.length && /\s/.test(s[i])) i++;
@@ -115,7 +125,7 @@ export function parseTerm(src: string): Term {
   const bound: { name: string; ty: Ty }[] = [];
 
   const parseExpr = (): Term => parseBin(0);
-  const PREC: Record<string, number> = { '↔': 1, '→': 2, '∨': 3, '∧': 4, '=': 5 };
+  const PREC: Record<string, number> = { '↔': 1, '→': 2, '∨': 3, '∧': 4, '=': 5, '≠': 5, '<': 5, '>': 5, '≤': 5, '≥': 5, '+': 6, '−': 6, '×': 7 };
   const parseBin = (min: number): Term => {
     let left = parseUnary();
     for (;;) {
@@ -126,7 +136,7 @@ export function parseTerm(src: string): Term {
       i++;
       // right-assoc for →, left for others
       const right = parseBin(op === '→' ? p : p + 1);
-      left = { k: 'bin', op: op as '∧', a: left, b: right };
+      left = { k: 'bin', op: op as BinOp, a: left, b: right };
     }
   };
   const parseUnary = (): Term => {
@@ -177,6 +187,11 @@ export function parseTerm(src: string): Term {
       if (s[i] !== close) err(`Expected "${close}"`);
       i++;
       return t;
+    }
+    const num = /^\d+(?:\.\d+)?/.exec(s.slice(i));
+    if (num) {
+      i += num[0].length;
+      return { k: 'const', name: num[0] };
     }
     const m = ID.exec(s.slice(i));
     if (!m) err(s[i] ? `Unexpected "${s[i]}"` : 'Unexpected end of formula');
@@ -234,8 +249,9 @@ export function typeOf(t: Term): Ty {
       if (t.op === 'ι') return t.ty;
       return T;
     case 'not':
-    case 'bin':
       return T;
+    case 'bin':
+      return ARITH.has(t.op) ? typeOf(t.a) : T;
     case 'app': {
       if (headConst(t)) return T;
       let ft = typeOf(t.f);
@@ -367,7 +383,7 @@ export function reduce(t: Term): Term {
 
 /* ---------------------------------------------------------------- printing */
 
-const PREC_OUT: Record<string, number> = { '↔': 1, '→': 2, '∨': 3, '∧': 4, '=': 5 };
+const PREC_OUT: Record<string, number> = { '↔': 1, '→': 2, '∨': 3, '∧': 4, '=': 5, '≠': 5, '<': 5, '>': 5, '≤': 5, '≥': 5, '+': 6, '−': 6, '×': 7 };
 
 /** Formula as plain text. */
 export function show(t: Term): string {
@@ -448,18 +464,26 @@ export interface Meaning {
 }
 
 /** Parse "formula : type" (the type is optional and checked against the formula when possible). */
-export function parseMeaning(src: string): Meaning {
-  // split at the last ":" at bracket depth 0 that is preceded by whitespace
-  let depth = 0;
-  let cut = -1;
-  for (let i = 0; i < src.length; i++) {
-    const c = src[i];
-    if ('(<⟨['.includes(c)) depth++;
-    else if (')>⟩]'.includes(c)) depth--;
-    else if (c === ':' && depth === 0 && i > 0 && /\s/.test(src[i - 1])) cut = i;
+/** Split "formula : type": the last " : " followed by something that parses as a type. */
+export function splitMeaning(src: string): [string, string | undefined] {
+  for (let i = src.length - 1; i > 0; i--) {
+    if (src[i] !== ':' || !/\s/.test(src[i - 1])) continue;
+    const rest = src.slice(i + 1).trim();
+    try {
+      parseTy(rest);
+      return [src.slice(0, i).trim(), rest];
+    } catch {
+      /* not a type: keep looking */
+    }
   }
-  const formula = (cut >= 0 ? src.slice(0, cut) : src).trim();
-  const declared = cut >= 0 ? parseTy(src.slice(cut + 1)) : undefined;
+  return [src.trim(), undefined];
+}
+
+export function parseMeaning(src: string): Meaning {
+  const [f, tyText] = splitMeaning(src);
+  const cut = tyText === undefined ? -1 : 0;
+  const formula = f;
+  const declared = cut >= 0 ? parseTy(tyText!) : undefined;
   if (!formula) throw new SemError('Empty formula');
   const term = parseTerm(formula);
   if (declared) {
@@ -480,6 +504,27 @@ export function parseMeaning(src: string): Meaning {
 }
 
 export type RuleName = 'FA' | 'PC' | 'EI' | 'FC';
+
+/** Predicate Abstraction: λname. ⟦φ⟧ (the name may be written as a constant, e.g. a trace x). */
+export function abstractOver(m: Meaning, name: string, ty: Ty): Meaning {
+  const toVar = (t: Term): Term => {
+    switch (t.k) {
+      case 'const':
+        return t.name === name ? { k: 'var', name, ty } : t;
+      case 'var':
+        return t.name === name ? { k: 'var', name, ty } : t;
+      case 'app':
+        return { k: 'app', f: toVar(t.f), args: t.args.map(toVar) };
+      case 'not':
+        return { k: 'not', a: toVar(t.a) };
+      case 'bin':
+        return { ...t, a: toVar(t.a), b: toVar(t.b) };
+      case 'bind':
+        return t.v === name ? t : { ...t, body: toVar(t.body) };
+    }
+  };
+  return { term: { k: 'bind', op: 'λ', v: name, ty, body: toVar(m.term) }, ty: fn(ty, m.ty) };
+}
 
 export interface Composed extends Meaning {
   rule: RuleName;
