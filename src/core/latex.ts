@@ -3,7 +3,7 @@ import { noteSide, semDisplay } from './layout';
 import type { Layout } from './layout';
 import type { DArrow, DNode, DTree } from './model';
 import type { Run, Runs } from './richtext';
-import { plain } from './richtext';
+import { LATEX_SYMBOLS, plain } from './richtext';
 import type { Scene } from './scene';
 import type { TreeStyle } from './style';
 
@@ -36,6 +36,14 @@ const MATH: Record<string, string> = {
   '∃': '\\exists', '∈': '\\in', '∪': '\\cup', '∩': '\\cap', '¬': '\\neg', '⊂': '\\subset', '⊃': '\\supset', '≺': '\\prec',
   '⁰': '^{0}', '∧': '\\wedge', '∨': '\\vee', '↔': '\\leftrightarrow', '⟦': '[\\![', '⟧': ']\\!]', '•': '\\bullet', '♯': '\\sharp', '♭': '\\flat', '✓': '\\checkmark',
 };
+
+// every other symbol typed as \\name goes back to the same command (LaTeX core or amssymb)
+const NOT_MATH = new Set(['powerset', 'coloneqq', 'S', 'P', 'copyright', 'degree', 'implies', 'impliedby', 'iff', 'llbracket', 'rrbracket']);
+for (const [name, ch] of Object.entries(LATEX_SYMBOLS)) {
+  if (name.startsWith('text') || NOT_MATH.has(name) || /^[\x00-\x7f]$/.test(ch) || ch in MATH) continue;
+  MATH[ch] = '\\' + name;
+}
+MATH['≔'] = '\\mathrel{:}=';
 
 const TEXT: Record<string, string> = {
   '\\': '\\textbackslash{}', '#': '\\#', $: '\\$', '%': '\\%', '&': '\\&', '~': '\\textasciitilde{}', _: '\\_',

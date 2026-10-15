@@ -33,6 +33,53 @@ function subtreeBottom(layout: Layout, n: DNode, memo: Map<DNode, number>): numb
   return b;
 }
 
+/**
+ * Where an arrow coming from below enters a landing site. A phrase is entered at its own node:
+ * the arrow runs up between its branches (it may cross the node's own branches, never text or
+ * deeper branches), as close to the middle as possible. If there is no such path, and for heads,
+ * it ends under everything the node dominates.
+ */
+function entryPoint(layout: Layout, n: DNode, x0: number, memo: Map<DNode, number>, gap: number): [number, number] {
+  const bottom = subtreeBottom(layout, n, memo);
+  const ln = layout.nodes.get(n)!;
+  if (n.children.length < 2) return [x0, bottom + gap];
+  // where the node's own branches start (below its label, features and meaning)
+  let top = ln.y + ln.block.h;
+  for (const e of layout.edges) if (e.parent === ln) top = Math.max(top, e.y1 - gap);
+  const below = new Set<DNode>();
+  const walk = (d: DNode) => {
+    for (const c of d.children) {
+      if (below.has(c)) continue;
+      below.add(c);
+      walk(c);
+    }
+  };
+  walk(n);
+  const boxes = [...below].map((d) => layout.nodes.get(d)).filter((l): l is NonNullable<typeof l> => !!l && l.y < bottom && l.y + l.block.fullH > top);
+  const segs: [number, number, number, number][] = [];
+  for (const e of layout.edges) {
+    if (!below.has(e.child.node) || e.parent === ln) continue;
+    const pts = e.pts ?? (e.kind === 'triangle' ? [[e.bx1 ?? e.x2, e.y2], [e.x1, e.y1], [e.bx2 ?? e.x2, e.y2], [e.bx1 ?? e.x2, e.y2]] : [[e.x1, e.y1], [e.x2, e.y2]]);
+    for (let i = 0; i + 1 < pts.length; i++) segs.push([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]]);
+  }
+  const free = (x: number) => {
+    if (boxes.some((l) => Math.abs(l.x - x) < l.block.w / 2 + 3)) return false;
+    // a deeper branch crossing the vertical line below the node
+    return !segs.some(([ax, ay, bx, by]) => {
+      if (Math.min(ax, bx) - 4 > x || Math.max(ax, bx) + 4 < x) return false;
+      if (Math.abs(bx - ax) < 1e-6) return Math.abs(ax - x) < 4 && Math.max(ay, by) > top;
+      const y = ay + ((by - ay) * (x - ax)) / (bx - ax);
+      return y > top;
+    });
+  };
+  const reach = Math.min(ln.block.w / 2, 80);
+  for (let d = 0; d <= reach; d += 2) {
+    if (free(x0 - d)) return [x0 - d, top + gap];
+    if (d && free(x0 + d)) return [x0 + d, top + gap];
+  }
+  return [x0, bottom + gap];
+}
+
 export function cubicAt(g: Pick<ArrowGeom, 'p0' | 'p1' | 'p2' | 'p3'>, t: number): [number, number] {
   const u = 1 - t;
   const a = u * u * u;
@@ -108,9 +155,8 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
     if (!lf || !lt) continue;
     if (a.route === 'under') {
       const sx = fan(a.from, lf);
-      const tx = fan(a.to, lt);
       const sy = subtreeBottom(layout, a.from, memo) + style.edgeGap + 1;
-      const ty = subtreeBottom(layout, a.to, memo) + style.edgeGap + 1;
+      const [tx, ty] = entryPoint(layout, a.to, fan(a.to, lt), memo, style.edgeGap + 1);
       const level = levelOf.get(a) ?? 0;
       const bottom = treeBottom + spacing * (0.9 + level) + a.bend[1];
       // the curve's lowest point (t = 0.5) is (sy + ty)/8 + 0.75·yL
