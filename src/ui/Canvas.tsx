@@ -507,14 +507,20 @@ function LabelList({ initial, onApply, placeholder }: { initial: E.LabelSpec[]; 
 }
 
 function NumField({ label, value, onCommit, placeholder }: { label: string; value?: number; onCommit: (v: string | null) => void; placeholder: string }) {
+  // keep what is being typed: a re-render of the toolbar (e.g. while the canvas pans) must not reset it
+  const draft = useSignal(value === undefined ? '' : String(value));
+  useEffect(() => {
+    draft.value = value === undefined ? '' : String(value);
+  }, [value]);
   return (
     <label class="num-field">
       <span>{label}</span>
       <input
         type="number"
         step="1"
-        value={value ?? ''}
+        value={draft.value}
         placeholder={placeholder}
+        onInput={(e) => (draft.value = (e.target as HTMLInputElement).value)}
         onKeyDown={(e) => e.stopPropagation()}
         onChange={(e) => {
           const v = (e.target as HTMLInputElement).value.trim();
