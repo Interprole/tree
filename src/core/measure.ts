@@ -18,9 +18,10 @@ export const SC_SCALE = 0.8;
 export function runsWidth(runs: Runs, font: FontSpec, measure: Measure): number {
   let w = 0;
   for (const r of runs) {
-    if (r.sub || r.sup) w += measure(r.sc ? r.text.toUpperCase() : r.text, { ...font, size: font.size * SCRIPT_SCALE });
-    else if (r.sc) w += measure(r.text.toUpperCase(), { ...font, size: font.size * SC_SCALE });
-    else w += measure(r.text, font);
+    const f = r.i || r.b ? { ...font, italic: !!font.italic !== !!r.i, bold: !!font.bold || !!r.b } : font;
+    if (r.sub || r.sup) w += measure(r.sc ? r.text.toUpperCase() : r.text, { ...f, size: font.size * SCRIPT_SCALE });
+    else if (r.sc) w += measure(r.text.toUpperCase(), { ...f, size: font.size * SC_SCALE });
+    else w += measure(r.text, f);
   }
   return w;
 }

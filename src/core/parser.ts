@@ -1,4 +1,4 @@
-import type { AArrow, ADoc, ALeaf, ANode, ARef, ArrowHead, ParseError, ParseResult, Span } from './ast';
+import type { AArrow, ADoc, ALeaf, ANode, ARef, ArrowHead, LabelSide, ParseError, ParseResult, Span } from './ast';
 
 /**
  * Bracket-notation parser.
@@ -16,6 +16,15 @@ class Fail extends Error {
 
 const isWs = (c: string | undefined) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === ' ';
 const ID_RE = /[\p{L}\p{N}_\-.:]/u;
+const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch']);
+const LABEL_RE = /^(left|right|above|below)?"((?:[^"\\]|\\.)*)"(?:@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?))?/;
+
+/** side"text"@dx,dy at the start of s */
+export function matchLabel(s: string): { side: LabelSide; text: string; off?: [number, number]; length: number } | null {
+  const m = LABEL_RE.exec(s);
+  if (!m) return null;
+  return { side: (m[1] as LabelSide) ?? 'auto', text: m[2].replace(/\\(.)/g, '$1'), off: m[3] !== undefined ? [Number(m[3]), Number(m[4])] : undefined, length: m[0].length };
+}
 
 export function lineCol(src: string, pos: number): { line: number; col: number } {
   let line = 1;
@@ -158,7 +167,7 @@ class Parser {
         this.skipQuote();
         continue;
       }
-      if ((c === '#' || c === '*' || c === '@') && labelEnd < 0) {
+      if ((c === '#' || c === ';' || c === '@') && labelEnd < 0) {
         labelEnd = this.i;
       }
       this.i++;
@@ -175,9 +184,13 @@ class Parser {
     let j = labelEnd;
     while (j < tokEnd) {
       const c = this.src[j];
-      if (c === '*') {
-        node.head = true;
-        j++;
+      if (c === ';') {
+        const m = /^;([a-z]+)=(#?[^;\s[\]@#]+)/.exec(this.src.slice(j, tokEnd));
+        if (!m || !NODE_OPTS.has(m[1])) this.fail(`Node options look like ;edge=red ;width=2 ;len=20 ;spread=10 ;sem=blue`, j, Math.min(tokEnd, j + (m ? m[0].length : 1)));
+        if (m![1] === 'color') node.color = m![2];
+        else if (m![1] === 'branch') node.branchColor = m![2];
+        else (node.opts ??= {})[m![1]] = m![2];
+        j += m![0].length;
       } else if (c === '#') {
         let k = j + 1;
         while (k < tokEnd && ID_RE.test(this.src[k])) k++;
@@ -258,7 +271,7 @@ class Parser {
       }
       if (ch === '|') {
         this.i++;
-        const g = this.readText('[]|{$', false);
+        const g = this.readText('[]|{$&', false);
         const text = g ? g.text : '';
         const last = node.children[node.children.length - 1];
         if (last && last.kind === 'leaf') {
@@ -280,11 +293,34 @@ class Parser {
           pronounce = this.src[k] === '!';
           k++;
         }
+        let text: string | undefined;
+        if (this.src[k] === '"') {
+          const q = this.src.indexOf('"', k + 1);
+          if (q < 0) this.fail('Unclosed quotation mark', k, k + 1);
+          text = this.src.slice(k + 1, q);
+          k = q + 1;
+        }
+        let sem: string | undefined;
+        if (this.src[k] === '$') {
+          const q = this.src.indexOf('$', k + 1);
+          if (q < 0) this.fail('Unclosed "$"', k, k + 1);
+          sem = this.src.slice(k + 1, q).trim();
+          k = q + 1;
+        }
         const ref: ARef = { kind: 'ref', id, span: { from: s, to: k } };
         if (pronounce !== undefined) ref.pronounce = pronounce;
+        if (text !== undefined) ref.text = text;
+        if (sem !== undefined) ref.sem = sem;
         this.refs.push(ref);
         node.children.push(ref);
         this.i = k;
+        continue;
+      }
+      if (ch === '&') {
+        const lab = matchLabel(this.src.slice(this.i + 1));
+        if (!lab) this.fail('A note looks like &"text", &right"text" or &left"text"@10,-5', this.i, this.i + 1);
+        (node.notes ??= []).push({ text: lab!.text, side: lab!.side, off: lab!.off, span: { from: this.i, to: this.i + 1 + lab!.length } });
+        this.i += 1 + lab!.length;
         continue;
       }
       if (ch === '$') {
@@ -306,7 +342,7 @@ class Parser {
         this.i++;
         continue;
       }
-      const t = this.readText('[]|{$', true);
+      const t = this.readText('[]|{$&', true);
       if (!t) {
         this.fail(`Unexpected "${ch}"`, this.i, this.i + 1);
       }
@@ -352,18 +388,20 @@ class Parser {
       head,
       line: 'solid',
       route: 'under',
+      labels: [],
       span: { from: start, to: start + line.trimEnd().length },
     };
     if (m[2]) arrow.fromOcc = Number(m[2]);
     if (m[5]) arrow.toOcc = Number(m[5]);
     const rest = line.slice(m[0].length);
     const off = start + m[0].length;
-    const tokRe = /\s*("(?:[^"\\]|\\.)*"|\S+)/gy;
+    const tokRe = /\s*((?:left|right|above|below)?"(?:[^"\\]|\\.)*"(?:@-?[\d.]+,-?[\d.]+)?|\S+)/gy;
     let t: RegExpExecArray | null;
     while ((t = tokRe.exec(rest))) {
       const tok = t[1];
       const tokFrom = off + t.index + t[0].length - tok.length;
-      if (tok.startsWith('"')) arrow.label = tok.slice(1, -1).replace(/\\(.)/g, '$1');
+      const lab = matchLabel(tok);
+      if (lab && lab.length === tok.length) arrow.labels.push({ text: lab.text, side: lab.side, off: lab.off, span: { from: tokFrom, to: tokFrom + tok.length } });
       else if (tok === 'dashed' || tok === 'dotted' || tok === 'solid') arrow.line = tok;
       else if (tok === 'under' || tok === 'curve') arrow.route = tok;
       else if (tok === 'hide') arrow.hidden = true;
