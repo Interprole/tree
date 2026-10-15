@@ -507,30 +507,27 @@ function LabelList({ initial, onApply, placeholder }: { initial: E.LabelSpec[]; 
 }
 
 function NumField({ label, value, onCommit, placeholder }: { label: string; value?: number; onCommit: (v: string | null) => void; placeholder: string }) {
-  // keep what is being typed: a re-render of the toolbar (e.g. while the canvas pans) must not reset it
-  const draft = useSignal(value === undefined ? '' : String(value));
-  useEffect(() => {
-    draft.value = value === undefined ? '' : String(value);
-  }, [value]);
-  const commit = () => {
-    const v = draft.value.trim();
-    if (v === (value === undefined ? '' : String(value))) return;
-    onCommit(v === '' ? null : v);
+  // an uncontrolled input: re-renders of the toolbar (e.g. while the canvas pans) never touch what is
+  // being typed; it is re-created only when the stored value changes
+  const current = value === undefined ? '' : String(value);
+  const commit = (el: HTMLInputElement) => {
+    const v = el.value.trim();
+    if (v !== current) onCommit(v === '' ? null : v);
   };
   return (
     <label class="num-field">
       <span>{label}</span>
       <input
+        key={current}
         type="number"
         step="1"
-        value={draft.value}
+        defaultValue={current}
         placeholder={placeholder}
-        onInput={(e) => (draft.value = (e.target as HTMLInputElement).value)}
         onKeyDown={(e) => {
           e.stopPropagation();
-          if (e.key === 'Enter') commit();
+          if (e.key === 'Enter') commit(e.currentTarget as HTMLInputElement);
         }}
-        onBlur={commit}
+        onBlur={(e) => commit(e.currentTarget as HTMLInputElement)}
       />
     </label>
   );
