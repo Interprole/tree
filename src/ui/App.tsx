@@ -6,14 +6,16 @@ import { examples } from '../examples';
 import { copyText } from '../export';
 import { t } from '../i18n';
 import {
-  arrowSource, build, error, loadExample, mobileTab, modal, panelOpen, pick, relationOf, scene, selection, setBuild, shareUrl, showToast, source, theme, toast, tool, tree,
+  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, linkTree, loadExample, mobileTab, modal, panelOpen, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, setBuild, shareUrl, showToast, source, theme, toast, tool, tree, trees, unlinkTree,
 } from '../state';
 import { Canvas, canvasApi } from './Canvas';
 import { Seg } from './controls';
 import { Help, MyTrees, Shortcuts } from './Dialogs';
 import { Editor } from './Editor';
 import { ExportDialog } from './ExportDialog';
-import { IAuto, IBook, IChevron, IHelp, IDownload, IFolder, IKeyboard, ILink, IMoon, IRedo, ISliders, ISun, IUndo, IClose } from './icons';
+import { IAuto, IBook, IChevron, IHelp, IDownload, IFolder, IFormat, IKeyboard, ILink, IMoon, IMore, IPlus, IRedo, ISliders, ISun, IUndo, IClose } from './icons';
+import { Inspector } from './Inspector';
+import { autoSaveFile, canWriteFiles, fileHandle, fileName, loadFile, openFromDisk, saveToDisk, unsaved } from '../files';
 import { ChainOptions, ModeOptions, SettingsPanel } from './SettingsPanel';
 
 function useTheme() {
@@ -72,6 +74,17 @@ function useShortcuts() {
         } else selection.value = null;
         return;
       }
+      // files: also while typing in the code (instead of the browser saving the page)
+      if (mod && !e.altKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void saveToDisk(e.shiftKey);
+        return;
+      }
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        void openFromDisk();
+        return;
+      }
       if (isTyping(e) || modal.value) return;
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -105,7 +118,11 @@ function useShortcuts() {
         case 'Enter':
         case 'F2':
           handled();
-          canvasApi.rename?.();
+          requestLabelFocus(sel.key);
+          break;
+        case 'p':
+          handled();
+          A.addMother();
           break;
         case 'Delete':
         case 'Backspace':
@@ -209,6 +226,185 @@ function StatusBar() {
   );
 }
 
+/** Saving to and opening from disk, and the trees kept in this browser. */
+function FileMenu() {
+  const open = useSignal(false);
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      if (!(e.target as Element).closest('.file-menu')) open.value = false;
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, []);
+  const run = (f: () => void) => () => {
+    open.value = false;
+    f();
+  };
+  const name = fileName.value;
+  return (
+    <div class="file-menu menu">
+      <button class="btn ghost" aria-haspopup="true" aria-expanded={open.value} onClick={() => (open.value = !open.value)} title={name ? `File: ${name}${unsaved.value ? ' (unsaved changes)' : ''}` : 'Save to disk, open, my trees'} data-testid="file-menu">
+        <IFolder size={17} /> <span class="hide-md file-label">{name ?? 'File'}</span>
+        {unsaved.value && <span class="unsaved-dot" title="Unsaved changes" />}
+        <IChevron size={14} />
+      </button>
+      {open.value && (
+        <div class="menu-pop file-pop" role="menu">
+          <button role="menuitem" onClick={run(() => void saveToDisk())}>
+            <strong>Save to disk <kbd>Ctrl S</kbd></strong>
+            <small>{fileHandle.value ? `Into ${fileHandle.value.name}` : `All trees of the canvas in one ${canWriteFiles() ? 'file' : 'file (downloaded)'}.`}</small>
+          </button>
+          <button role="menuitem" onClick={run(() => void saveToDisk(true))}>
+            <strong>Save as… <kbd>Ctrl Shift S</kbd></strong>
+            <small>A new file.</small>
+          </button>
+          <button role="menuitem" onClick={run(() => void openFromDisk())}>
+            <strong>Open from disk… <kbd>Ctrl O</kbd></strong>
+            <small>A saved .nanotrees file, or bracket code (.txt). You can also drop a file onto the window.</small>
+          </button>
+          {fileHandle.value && (
+            <label class="menu-toggle">
+              <input type="checkbox" checked={autoSaveFile.value} onChange={(e) => (autoSaveFile.value = (e.target as HTMLInputElement).checked)} />
+              <span>
+                <strong>Keep {fileHandle.value.name} up to date</strong>
+                <small>Every change is written into the file.</small>
+              </span>
+            </label>
+          )}
+          <button role="menuitem" onClick={run(() => (modal.value = 'trees'))}>
+            <strong>{t('myTrees')}…</strong>
+            <small>Trees kept in this browser.</small>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tabs of the trees on the canvas, with copying and linking. */
+function TreeTabs() {
+  const menu = useSignal<string | null>(null);
+  const editing = useSignal<string | null>(null);
+  const linked = linkedIds.value;
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      if (!(e.target as Element).closest('.tree-tabs')) menu.value = null;
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, []);
+  const list = trees.value;
+  return (
+    <div class="tree-tabs" role="tablist" aria-label="Trees on the canvas">
+      {list.map((e) => (
+        <div key={e.id} class={`tree-tab ${e.id === activeId.value ? 'on' : ''}`} role="tab" aria-selected={e.id === activeId.value}>
+          {editing.value === e.id ? (
+            <input
+              class="tab-rename"
+              defaultValue={e.name}
+              ref={(el) => {
+                if (el && document.activeElement !== el) {
+                  el.focus();
+                  el.select();
+                }
+              }}
+              onKeyDown={(ev) => {
+                ev.stopPropagation();
+                if (ev.key === 'Enter') (ev.currentTarget as HTMLInputElement).blur();
+                if (ev.key === 'Escape') editing.value = null;
+              }}
+              onBlur={(ev) => {
+                if (editing.value === e.id) renameTree(e.id, (ev.currentTarget as HTMLInputElement).value);
+                editing.value = null;
+              }}
+            />
+          ) : (
+            <button class="tab-name" onClick={() => activateTree(e.id)} onDblClick={() => (editing.value = e.id)} title={linked.has(e.id) ? 'Linked copy: shares its code with another tree. Double-click to rename.' : 'Double-click to rename'}>
+              {e.name}
+              {linked.has(e.id) && <span class="link-mark"><ILink size={11} /></span>}
+            </button>
+          )}
+          <button class="tab-more" aria-label={`More for ${e.name}`} title="Copy, link, rename, delete" onClick={() => (menu.value = menu.value === e.id ? null : e.id)}>
+            <IMore size={14} />
+          </button>
+          {menu.value === e.id && (
+            <div class="menu-pop tab-menu" role="menu">
+              <button role="menuitem" onClick={() => ((menu.value = null), duplicateTree(e.id, false))}>
+                <strong>Copy</strong>
+                <small>An independent copy: change it without touching this one.</small>
+              </button>
+              <button role="menuitem" onClick={() => ((menu.value = null), duplicateTree(e.id, true))}>
+                <strong>Linked copy</strong>
+                <small>Shares the code: an edit in one changes both. Settings (copies / traces, colours, fonts) stay separate.</small>
+              </button>
+              {linked.has(e.id) && (
+                <button role="menuitem" onClick={() => ((menu.value = null), unlinkTree(e.id))}>
+                  <strong>Unlink</strong>
+                  <small>Give this tree its own code again.</small>
+                </button>
+              )}
+              {list
+                .filter((o) => o.id !== e.id && o.srcId !== e.srcId)
+                .map((o) => (
+                  <button key={o.id} role="menuitem" onClick={() => ((menu.value = null), linkTree(e.id, o.id))}>
+                    <strong>Link to {o.name}</strong>
+                    <small>Take over the code of {o.name} and keep it shared.</small>
+                  </button>
+                ))}
+              <button role="menuitem" onClick={() => ((menu.value = null), (editing.value = e.id))}>
+                <strong>Rename</strong>
+              </button>
+              {list.length > 1 && (
+                <button role="menuitem" class="danger" onClick={() => ((menu.value = null), confirm(`Delete “${e.name}” from the canvas?`) && removeTree(e.id))}>
+                  <strong>Delete from the canvas</strong>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      <button class="icon-btn small add-tree" title="New tree on the canvas" aria-label="New tree" onClick={() => addTree()}>
+        <IPlus size={15} />
+      </button>
+    </div>
+  );
+}
+
+/** A draggable border that changes the width of a pane. */
+function Splitter({ side, onDrag, onReset, label }: { side: 'left' | 'right'; onDrag: (dx: number, start: number) => void; onReset: () => void; label: string }) {
+  return (
+    <div
+      class={`splitter splitter-${side}`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      title={`${label} (double-click: default)`}
+      onDblClick={onReset}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        const el = e.currentTarget as HTMLElement;
+        el.setPointerCapture(e.pointerId);
+        const pane = el.parentElement!;
+        const start = pane.getBoundingClientRect().width;
+        const x0 = e.clientX;
+        document.body.classList.add('resizing');
+        const move = (ev: PointerEvent) => onDrag(ev.clientX - x0, start);
+        const up = () => {
+          el.removeEventListener('pointermove', move);
+          el.removeEventListener('pointerup', up);
+          el.removeEventListener('pointercancel', up);
+          document.body.classList.remove('resizing');
+        };
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+      }}
+    />
+  );
+}
+
+const clampW = (w: number, min: number) => Math.round(Math.min(Math.max(w, min), window.innerWidth * 0.6));
+
 export function App() {
   useTheme();
   useShortcuts();
@@ -221,7 +417,23 @@ export function App() {
     if (await copyText(url)) showToast(url.length > 2000 ? t('shareTooLong', { n: url.length }) : t('shareCopied'));
   };
   return (
-    <div class={`app ${panelOpen.value ? 'panel-open' : ''} tab-${mobileTab.value}`}>
+    <div
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        const f = e.dataTransfer?.files?.[0];
+        if (!f) return;
+        e.preventDefault();
+        void loadFile(f);
+      }}
+      class={`app ${panelOpen.value ? 'panel-open' : ''} ${selection.value ? 'has-selection' : ''} tab-${mobileTab.value}`}
+      style={{
+        '--code-w': paneWidths.value.code ? `${paneWidths.value.code}px` : 'minmax(300px, 30%)',
+        '--insp-w': `${paneWidths.value.inspector}px`,
+        '--set-w': `${paneWidths.value.settings}px`,
+      }}
+    >
       <header class="topbar">
         <div class="brand">
           <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
@@ -258,9 +470,7 @@ export function App() {
             <IRedo />
           </button>
           <span class="sep hide-xs" />
-          <button class="btn ghost" onClick={() => (modal.value = 'trees')} title={t('myTrees')}>
-            <IFolder size={17} /> <span class="hide-md">{t('myTrees')}</span>
-          </button>
+          <FileMenu />
           <button class="btn ghost" onClick={share} title={t('share')} data-testid="share">
             <ILink size={17} /> <span class="hide-md">{t('share')}</span>
           </button>
@@ -285,17 +495,29 @@ export function App() {
 
       <main class="workspace">
         <section class="pane code-pane" aria-label={t('code')}>
-          <Editor />
+          <TreeTabs />
+          <div class="editor-wrap">
+            <Editor />
+            <button class="icon-btn small format-btn" title="Lay out the code: line breaks and indentation (Shift+Alt+F)" aria-label="Format the code" onClick={() => A.formatCode()}>
+              <IFormat size={15} />
+            </button>
+          </div>
           <StatusBar />
           <div class="mode-options">
             <ModeOptions />
             <ChainOptions />
           </div>
+          <Splitter side="right" label="Width of the code" onReset={() => (paneWidths.value = { ...paneWidths.value, code: null })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, code: clampW(w0 + dx, 220) })} />
         </section>
         <section class="pane canvas-pane" aria-label={t('tree')}>
           <Canvas />
         </section>
+        <aside class="pane inspector-pane" aria-label="Edit the selection">
+          <Splitter side="left" label="Width of the edit panel" onReset={() => (paneWidths.value = { ...paneWidths.value, inspector: 300 })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, inspector: clampW(w0 - dx, 220) })} />
+          <Inspector />
+        </aside>
         <aside class="pane settings-pane" aria-label={t('settings')}>
+          <Splitter side="left" label="Width of the settings" onReset={() => (paneWidths.value = { ...paneWidths.value, settings: 330 })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, settings: clampW(w0 - dx, 240) })} />
           <div class="settings-head">
             <h2>{t('settings')}</h2>
             <button class="icon-btn hide-mobile" aria-label={t('close')} onClick={() => (panelOpen.value = false)}>

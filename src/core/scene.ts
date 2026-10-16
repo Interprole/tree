@@ -1,4 +1,4 @@
-import { layoutArrows } from './arrows';
+import { geomEnd, geomPath, layoutArrows } from './arrows';
 import type { ArrowGeom } from './arrows';
 import { displayLabel, fontFor, layoutTree, NOTE_SCALE, noteSide, semDisplay } from './layout';
 import type { Box, Layout, LNode } from './layout';
@@ -303,14 +303,13 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   geoms.forEach((g, i) => {
     const a = g.arrow;
     const color = a.color ?? style.arrowColor;
-    const p = (q: [number, number]) => `${f(X(q[0]))} ${f(Y(q[1]))}`;
     const hl = m.fs * 0.45;
-    // shorten the curve so the stroke does not poke through the arrowhead
-    const d = `M${p(g.p0)}C${p(g.p1)} ${p(g.p2)} ${p(g.p3)}`;
+    const map = (q: [number, number]): [number, number] => [X(q[0]), Y(q[1])];
+    const d = geomPath(g, map);
     const width = Math.max(0.8, style.lineWidth * 1.05);
     const dash = a.line === 'dashed' ? [5, 3.5] : a.line === 'dotted' ? [1.2, 2.8] : undefined;
     prims.push({ t: 'path', d, stroke: color, width, dash, role: 'arrow', arrow: i });
-    const head = (tip: [number, number], from: [number, number]) => {
+    const head = ([tip, from]: [[number, number], [number, number]]) => {
       let vx = tip[0] - from[0];
       let vy = tip[1] - from[1];
       const len = Math.hypot(vx, vy) || 1;
@@ -323,14 +322,8 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
       const back = 0.25;
       return `M${f(X(tip[0]))} ${f(Y(tip[1]))}L${f(X(bx + wx))} ${f(Y(by + wy))}L${f(X(tip[0] - vx * hl * (1 - back)))} ${f(Y(tip[1] - vy * hl * (1 - back)))}L${f(X(bx - wx))} ${f(Y(by - wy))}Z`;
     };
-    // tangent direction: use a point slightly before the end
-    const near = (t: number) => {
-      const u = 1 - t;
-      const a1 = u * u * u, b1 = 3 * u * u * t, c1 = 3 * u * t * t, d1 = t * t * t;
-      return [a1 * g.p0[0] + b1 * g.p1[0] + c1 * g.p2[0] + d1 * g.p3[0], a1 * g.p0[1] + b1 * g.p1[1] + c1 * g.p2[1] + d1 * g.p3[1]] as [number, number];
-    };
-    if (a.head === 'end' || a.head === 'both') prims.push({ t: 'path', d: head(g.p3, near(0.93)), fill: color, role: 'arrowhead', arrow: i });
-    if (a.head === 'start' || a.head === 'both') prims.push({ t: 'path', d: head(g.p0, near(0.07)), fill: color, role: 'arrowhead', arrow: i });
+    if (a.head === 'end' || a.head === 'both') prims.push({ t: 'path', d: head(geomEnd(g, 'end')), fill: color, role: 'arrowhead', arrow: i });
+    if (a.head === 'start' || a.head === 'both') prims.push({ t: 'path', d: head(geomEnd(g, 'start')), fill: color, role: 'arrowhead', arrow: i });
     for (const l of g.labels) {
       const runs = a.labels.find((x) => x.index === l.index)!.runs;
       const lx = X(l.x) - l.w / 2;
@@ -338,7 +331,8 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
       drawRuns(runs, lx, ly, arrowFs, true, false, color, 'arrowlabel');
       labelHits.push({ kind: 'arrow', owner: i, index: l.index, box: { x1: lx - 2, y1: ly - arrowFs, x2: lx + l.w + 2, y2: ly + arrowFs * 0.3 } });
     }
-    arrowHits.push({ index: i, geom: { ...g, p0: [X(g.p0[0]), Y(g.p0[1])], p1: [X(g.p1[0]), Y(g.p1[1])], p2: [X(g.p2[0]), Y(g.p2[1])], p3: [X(g.p3[0]), Y(g.p3[1])], handle: [X(g.handle[0]), Y(g.handle[1])] }, d });
+    const segs = g.segs.map((c) => c.map(map) as typeof c);
+    arrowHits.push({ index: i, geom: { ...g, segs, knots: g.knots.map(map), mid: map(g.mid), handle: map(g.handle) }, d });
   });
 
   return {

@@ -210,3 +210,25 @@ describe('meaning display', () => {
     expect(t.root.sem!.runs).toEqual([{ text: 'λP' }, { text: '⟨e,t⟩', sub: true }, { text: '. ιx. P(x)' }]);
   });
 });
+
+import { tree as mkTree2 } from './helpers';
+import { plain as plainText } from '../src/core/richtext';
+describe('copies pronounced with other words, plain arrows', () => {
+  test('#id"words | gloss" shows the words with a gloss line', () => {
+    const t = mkTree2('[CP [DP#s dei vrou] [TP #s"zij | she" [VP x]]]');
+    const tp = t.nodes.find((n) => plainText(n.label) === 'TP')!;
+    const pos = tp.children[0];
+    expect(plainText(pos.children[0].label)).toBe('zij');
+    expect(pos.children[0].gloss?.map(plainText)).toEqual(['she']);
+    expect(pos.copy).toBeFalsy();
+  });
+  test('a plain arrow between heads is not head movement', () => {
+    const src = '[TP [T#t -s] [VP [V#v sing] x]]\n#v -> #t';
+    const moved = mkTree2(src);
+    expect(moved.nodes.some((n) => n.struck)).toBe(true);
+    const plainArrow = mkTree2(src + ' plain');
+    expect(plainArrow.nodes.some((n) => n.struck)).toBe(false);
+    expect(plainText(plainArrow.nodes.find((n) => n.id === 't')!.label)).toBe('T');
+    expect(plainArrow.arrows).toHaveLength(1);
+  });
+});

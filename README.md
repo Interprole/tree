@@ -18,16 +18,18 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
   - **traces**: `t`;
   - **multidominance**: one node, several mothers.
 
-  Several copies can be pronounced (`#wh!`), a copy can be pronounced with different words (`#wh"whom"`), and a lower position can get its own meaning (`#wh$x : e$`, triggering Predicate Abstraction). Arrows between positions are drawn automatically and each can be edited. Movement indices are separate from the indices you type for binding.
+  Several copies can be pronounced (`#wh!`), a copy can be pronounced with different words, with a gloss if you like (`#wh"whom"`, `#subj"zij | she"` for pronoun copying as in Wambeek Dutch), and a lower position can get its own meaning (`#wh$x : e$`, triggering Predicate Abstraction). Arrows between positions are drawn automatically and each can be edited; deleting one hides it. Movement indices are separate from the indices you type for binding.
 - **Head movement.** An arrow between two heads strikes out the source and turns the target into a complex head written as text: the labels (V+v, V+v+T, T+C) and the words (sing+-s) are joined with +. No extra edges are drawn.
 - **Compositional semantics.** Write meanings as `$λx. cat(x) : <e,t>$` (or `lambda x.`, `iota x.`, `exists`, `forall`; numbers and comparisons work; types can be any names). The meanings of the other nodes are computed bottom-up with Functional Application, Predicate Conjunction, Event Identification and Function Composition. Type errors are shown at the node; the rule used can be shown or hidden, and meaning colours are configurable.
-- **Canvas editing:**
-  - rename, add daughters or sisters;
+- **Several trees on one canvas.** Each tree has its own code, settings and place on the canvas (drag it by its name) and is exported on its own. A tree can be copied: an independent copy, or a linked copy that shares the code (edit one, both change) while its settings stay its own, e.g. copies in one and traces in the other.
+- **Canvas editing** in an edit panel beside the canvas, so nothing covers the tree:
+  - rename (the tree follows as you type), add daughters, sisters or a mother; the code is laid out with line breaks and indentation as you go (also *Format*, Shift+Alt+F);
   - add an existing constituent again by clicking it (a new chain position);
   - triangles that keep the structure in the code;
   - features, meanings, notes next to a node (several, positioned automatically or by side, draggable);
-  - colours of the label, the edge above, the whole branch (edges, labels and meanings) or the meaning; edge width and length, spread of the daughters;
-  - arrows: line, head direction, reverse, colour, route, several labels at chosen sides (draggable);
+  - colours of the label, the edge above, the whole branch (edges, labels and meanings) or the meaning, from the palette or any colour; edge width and length, spread of the daughters (changed at once with ▲▼, the arrow keys or the wheel);
+  - arrows: line, head direction, reverse, colour, route, several labels at chosen sides (draggable), any number of bend points (double-click an arrow); an arrow can be *just an arrow* instead of head movement;
+  - arrows leave and enter the node itself: at the side of a node with daughters, under a word; a head with only a word uses the word by default, or the node (`from=node`, `to=node`);
   - Markdown (`**bold**`, `*italic*`, `~~struck~~`) in labels, words, notes and arrow labels;
   - changing the branching of a node with two daughters (left ↔ right swaps them: `[XP X [Z]]` ↔ `[XP [Z] X]`);
   - click a note or an arrow label to rename or delete it, drag it to move it;
@@ -36,8 +38,9 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 - **Export and sharing:**
   - SVG and PDF with embedded fonts, PNG up to 576 dpi;
   - LaTeX code, tested by compiling it with `pdflatex`, `xelatex` and `lualatex`;
-  - share links, autosave, a list of saved trees.
-- **Interface:** every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
+  - save the canvas to disk (a `.nanotrees` file with all its trees; in Chrome and Edge Ctrl+S writes into the same file again, optionally on every change) and open it again;
+  - share links, autosave in the browser, a list of saved trees.
+- **Interface:** resizable panes (drag the borders); every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
 
 ## Bracket notation
 
@@ -57,10 +60,13 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | `[DP &"focus" &right"✓"@4,-2 …]` | notes next to the node (side, drag offset) |
 | `[DP#wh what] … #wh` | a chain: the same constituent in two positions |
 | `#wh!`, `[DP#wh? what]` | pronounce / silence a position |
-| `#wh"whom"`, `#wh$x : e$` | a position with its own words / meaning |
+| `#wh"whom"`, `#wh"zij \| she"`, `#wh$x : e$` | a position with its own words (and gloss) / meaning |
 | `$λx_e.λe_s. agent(e)(x)$` | a meaning (optionally `: <type>`) |
 | `#a -> #b dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; between heads it is head movement |
 | `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
+| `#a -> #b plain` | just an arrow: between heads it is not head movement |
+| `#a -> #b via=0,40;-20,60` | bend points (px from the middle of the two ends) |
+| `#a -> #b from=node to=node` | ends at the node instead of its word |
 | `% comment` | comment to the end of the line |
 
 Example: head movement, together with a subject chain.
@@ -117,6 +123,7 @@ src/core/      no DOM, tested on its own
   scene.ts     drawing primitives → SVG, PNG, PDF
   latex.ts     forest / tikz-qtree / TikZ export
   edits.ts     canvas operations as minimal text edits
+  format.ts    line breaks and indentation of the code
   analysis.ts  c-command and dominance
 ```
 

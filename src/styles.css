@@ -201,13 +201,18 @@ kbd {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(300px, 30%) 1fr 0;
+  grid-template-columns: var(--code-w) minmax(0, 1fr) var(--insp-w) 0;
   min-height: 0;
-  transition: grid-template-columns 0.2s ease;
 }
 
 .panel-open .workspace {
-  grid-template-columns: minmax(300px, 30%) 1fr 330px;
+  grid-template-columns: var(--code-w) minmax(0, 1fr) var(--insp-w) var(--set-w);
+}
+
+body.resizing,
+body.resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .panel-open .settings-pane,
@@ -225,12 +230,30 @@ kbd {
   flex-direction: column;
   border-right: 1px solid var(--border);
   background: var(--editor-bg);
+  position: relative;
+}
+
+.editor-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
 }
 
 .editor {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
+}
+
+.format-btn {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .editor .cm-editor {
@@ -295,6 +318,7 @@ kbd {
 }
 
 .settings-pane {
+  position: relative;
   visibility: hidden;
   background: var(--surface);
   border-left: 1px solid var(--border);
@@ -677,39 +701,6 @@ kbd {
   text-align: center;
 }
 
-.floating {
-  position: absolute;
-  z-index: 10;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  cursor: default;
-}
-
-.node-bar {
-  display: flex;
-  gap: 1px;
-  padding: 3px;
-  transform: translate(-50%, calc(-100% - 22px));
-}
-
-.color-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 216px;
-}
-
 .swatches {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -727,28 +718,6 @@ kbd {
   background: linear-gradient(135deg, transparent 45%, var(--danger) 45%, var(--danger) 55%, transparent 55%), var(--surface);
 }
 
-.arrow-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: 330px;
-}
-
-.arrow-bar .note {
-  font-size: 12px;
-  color: var(--muted);
-  max-width: 300px;
-}
-
-.arrow-bar .row input {
-  flex: 1;
-  min-width: 0;
-  padding: 3px 7px;
-}
-
 .row {
   display: flex;
   gap: 8px;
@@ -764,27 +733,6 @@ kbd {
   flex: 1;
   min-width: 0;
 }
-
-.rename-box {
-  position: absolute;
-  transform: translateX(-50%);
-  min-width: 90px;
-  text-align: center;
-  font-family: var(--serif);
-  z-index: 12;
-  border: 1.5px solid #2563eb;
-  box-shadow: var(--shadow);
-  padding: 2px 8px;
-  /* the box sits on the white paper: dark text and a clearly visible caret in both themes */
-  background: #fff;
-  color: #111;
-  caret-color: #c2410c;
-}
-
-
-
-
-
 
 /* ------------------------------------------------------------ settings */
 
@@ -1190,9 +1138,6 @@ textarea.code {
   .hide-sm {
     display: none;
   }
-  .panel-open .workspace {
-    grid-template-columns: minmax(260px, 34%) 1fr 300px;
-  }
 }
 
 @media (min-width: 821px) {
@@ -1589,18 +1534,6 @@ textarea.code {
   font-size: 11px;
 }
 
-.style-pop {
-  width: 290px;
-}
-
-.style-pop .seg {
-  align-self: stretch;
-}
-
-.style-pop .seg button {
-  flex: 1;
-}
-
 .num-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1635,21 +1568,470 @@ textarea.code {
   outline-offset: 1px;
 }
 
-/* node toolbar popovers always open above the toolbar */
-.node-bar .color-pop {
-  top: auto;
-  bottom: calc(100% + 6px);
+/* ------------------------------------------------------------ pane borders */
+
+.splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
 }
 
-.label-editor {
+.splitter-right {
+  right: -5px;
+}
+
+.splitter-left {
+  left: -5px;
+}
+
+.splitter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.splitter:hover::after,
+body.resizing .splitter::after {
+  background: var(--accent);
+  width: 2px;
+}
+
+/* ------------------------------------------------------------ trees on the canvas */
+
+.tree-tabs {
   display: flex;
-  gap: 4px;
   align-items: center;
-  padding: 5px;
-  transform: translateX(-50%);
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex: none;
 }
 
-.label-editor input {
-  width: 170px;
-  padding: 3px 7px;
+.tree-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+  margin-bottom: -1px;
+  flex: none;
+}
+
+.tree-tab.on {
+  background: var(--editor-bg);
+  border-color: var(--border);
+  border-bottom: 1px solid var(--editor-bg);
+}
+
+.tab-name {
+  border: 0;
+  background: transparent;
+  padding: 5px 4px 5px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tree-tab.on .tab-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tab-more {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 5px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.tab-more:hover {
+  background: var(--surface-2);
+}
+
+.tab-rename {
+  width: 120px;
+  margin: 3px 4px;
+  padding: 2px 6px;
+  font-size: 12.5px;
+}
+
+.tab-menu {
+  position: fixed;
+  margin-top: 4px;
+  top: auto;
+  left: auto;
+  width: 280px;
+  z-index: 40;
+}
+
+.tree-tab .tab-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+}
+
+.tab-menu .danger strong {
+  color: var(--danger);
+}
+
+.add-tree {
+  margin-left: 4px;
+  flex: none;
+}
+
+.link-mark {
+  display: inline-flex;
+  vertical-align: -1px;
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
+.sheet-head {
+  position: absolute;
+  transform: translateY(0);
+  padding: 2px 9px;
+  font-size: 12px;
+  border-radius: 6px 6px 0 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: grab;
+  white-space: nowrap;
+  user-select: none;
+  z-index: 3;
+}
+
+.sheet-head.on {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.sheet-head:active {
+  cursor: grabbing;
+}
+
+.other-sheet {
+  cursor: pointer;
+}
+
+.other-sheet:hover .paper {
+  stroke: rgba(37, 99, 235, 0.45);
+  stroke-width: 1.5;
+}
+
+.paper-active {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.bend-handle.via {
+  fill: #2563eb;
+  stroke: #fff;
+  stroke-width: 1.6;
+}
+
+.label-hit.selected {
+  fill: rgba(37, 99, 235, 0.08);
+  stroke: #2563eb;
+}
+
+/* ------------------------------------------------------------ edit panel (inspector) */
+
+.inspector-pane {
+  position: relative;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.inspector {
+  position: relative;
+  padding: 12px 14px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.insp-empty h2,
+.insp-head h2 {
+  font: 600 17px var(--serif);
+  margin: 0;
+}
+
+.insp-empty .hint {
+  margin: 8px 0;
+}
+
+.insp-keys {
+  padding-left: 18px;
+  line-height: 1.9;
+}
+
+.insp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.insp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  font-size: 11.5px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.insp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.insp-field input {
+  padding: 5px 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.insp-field input.mono {
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.insp-tools {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.insp-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.insp-tool:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.insp-tool.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.insp-tool.danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.insp-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.insp-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.insp-group h3 {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.insp-group .seg {
+  align-self: stretch;
+}
+
+.insp-group .seg button {
+  flex: 1;
+}
+
+.insp-group .row.wrap {
+  margin: 0;
+  gap: 6px;
+}
+
+.insp-group .hint {
+  margin: 0;
+}
+
+.danger-btn:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.swatch.custom {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(#e11d48, #f59e0b, #84cc16, #06b6d4, #6366f1, #d946ef, #e11d48);
+}
+
+.swatch.custom input {
+  position: absolute;
+  inset: -6px;
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
+  opacity: 0;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+}
+
+@media (min-width: 821px) and (max-width: 980px) {
+  /* the edit panel leaves the grid (see below): three columns */
+  .workspace {
+    grid-template-columns: minmax(240px, 32%) minmax(0, 1fr) 0;
+  }
+  .panel-open .workspace {
+    grid-template-columns: minmax(240px, 32%) minmax(0, 1fr) min(var(--set-w), 300px);
+  }
+}
+
+@media (max-width: 980px) {
+  /* the edit panel becomes a sheet over the lower part of the canvas, shown for a selection */
+  .inspector-pane {
+    position: fixed;
+    right: 8px;
+    bottom: 8px;
+    width: min(360px, calc(100vw - 16px));
+    max-height: 48vh;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    z-index: 30;
+    display: none;
+  }
+  .has-selection .inspector-pane {
+    display: block;
+  }
+  .inspector-pane .splitter {
+    display: none;
+  }
+  .inspector .insp-close {
+    display: grid !important;
+  }
+}
+
+.insp-close {
+  display: none !important;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+@media (max-width: 820px) {
+  .has-selection.tab-tree .inspector-pane {
+    display: block !important;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+  .splitter {
+    display: none;
+  }
+}
+
+.end-lbl {
+  width: 36px;
+  font-size: 12px;
+  color: var(--muted);
+  flex: none;
+}
+
+/* ------------------------------------------------------------ files */
+
+.file-pop {
+  right: 0;
+  left: auto;
+  width: 320px;
+}
+
+.file-pop kbd {
+  float: right;
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.file-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unsaved-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.menu-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.menu-toggle:hover {
+  background: var(--surface-2);
+}
+
+.menu-toggle span {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-toggle small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.menu-toggle input {
+  margin-top: 3px;
 }

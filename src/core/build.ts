@@ -211,7 +211,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
       return;
     }
     const labels = a.labels.map((l, i) => ({ runs: parseRich(l.text), side: l.side, off: l.off, index: i }));
-    arrows.push({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], src: a, index });
+    arrows.push({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], via: a.via, plain: a.plain, fromAt: a.fromAt, toAt: a.toAt, src: a, index });
   });
   if (opts.chains !== 'multidominance' && opts.chainArrows) {
     const covered = (x: DNode, y: DNode) =>
@@ -369,7 +369,11 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
       }
       // pronounced with other words: #wh!"whom"
       if (sl.info.text !== undefined && overt[i]) {
-        inst.children = [{ key: `${inst.key}~w`, kind: 'leaf', label: parseRich(sl.info.text), children: [], parents: [], indices: [], synthetic: true }];
+        // "zij | she": the words, then gloss lines
+        const [words, ...gloss] = sl.info.text.split(/\s*\|\s*/);
+        const leaf: DNode = { key: `${inst.key}~w`, kind: 'leaf', label: parseRich(words), children: [], parents: [], indices: [], synthetic: true };
+        if (gloss.length) leaf.gloss = gloss.map((g) => parseRich(g, { smallCaps: true }));
+        inst.children = [leaf];
         inst.triangle = false;
       }
       // meaning of this position: #wh$x : e$ (e.g. a trace as a variable)
@@ -404,7 +408,7 @@ const isHead = (n: DNode) => n.kind === 'phrase' && n.children.every((c) => c.ki
 function applyHeadMovement(arrows: DArrow[]) {
   const head = (n: DNode) => (n.kind === 'leaf' ? n.parents[0] : n);
   const moves = arrows
-    .filter((a) => !a.auto)
+    .filter((a) => !a.auto && !a.plain)
     .map((a) => ({ from: head(a.from), to: head(a.to) }))
     .filter((m) => m.from && m.to && m.from !== m.to && isHead(m.from) && isHead(m.to));
   if (!moves.length) return;

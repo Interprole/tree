@@ -178,7 +178,8 @@ const GUIDE: GuideSection[] = [
         <Table rows={[
           ['#wh!', 'Pronounce this position too (multiple spell-out).'],
           ['[DP#wh? what]', 'Do not pronounce this position.'],
-          ['#wh"whom"', 'Pronounce this copy differently (e.g. a resumptive or a partial copy): the position shows the given words.'],
+          ['#wh"whom"', 'Pronounce this copy differently (e.g. a resumptive, a pronoun copy or a partial copy): the position shows the given words.'],
+          ['#subj"zij | she"', 'Other words with a gloss line, e.g. pronoun copying in Wambeek Dutch: [DP#subj dei vrou] … #subj"zij | she" (see Examples). On the canvas: select the lower position → Pronounced as.'],
           ['#wh$x : e$', 'Give a lower position its own meaning (a trace as a variable). Its sister is then abstracted over it (Predicate Abstraction, shown as PA+…).'],
         ]} />
         <p>On the canvas: select a position → ⋯ → <em>Pronounce / Silence this position</em>.</p>
@@ -201,6 +202,8 @@ const GUIDE: GuideSection[] = [
           ['"label"   @red', 'A label, a colour. Several labels are allowed.'],
           ['above"x"  below"y"  left"z"', 'Label position (default: auto = under an arrow below the tree, outside a curve). Drag a label to move it: writes "x"@dx,dy.'],
           ['bend=0,20', 'Offset of the bend (set by dragging the handle).'],
+          ['via=0,40;-30,60', 'Bend points: the arrow is a smooth curve through them (offsets in px from the middle of its two ends). Double-click an arrow to add one, drag the round handles, double-click a handle to remove it.'],
+          ['plain', 'Just an arrow: between two heads it is not head movement (nothing struck through, no V+v).'],
           ['#wh/2 -> #wh/1 hide', 'Hide one automatic arrow of a chain.'],
         ]} />
       </>
@@ -245,21 +248,24 @@ const GUIDE: GuideSection[] = [
     title: 'Editing on the canvas',
     body: () => (
       <>
-        <p>Click a node to select it (it is also selected in the code); a toolbar appears above it.</p>
+        <p>Click a node to select it (it is also selected in the code). Everything about it is in the <em>Edit</em> panel to the right of the canvas, so nothing covers the tree.</p>
         <Table rows={[
-          ['✎', 'Rename (also double-click or Enter). You can type markup: DP_i, T\'.'],
-          ['daughter / sister', 'Add a new node X and rename it.'],
-          ['copy', 'Add an existing constituent again: choose daughter or sister, then click the constituent. This makes a new chain position (#id).'],
-          ['△', 'Triangle on/off. The structure stays in the code.'],
-          ['[f]', 'Features (comma-separated).'],
-          ['λ', 'Meaning; or keep the computed meaning.'],
-          ['“ ”', 'Notes next to the node: several, each with a position (auto, left, right, above, below). Drag them on the canvas; click one to rename or delete it.'],
-          ['palette', 'Colour the label, the edge above, the whole branch or the meaning.'],
-          ['↔', 'Spacing: width and extra length of the edge above, spread of the daughters.'],
-          ['arrow', 'Draw an arrow from this node: then click the target.'],
-          ['⋯', <>Change the branching of a node with two daughters by swapping them: <em>left</em> turns [XP X [Z]] into [XP [Z] X], <em>right</em> turns [XP [Z] X] into [XP X [Z]]; pronounce or silence a chain position.</>],
-          ['🗑', 'Delete the node (its #references and arrows go too).'],
+          ['Label', 'Rename: type in the panel, the tree follows as you type (double-click or Enter jumps there). You can type markup: DP_i, T\'.'],
+          ['Daughter / Sister / Mother', 'Add a new node X (a mother goes above the node: X → [Y X]) and type its label. The code gets line breaks and indentation by itself.'],
+          ['Triangle', 'Triangle on/off. The structure stays in the code.'],
+          ['Arrow', 'Draw an arrow from this node: then click the target.'],
+          ['Movement', 'Re-merge: add an existing constituent again (a new chain position #id). Pronounce or silence a position; pronounce a lower position with other words (a pronoun copy).'],
+          ['Features, meaning', 'Features (comma-separated), the meaning, or keep the computed meaning.'],
+          ['Notes', 'Notes next to the node: several, each with a position (auto, left, right, above, below). Drag them on the canvas; click one to edit or delete it.'],
+          ['Colour', 'Colour the label, the edge above, the whole branch or the meaning: a palette colour or any colour (the rainbow swatch).'],
+          ['Spacing', 'Width and extra length of the edge above, spread of the daughters. The ▲▼ buttons, the arrow keys and the mouse wheel change the tree at once.'],
+          ['Branching', <>Swap the two daughters: <em>left</em> turns [XP X [Z]] into [XP [Z] X], <em>right</em> turns [XP [Z] X] into [XP X [Z]].</>],
         ]} />
+        <p>Drag the borders between the code, the canvas, the edit panel and the settings to make them wider or narrower (double-click a border: default). The ≡ button in the code (Shift+Alt+F) lays out the whole code.</p>
+        <h4>Several trees</h4>
+        <p>
+          The tabs above the code are the trees on the canvas; <strong>+</strong> adds one. Each tree has its own code and settings and is exported on its own. Click a tree on the canvas to edit it, drag its name to move it. ⋯ on a tab: <em>Copy</em> makes an independent copy, <em>Linked copy</em> one that shares the code (an edit in one changes both, while e.g. copies vs traces or colours stay separate); <em>Unlink</em> and <em>Link to…</em> change that later.
+        </p>
         <h4>Tools (bottom of the canvas)</h4>
         <Table rows={[
           ['Select', 'Select and edit.'],
@@ -267,7 +273,7 @@ const GUIDE: GuideSection[] = [
           ['C-command', 'Click a node: green shows what it c-commands.'],
           ['Dominance', 'Click a node: blue shows what it dominates.'],
         ]} />
-        <p>Click a note or an arrow label to rename or delete it; drag it to move it. Click an arrow to change its line, head direction (→ ← ↔ —), colour, route and labels, or to reverse it. Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the tree.</p>
+        <p>Click a note or an arrow label to edit or delete it; drag it to move it. Click an arrow to change its line, head direction (→ ← ↔ —), colour, route, labels and bend points, to reverse it, or to make it <em>just an arrow</em> (not head movement). Deleting an arrow between two positions of a chain hides it (it does not come back with default settings). Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the trees.</p>
       </>
     ),
   },
@@ -287,7 +293,8 @@ const GUIDE: GuideSection[] = [
           ['PDF', 'Vector, fonts embedded.'],
           ['LaTeX', 'forest code (also tikz-qtree, or TikZ with the exact layout). Compiles with pdfLaTeX, XeLaTeX and LuaLaTeX.'],
           ['Share', 'A link with the tree and its settings.'],
-          ['My trees', 'Save trees in this browser. The current tree is saved automatically.'],
+          ['Save to disk', 'File → Save to disk (Ctrl+S) writes the whole canvas, all its trees, into a .nanotrees file; Open from disk (Ctrl+O) or dropping a file onto the window brings it back. In Chrome and Edge the file stays connected: Ctrl+S saves into it again, and it can be kept up to date automatically.'],
+          ['My trees', 'Save the canvas (all its trees) in this browser. The current canvas is saved automatically, but only in this browser: save to disk to keep it safe.'],
         ]} />
       </>
     ),
@@ -324,16 +331,21 @@ export function Help() {
 const KEYS: [string, string][] = [
   ['Ctrl/⌘ Z', 'Undo'],
   ['Ctrl/⌘ Shift Z, Ctrl Y', 'Redo'],
+  ['Ctrl/⌘ S', 'Save to disk (Shift: save as)'],
+  ['Ctrl/⌘ O', 'Open from disk'],
   ['Click', 'Select a node (also selects it in the code)'],
   ['Double-click, Enter, F2', 'Rename'],
   ['A', 'Add a daughter'],
   ['S', 'Add a sister'],
+  ['P', 'Add a mother'],
   ['Delete, Backspace', 'Delete the node or arrow'],
   ['T', 'Triangle on/off'],
   ['M', 'Arrow from the selected node'],
   ['← → ↑ ↓', 'Move between sisters / mother / daughter'],
   ['V · W · C · D', 'Tools: select, arrow, c-command, dominance'],
   ['+ − 0', 'Zoom in / out / fit'],
+  ['Shift Alt F', 'Lay out the code (in the code editor)'],
+  ['Double-click an arrow', 'Add a bend point'],
   ['Esc', 'Cancel, deselect'],
   ['?', 'Shortcuts'],
 ];

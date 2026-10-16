@@ -135,22 +135,74 @@ describe('colours', () => {
 });
 
 import { layoutTree } from '../src/core/layout';
-import { layoutArrows } from '../src/core/arrows';
+import { geomSample, layoutArrows } from '../src/core/arrows';
 describe('movement arrows', () => {
-  const end = (src: string, id: string) => {
-    const t = mkTree(src, { chains: 'traces' });
+  const geom = (src: string, id: string, o = {}) => {
+    const t = mkTree(src, { chains: 'traces', ...o });
     const L = layoutTree(t, ds, am);
     const { geoms } = layoutArrows(L, t.arrows);
     const n = t.nodes.find((x) => x.id === id)!;
-    return { y: geoms[0].p3[1], node: L.nodes.get(n)!, kids: n.children.map((c) => L.nodes.get(c)!) };
+    const g = geoms[0];
+    return { g, L, t, start: g.segs[0][0], end: g.segs[g.segs.length - 1][3], node: L.nodes.get(n)!, kids: n.children.map((c) => L.nodes.get(c)!) };
   };
-  test('an arrow lands on the label of a phrase, between its branches', () => {
-    const { y, node, kids } = end('[S [DP#q [D every] [NP cat]] [VP [V likes] #q]]', 'q');
-    expect(y).toBeGreaterThan(node.y + node.block.h - 1);
-    expect(y).toBeLessThan(Math.min(...kids.map((k) => k.y)));
+  /** the arrow never passes through a label other than at its own ends */
+  const clearOfLabels = (g: ReturnType<typeof geom>) => {
+    const pts = geomSample(g.g, 12).slice(3, -3);
+    for (const ln of g.L.list) {
+      const b = ln.block;
+      for (const [x, y] of pts) {
+        const inside = x > ln.x - b.w / 2 + 1 && x < ln.x + b.w / 2 - 1 && y > ln.y + 1 && y < ln.y + b.fullH - 1;
+        expect(inside, `arrow crosses the label of ${ln.node.key}`).toBe(false);
+      }
+    }
+  };
+  test('an arrow lands on the landing node itself, not under its subtree', () => {
+    const r = geom('[S [DP#q [D every] [NP cat]] [VP [V likes] #q]]', 'q');
+    // the end is at the node's own label, above its daughters
+    expect(r.end[1]).toBeLessThan(Math.min(...r.kids.map((k) => k.y)));
+    expect(Math.abs(r.end[0] - r.node.x)).toBeLessThan(r.node.block.w / 2 + 8);
+    clearOfLabels(r);
   });
-  test('a unary phrase is entered from under its yield', () => {
-    const { y, kids } = end('[S [DP#q [NP cat]] [VP [V likes] #q]]', 'q');
-    expect(y).toBeGreaterThan(kids[0].y + kids[0].block.h);
+  test('an arrow leaves the moved node itself', () => {
+    const r = geom('[CP [DP#wh what] [C\' [C did] [TP [DP Mary] [VP [V buy] [DP#o [D the] [NP book]]]]]]\n#o -> #wh', 'o');
+    expect(r.start[1]).toBeLessThan(Math.min(...r.kids.map((k) => k.y)));
+    clearOfLabels(r);
+  });
+  test('a unary phrase is reached at its own label too', () => {
+    const r = geom('[S [DP#q [NP cat]] [VP [V likes] #q]]', 'q');
+    expect(r.end[1]).toBeLessThan(r.kids[0].y + 2);
+    clearOfLabels(r);
+  });
+  test('a node with daughters is entered from the side of its label, horizontally', () => {
+    const r = geom('[S [DP#q [D every] [NP cat]] [VP [V likes] #q]]', 'q');
+    const last = r.g.segs[r.g.segs.length - 1];
+    expect(Math.abs(last[3][1] - last[2][1])).toBeLessThan(0.5);
+    expect(r.end[1]).toBeLessThan(r.node.y + r.node.block.labelH);
+  });
+  test('a head with only a word: the arrow leaves and enters the word, vertically; or the node with from=/to=node', () => {
+    const src = '[TP [T#t -s] [VP [V#v sing] [DP it]]]\n#v -> #t';
+    const t = mkTree(src);
+    const L = layoutTree(t, ds, am);
+    const g = layoutArrows(L, t.arrows).geoms[0];
+    const word = (id: string) => L.nodes.get(t.nodes.find((x) => x.id === id)!.children[0])!;
+    const [s0, s1] = [g.segs[0][0], g.segs[0][1]];
+    expect(Math.abs(s0[0] - s1[0])).toBeLessThan(0.5);
+    expect(s0[1]).toBeGreaterThan(word('v').y + word('v').block.fullH - 1);
+    const e = g.segs[g.segs.length - 1][3];
+    expect(e[1]).toBeGreaterThan(word('t').y + word('t').block.fullH - 1);
+    const t2 = mkTree(src + ' to=node');
+    const L2 = layoutTree(t2, ds, am);
+    const g2 = layoutArrows(L2, t2.arrows).geoms[0];
+    const tn = L2.nodes.get(t2.nodes.find((x) => x.id === 't')!)!;
+    const e2 = g2.segs[g2.segs.length - 1][3];
+    expect(e2[1]).toBeLessThan(tn.y + tn.block.labelH);
+  });
+  test('bend points: the curve passes through them', () => {
+    const t = mkTree('[S [A#a x] [B [C y] [D#d z]]]\n#d -> #a via=0,60;-20,80');
+    const L = layoutTree(t, ds, am);
+    const g = layoutArrows(L, t.arrows).geoms[0];
+    expect(g.segs).toHaveLength(3);
+    expect(g.knots[1]).toEqual([g.mid[0], g.mid[1] + 60]);
+    expect(g.segs[1][0]).toEqual(g.knots[1]);
   });
 });

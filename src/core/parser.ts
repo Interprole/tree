@@ -405,12 +405,27 @@ class Parser {
       else if (tok === 'dashed' || tok === 'dotted' || tok === 'solid') arrow.line = tok;
       else if (tok === 'under' || tok === 'curve') arrow.route = tok;
       else if (tok === 'hide') arrow.hidden = true;
+      else if (tok === 'plain') arrow.plain = true;
+      else if (/^(from|to)=(node|word)$/.test(tok)) {
+        const [k, v] = tok.split('=') as ['from' | 'to', 'node' | 'word'];
+        if (k === 'from') arrow.fromAt = v;
+        else arrow.toAt = v;
+      }
+      else if (tok.startsWith('via=')) {
+        const pts = tok
+          .slice(4)
+          .split(';')
+          .filter(Boolean)
+          .map((p) => p.split(',').map(Number));
+        if (!pts.length || pts.some((p) => p.length !== 2 || p.some((n) => !Number.isFinite(n)))) this.fail('via= expects points, e.g. via=0,40;30,60', tokFrom, tokFrom + tok.length);
+        arrow.via = pts as [number, number][];
+      }
       else if (tok.startsWith('@') && tok.length > 1) arrow.color = tok.slice(1);
       else if (tok.startsWith('bend=')) {
         const nums = tok.slice(5).split(',').map(Number);
         if (nums.some((n) => !Number.isFinite(n))) this.fail('bend= expects numbers, e.g. bend=0,20', tokFrom, tokFrom + tok.length);
         arrow.bend = [nums.length > 1 ? nums[0] : 0, nums.length > 1 ? nums[1] : nums[0]];
-      } else this.fail(`Unknown arrow option "${tok}". Use dashed, dotted, curve, hide, "label", @colour or bend=x,y`, tokFrom, tokFrom + tok.length);
+      } else this.fail(`Unknown arrow option "${tok}". Use dashed, dotted, curve, plain, hide, from=node, to=node, "label", @colour, bend=x,y or via=x,y;x,y`, tokFrom, tokFrom + tok.length);
     }
     this.i = lineEnd;
     return arrow;

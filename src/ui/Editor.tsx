@@ -9,10 +9,10 @@ import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/
 import type { CompletionContext } from '@codemirror/autocomplete';
 import { setDiagnostics } from '@codemirror/lint';
 import { tags } from '@lezer/highlight';
-import { setEditorBridge } from '../actions';
+import { formatCode, setEditorBridge } from '../actions';
 import { MACROS } from '../core/richtext';
 import { t } from '../i18n';
-import { error, parsed, selection, source, tree } from '../state';
+import { activeTree, error, parsed, selection, source, tree } from '../state';
 
 /* ------------------------------------------------------------ highlighting */
 
@@ -226,41 +226,49 @@ function nodeAt(pos: number): string | null {
 export function Editor() {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const view = new EditorView({
-      parent: host.current!,
-      state: EditorState.create({
-        doc: source.value,
-        extensions: [
-          lineNumbers(),
-          highlightSpecialChars(),
-          history(),
-          drawSelection(),
-          highlightActiveLine(),
-          bracketMatching(),
-          closeBrackets(),
-          autocompletion({ override: [macroCompletions], icons: false }),
-          bracketLang,
-          syntaxHighlighting(highlight),
-          EditorView.lineWrapping,
-          placeholder(t('emptyDoc')),
-          keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
-          editorTheme,
-          EditorView.contentAttributes.of({ 'aria-label': 'Tree source in bracket notation', spellcheck: 'false' }),
-          EditorView.updateListener.of((u) => {
-            if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External))) {
-              source.value = u.state.doc.toString();
-            }
-            if (u.selectionSet && u.transactions.some((tr) => tr.isUserEvent('select') || tr.isUserEvent('input'))) {
-              const key = nodeAt(u.state.selection.main.head);
-              if (key && view.hasFocus) selection.value = { kind: 'node', key };
-            }
-          }),
-        ],
+    let view: EditorView;
+    const extensions = [
+      lineNumbers(),
+      highlightSpecialChars(),
+      history(),
+      drawSelection(),
+      highlightActiveLine(),
+      bracketMatching(),
+      closeBrackets(),
+      autocompletion({ override: [macroCompletions], icons: false }),
+      bracketLang,
+      syntaxHighlighting(highlight),
+      EditorView.lineWrapping,
+      placeholder(t('emptyDoc')),
+      keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab, { key: 'Shift-Alt-f', run: () => (formatCode(), true) }]),
+      editorTheme,
+      EditorView.contentAttributes.of({ 'aria-label': 'Tree source in bracket notation', spellcheck: 'false' }),
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged && !u.transactions.some((tr) => tr.annotation(External))) {
+          source.value = u.state.doc.toString();
+        }
+        if (u.selectionSet && u.transactions.some((tr) => tr.isUserEvent('select') || tr.isUserEvent('input'))) {
+          const key = nodeAt(u.state.selection.main.head);
+          if (key && view.hasFocus) selection.value = { kind: 'node', key };
+        }
       }),
-    });
-    // external changes (examples, links, my trees) → editor
+    ];
+    const make = (doc: string) => EditorState.create({ doc, extensions });
+    view = new EditorView({ parent: host.current!, state: make(source.value) });
+    // every code of the canvas keeps its own editor state (and undo history); linked copies share one
+    const states = new Map<string, EditorState>();
+    let shownSrc = activeTree.peek().srcId;
     const stopSync = effect(() => {
+      const src = activeTree.value.srcId;
       const s = source.value;
+      if (src !== shownSrc) {
+        states.set(shownSrc, view.state);
+        shownSrc = src;
+        const saved = states.get(src);
+        view.setState(saved && saved.doc.toString() === s ? saved : make(s));
+        return;
+      }
+      // external changes (examples, links, my trees) → editor
       if (s !== view.state.doc.toString()) {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s }, annotations: External.of(true) });
       }

@@ -1,10 +1,12 @@
-import { signal } from '@preact/signals';
 import type { AArrow, ALeaf, ANode, ARef } from './core/ast';
 import * as E from './core/edits';
 import type { Edit } from './core/edits';
+import { formatDoc, tidyEdit } from './core/format';
+import { cubicAt, insertVia } from './core/arrows';
+import type { ArrowGeom } from './core/arrows';
 import type { DArrow, DNode } from './core/model';
 import { t } from './i18n';
-import { arrowSource, doc, editable, pick, selection, showToast, source, tool, tree } from './state';
+import { arrowSource, build, doc, editable, pick, requestLabelFocus, scene, selection, showToast, source, tool, tree } from './state';
 
 /** Bridge to the code editor, so that canvas edits go through its undo history. */
 export interface EditorBridge {
@@ -87,46 +89,66 @@ function guard(n: DNode | null): n is DNode {
 export function renameNode(n: DNode, text: string) {
   if (!guard(n)) return;
   const s = n.src!;
-  applyEdit(s.kind === 'leaf' ? E.renameLeaf(s, text) : E.renameNode(source.value, s, text));
+  applyEdit(s.kind === 'leaf' ? E.renameLeaf(s, text.trim() ? text : '∅') : E.renameNode(source.value, s, text));
+}
+
+/** Apply a structural edit and lay the code out around it (line breaks and indentation). */
+function applyTidy(edit: Edit, anchor: number, up: number): Edit {
+  const out = tidyEdit(source.value, edit, anchor, up);
+  applyEdit(out);
+  return out;
 }
 
 export function addChild(n: DNode | null = selectedNode()) {
   if (!guard(n)) return;
-  const s = n.src!;
-  applyEdit(E.addChild(s));
-  selectNewNode(s.kind === 'leaf' ? s.span.from + s.text.length + 3 : s.span.to - 1 + 2);
+  const e = E.addChild(n.src!);
+  selectNewNode(applyTidy(e, e.select!.from, 1).select?.from);
 }
 
 export function addSister(n: DNode | null = selectedNode()) {
   if (!guard(n)) return;
   const s = n.src!;
   if (s.kind === 'node' && s === doc.value?.root) {
-    showToast('The root cannot have sisters — add a daughter instead.');
+    showToast('The root cannot have sisters — add a daughter or a mother instead.');
     return;
   }
-  const at = s.kind === 'leaf' ? s.fullSpan.to : s.span.to;
-  applyEdit(E.addSister(s));
-  selectNewNode(at + 2);
+  const e = E.addSister(s);
+  selectNewNode(applyTidy(e, e.select!.from, 1).select?.from);
 }
 
-/** after an insertion, select the node whose label starts at pos */
-function selectNewNode(pos: number) {
+/** Put a new node above this one: X → [Y X]. */
+export function addMother(n: DNode | null = selectedNode()) {
+  if (!guard(n)) return;
+  const e = E.addMother(n.src!);
+  selectNewNode(applyTidy(e, e.select!.from, 1).select?.from);
+}
+
+/** Lay out the whole code: line breaks and indentation. */
+export function formatCode() {
+  const src = source.value;
+  const next = formatDoc(src);
+  if (next !== src) applyEdit({ changes: [{ from: 0, to: src.length, insert: next }] });
+}
+
+/** after an insertion, select the node whose label starts at pos and let the user type its label */
+function selectNewNode(pos: number | undefined) {
+  if (pos === undefined) return;
   queueMicrotask(() => {
     const n = tree.value?.nodes.find((x) => x.src?.kind === 'node' && x.src.labelSpan.from === pos);
-    if (n) selection.value = { kind: 'node', key: n.key };
-    pendingRename.value = n?.key ?? null;
+    if (!n) return;
+    selection.value = { kind: 'node', key: n.key };
+    requestLabelFocus(n.key);
   });
 }
-
-/** a freshly added node that should open the rename box */
-export const pendingRename = signal<string | null>(null);
 
 export function deleteNode(n: DNode | null = selectedNode()) {
   if (!guard(n)) return;
   const d = doc.value!;
   // the parent becomes selected
   const parentKey = n.parents[0]?.key ?? null;
-  applyEdit(E.deleteElement(source.value, d, n.src!));
+  const e = E.deleteElement(source.value, d, n.src!);
+  if (e.changes.length && !(n.src!.kind === 'node' && n.src === d.root)) applyTidy(e, E.mapPos(e.changes[0].from, e.changes), 0);
+  else applyEdit(e);
   selection.value = parentKey ? { kind: 'node', key: parentKey } : null;
 }
 
@@ -191,6 +213,23 @@ export function togglePronounce(n: DNode | null = selectedNode()) {
   applyEdit(E.setPronounce(pos, !overt));
 }
 
+/** The #ref of a lower position of a chain (null for the defining node or outside chains). */
+export function chainRef(n: DNode | null): ARef | null {
+  const pos = n && chainPosition(n);
+  return pos && 'ref' in pos ? pos.ref : null;
+}
+
+/** Pronounce one position of a chain with other words (e.g. a pronoun copy), or with the same words again (null). */
+export function setPronounceAs(n: DNode | null, text: string | null) {
+  if (!n || !editable.value) return;
+  const r = chainRef(n);
+  if (!r) {
+    showToast('Only a lower position of a chain (#id) can be pronounced with other words.');
+    return;
+  }
+  applyEdit(E.setRefText(r, text));
+}
+
 /** Click-to-pick: add an existing constituent again as a daughter or sister (a new chain position). */
 export function startPick(kind: 'daughter' | 'sister', n: DNode | null = selectedNode()) {
   if (!guard(n)) return;
@@ -213,7 +252,8 @@ export function completePick(target: DNode) {
     showToast('A constituent cannot be re-merged inside itself.');
     return;
   }
-  applyEdit(E.addCopy(doc.value!, t, p.kind === 'daughter' ? { kind: 'daughter', of: placeSrc as ANode } : { kind: 'sister', of: placeSrc }));
+  const e = E.addCopy(doc.value!, t, p.kind === 'daughter' ? { kind: 'daughter', of: placeSrc as ANode } : { kind: 'sister', of: placeSrc });
+  applyTidy(e, E.mapPos(e.changes[0].from, e.changes) + 1, 0);
 }
 
 export function restructure(n: DNode | null, shape: 'right' | 'left') {
@@ -223,7 +263,7 @@ export function restructure(n: DNode | null, shape: 'right' | 'left') {
     showToast(edit.error);
     return;
   }
-  applyEdit(edit);
+  applyTidy(edit, (n.src as ANode).labelSpan.from, 0);
 }
 
 /** Edge colour / width / length, spread of daughters, meaning colour of a node. */
@@ -367,7 +407,7 @@ function materialise(a: DArrow, patch: Partial<AArrow>): boolean {
     to = endpointOf(a.to);
   }
   if (!from || !to) return false;
-  applyEdit(E.addArrow(source.value, doc.value, from, to, { route: a.route, line: a.line, head: a.head, ...patch }));
+  applyEdit(E.addArrow(source.value, doc.value, from, to, { route: a.route, line: a.line, head: a.head, fromAt: a.fromAt, toAt: a.toAt, ...patch }));
   return true;
 }
 
@@ -383,10 +423,34 @@ export function updateArrow(a: DArrow, patch: Partial<AArrow>) {
   applyEdit(E.updateArrow(a.src, patch));
 }
 
-/** Delete an arrow; an automatic chain arrow is hidden with a "hide" line. */
+/** An explicit line that restyles a link of a chain: without it the automatic arrow would come back. */
+function isChainLink(a: AArrow): boolean {
+  const b = build.value;
+  return a.from === a.to && !!a.fromOcc && !!a.toOcc && Math.abs(a.fromOcc - a.toOcc) === 1 && b.chains !== 'multidominance' && b.chainArrows;
+}
+
+/** Delete an arrow; an arrow between two positions of a chain is hidden with a "hide" line. */
 export function deleteArrow(a: DArrow | null = selectedArrow()) {
   if (!a) return;
   if (a.auto || !a.src) materialise(a, { hidden: true });
-  else applyEdit(E.deleteArrow(source.value, a.src));
+  else if (isChainLink(a.src)) {
+    const { from, to, fromOcc, toOcc } = a.src;
+    applyEdit({ changes: [{ from: a.src.span.from, to: a.src.span.to, insert: E.arrowLine({ from, to, fromOcc, toOcc, hidden: true, head: 'end', line: 'solid', route: 'under', labels: [] }) }] });
+  } else applyEdit(E.deleteArrow(source.value, a.src));
   selection.value = null;
+}
+
+/** Geometry of an arrow as drawn (picture coordinates). */
+export function arrowGeom(index: number): ArrowGeom | null {
+  return scene.value?.arrows[index]?.geom ?? null;
+}
+
+/** Bend points with one more in the middle of the arrow. */
+export function addViaAtMiddle(g: ArrowGeom): [number, number][] {
+  return insertVia(g, g.arrow.via?.length ? cubicAt(g, 0.5) : g.handle);
+}
+
+/** Set the bend points of an arrow (relative to the middle of its ends); [] = automatic shape. */
+export function setVia(a: DArrow, via: [number, number][]) {
+  updateArrow(a, { via: via.length ? via.map(([x, y]) => [Math.round(x), Math.round(y)]) : undefined, bend: undefined });
 }

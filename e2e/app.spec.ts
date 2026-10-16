@@ -37,13 +37,17 @@ test('canvas editing syncs to the code and undo works', async ({ page }) => {
   await setCode(page, '[S [NP John] [VP runs]]');
   await page.locator('[data-node] title', { hasText: 'VP' }).locator('..').click();
   await page.keyboard.press('Enter');
-  await page.locator('.rename-box').fill("V'");
+  // the label field of the edit panel: the tree follows as you type
+  const label = page.locator('.inspector input[aria-label="Label"]');
+  await expect(label).toBeFocused();
+  await label.fill("V'");
   await page.keyboard.press('Enter');
   await expect.poll(() => code(page)).toContain("[V' runs]");
-  // add a daughter with the keyboard
+  // add a daughter with the keyboard: its label is ready to be typed
   await page.locator('[data-node] title', { hasText: "V′" }).locator('..').click();
   await page.keyboard.press('a');
-  await page.locator('.rename-box').fill('Adv');
+  await expect(label).toBeFocused();
+  await label.fill('Adv');
   await page.keyboard.press('Enter');
   await expect.poll(() => code(page)).toContain("[V' runs [Adv]]");
   await page.locator('.canvas').click({ position: { x: 5, y: 5 } });
@@ -62,8 +66,8 @@ test('arrow tool adds an arrow line; selecting and restyling it', async ({ page 
   await nodes.filter({ has: page.locator('title', { hasText: /^t$/ }) }).click();
   await nodes.filter({ has: page.locator('title', { hasText: /^what$/ }) }).click();
   await expect.poll(() => code(page)).toMatch(/#\w+ -> #\w+/);
-  await expect(page.locator('.arrow-bar')).toBeVisible();
-  await page.locator('.arrow-bar button', { hasText: 'Dashed' }).click();
+  await expect(page.locator('.inspector h2', { hasText: 'Arrow' })).toBeVisible();
+  await page.locator('.inspector button', { hasText: 'Dashed' }).click();
   await expect.poll(() => code(page)).toContain('dashed');
   // drag the bend handle down by 40px
   const h = await page.locator('.bend-handle').boundingBox();
@@ -125,12 +129,14 @@ test('downloads SVG, PNG and PDF', async ({ page }) => {
 test('my trees: save and reopen', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[A saved tree]');
-  await page.getByRole('button', { name: 'My trees' }).click();
+  await page.getByTestId('file-menu').click();
+  await page.getByRole('menuitem', { name: /My trees/ }).click();
   await page.getByPlaceholder('Name').fill('Mine');
   await page.getByRole('button', { name: 'Save current tree' }).click();
   await page.keyboard.press('Escape');
   await setCode(page, '[B other]');
-  await page.getByRole('button', { name: 'My trees' }).click();
+  await page.getByTestId('file-menu').click();
+  await page.getByRole('menuitem', { name: /My trees/ }).click();
   await page.locator('.tree-list .open', { hasText: 'Mine' }).click();
   await expect(page.locator('.cm-content')).toContainText('[A saved tree]');
 });
@@ -153,10 +159,9 @@ test('add an existing constituent again by clicking it (a chain)', async ({ page
   await setCode(page, '[CP [DP what] [VP [V see]]]');
   await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
   await page.locator('[data-node] title', { hasText: /^VP$/ }).locator('..').click();
-  await page.locator('.node-bar button[title^="Add an existing"]').click();
-  await page.locator('.menu-list button', { hasText: 'Add as a daughter' }).click();
+  await page.locator('.inspector button', { hasText: 'Re-merge as daughter' }).click();
   await page.locator('[data-node] title', { hasText: /^DP$/ }).first().locator('..').click();
-  await expect.poll(() => code(page)).toBe('[CP [DP#dp what] [VP [V see] #dp]]');
+  await expect.poll(() => code(page)).toBe('[CP [DP#dp what]\n    [VP [V see] #dp]]');
   // copies view: a gray copy and an arrow
   await expect(page.locator('.prims text', { hasText: 'what' })).toHaveCount(2);
   await expect(page.locator('.arrow-hit')).toHaveCount(1);
@@ -189,16 +194,17 @@ test('arrow: colour, reverse, several labels, drag a label', async ({ page }) =>
     return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
   });
   await page.mouse.click(mid.x, mid.y);
-  await expect(page.locator('.arrow-bar')).toBeVisible();
-  await page.locator('.arrow-bar .swatch[title="#1d4ed8"]').click();
+  const insp = page.locator('.inspector');
+  await expect(insp.locator('h2', { hasText: 'Arrow' })).toBeVisible();
+  await insp.locator('.swatch[title="#1d4ed8"]').click();
   await expect.poll(() => code(page)).toContain('@#1d4ed8');
-  await page.locator('.arrow-bar button', { hasText: 'Reverse' }).click();
+  await insp.locator('button', { hasText: 'Reverse' }).click();
   await expect.poll(() => code(page)).toContain('#a -> #b');
-  await page.locator('.arrow-bar .label-list input').first().fill('wh');
-  await page.locator('.arrow-bar .label-list button', { hasText: '+ Add' }).click();
-  await page.locator('.arrow-bar .label-list input').nth(1).fill('**A**');
-  await page.locator('.arrow-bar .label-list select').nth(1).selectOption('above');
-  await page.locator('.arrow-bar .label-list button', { hasText: 'Apply' }).click();
+  await insp.locator('.label-list input').first().fill('wh');
+  await insp.locator('.label-list button', { hasText: '+ Add' }).click();
+  await insp.locator('.label-list input').nth(1).fill('**A**');
+  await insp.locator('.label-list select').nth(1).selectOption('above');
+  await insp.locator('.label-list button', { hasText: 'Apply' }).click();
   await expect.poll(() => code(page)).toContain('"wh" above"**A**"');
   await page.keyboard.press('Escape');
   const box = await page.locator('.label-hit').first().boundingBox();
@@ -207,60 +213,228 @@ test('arrow: colour, reverse, several labels, drag a label', async ({ page }) =>
   await page.mouse.move(box!.x + box!.width / 2 + 40, box!.y + box!.height / 2 + 20, { steps: 6 });
   await page.mouse.up();
   await expect.poll(() => code(page)).toMatch(/"wh"@\d+,\d+/);
-  // click a label: rename it, then delete it
+  // click a label: edit it in the panel, then delete it
   const lab = await page.locator('.label-hit').first().boundingBox();
   await page.mouse.click(lab!.x + lab!.width / 2, lab!.y + lab!.height / 2);
-  await page.locator('.label-editor input').fill('A-mvt');
-  await page.locator('.label-editor input').press('Enter');
+  const text = insp.locator('input[aria-label^="Text"]');
+  await text.fill('A-mvt');
+  await text.press('Enter');
   await expect.poll(() => code(page)).toMatch(/"A-mvt"@\d+,\d+/);
   const lab2 = await page.locator('.label-hit').first().boundingBox();
   await page.mouse.click(lab2!.x + lab2!.width / 2, lab2!.y + lab2!.height / 2);
-  await page.locator('.label-editor button[aria-label="Delete this label"]').click();
+  await insp.locator('button', { hasText: 'Delete label' }).click();
   await expect.poll(() => code(page)).not.toContain('A-mvt');
 });
 
-test('node: notes, edge style, restructure', async ({ page }) => {
+test('node: notes, edge style, spacing at once, restructure', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[S [DP she] [VP [V saw] [DP him]]]');
   const node = (label: string) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label}$`) }) });
+  const insp = page.locator('.inspector');
   await node('VP').click();
-  await page.locator('.node-bar button[aria-label="Notes next to the node"]').click();
-  await page.locator('.label-list input').first().fill('focus');
-  await page.locator('.label-list button', { hasText: 'Apply' }).click();
+  await insp.locator('.label-list input').first().fill('focus');
+  await insp.locator('.label-list button', { hasText: 'Apply' }).click();
   await expect.poll(() => code(page)).toContain('[VP [V saw] [DP him] &"focus"]');
   await node('VP').click();
-  await page.locator('.node-bar button[aria-label="Colours"]').click();
-  await page.locator('.style-pop .seg button', { hasText: 'Edge' }).click();
-  await page.locator('.style-pop .swatch[title="#b91c1c"]').click();
+  await insp.locator('.seg button', { hasText: 'Edge' }).click();
+  await insp.locator('.swatch[title="#b91c1c"]').click();
   await expect.poll(() => code(page)).toContain('[VP;edge=#b91c1c');
-  await page.locator('.node-bar button[aria-label^="Spacing"]').click();
-  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').fill('3');
-  await page.locator('.num-field', { hasText: 'Edge width' }).locator('input').press('Enter');
-  await expect
-    .poll(async () => {
-      const c = await code(page);
-      if (c.includes(';width=3')) return c;
-      // diagnostics for a failure seen only in CI
-      return JSON.stringify(
-        await page.evaluate(() => ({
-          code: document.querySelector('.cm-content')?.textContent,
-          input: (document.querySelector('.num-field input') as HTMLInputElement | null)?.value,
-          active: document.activeElement?.outerHTML.slice(0, 120),
-          toast: document.querySelector('.toast')?.textContent,
-          bar: document.querySelector('.node-bar')?.getBoundingClientRect().toJSON(),
-          pop: document.querySelector('.node-bar .color-pop')?.getBoundingClientRect().toJSON(),
-          status: document.querySelector('.status')?.textContent,
-        })),
-      );
-    })
-    .toContain(';width=3');
+  // number fields apply at once: typing, and the arrow keys
+  const width = insp.locator('.num-field', { hasText: 'Edge width' }).locator('input');
+  await width.fill('3');
+  await expect.poll(() => code(page)).toContain(';width=3');
+  await width.press('ArrowUp');
+  await expect.poll(() => code(page)).toContain(';width=3.5');
+  const spread = insp.locator('.num-field', { hasText: 'Spread' }).locator('input');
+  await spread.focus();
+  await spread.press('ArrowUp');
+  await expect.poll(() => code(page)).toContain(';spread=1');
   await page.locator('.canvas').focus();
   await page.keyboard.press('Escape');
   await node('S').click();
-  await page.locator('.node-bar button[aria-label^="More"]').click();
-  await page.locator('.menu-list button', { hasText: 'left' }).click();
-  await expect.poll(() => code(page)).toMatch(/^\[S \[VP.*\] \[DP she\]\]$/);
-  // already left-branching: a message, no change (the menu is still open)
-  await page.locator('.menu-list button', { hasText: 'left' }).click();
+  await insp.locator('button', { hasText: '← left' }).click();
+  await expect.poll(() => code(page)).toMatch(/^\[S \[VP[^]*\]\s+\[DP she\]\]$/);
+  // already left-branching: a message, no change
+  await insp.locator('button', { hasText: '← left' }).click();
   await expect(page.locator('.toast')).toContainText('Already left-branching');
+});
+
+test('custom colour, mother, layout of the code', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  const insp = page.locator('.inspector');
+  await page.locator('[data-node] title', { hasText: /^VP$/ }).locator('..').click();
+  await insp.locator('.swatch.custom input').evaluate((el: HTMLInputElement) => {
+    el.value = '#123456';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect.poll(() => code(page)).toContain('[VP@#123456 runs]');
+  // the colour is offered again
+  await expect(insp.locator('.swatch[title="#123456"]')).toHaveCount(1);
+  // a mother above VP, with the code laid out on lines
+  await page.keyboard.press('p');
+  await expect(insp.locator('input[aria-label="Label"]')).toBeFocused();
+  await insp.locator('input[aria-label="Label"]').fill('TP');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => code(page)).toBe('[S [NP John]\n   [TP [VP@#123456 runs]]]');
+});
+
+test('several trees: a copy, a linked copy, each with its own export', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  // an independent copy
+  await page.locator('.tree-tab').first().locator('.tab-more').click();
+  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  await expect(page.locator('.tree-tab')).toHaveCount(2);
+  await expect(page.locator('.sheet-head')).toHaveCount(2);
+  await setCode(page, '[S [NP Mary] [VP sleeps]]');
+  await page.locator('.tree-tab .tab-name').first().click();
+  await expect(page.locator('.cm-content')).toContainText('John');
+  // a linked copy follows every edit
+  await page.locator('.tree-tab').first().locator('.tab-more').click();
+  await page.locator('.tab-menu button', { hasText: 'Linked copy' }).click();
+  await expect(page.locator('.tree-tab')).toHaveCount(3);
+  await expect(page.locator('.tree-tab.on .link-mark')).toHaveCount(1);
+  await setCode(page, '[S [NP Bill] [VP runs]]');
+  await page.locator('.tree-tab .tab-name').first().click();
+  await expect(page.locator('.cm-content')).toContainText('Bill');
+  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await expect(page.locator('.cm-content')).toContainText('Mary');
+  // all three are on the canvas; the export names the tree
+  await expect(page.locator('.other-sheet')).toHaveCount(2);
+  await page.getByTestId('export').click();
+  await expect(page.locator('.modal h2')).toContainText('Tree 1 (copy)');
+  await page.keyboard.press('Escape');
+  // the whole canvas is autosaved
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('nanotrees:current') ?? '{}').snap?.w?.trees?.length))
+    .toBe(3);
+});
+
+test('deleting a restyled chain arrow hides it instead of restoring the default', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP#wh what] [VP [V buy] #wh]]');
+  await page.locator('.arrow-hit').first().evaluate((el) => {
+    const p = el as SVGPathElement;
+    const pt = p.getPointAtLength(p.getTotalLength() / 2);
+    const m = p.getScreenCTM()!;
+    (window as unknown as { __pt: unknown }).__pt = { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
+  });
+  const pt = await page.evaluate(() => (window as unknown as { __pt: { x: number; y: number } }).__pt);
+  await page.mouse.click(pt.x, pt.y);
+  await page.locator('.inspector button', { hasText: 'Dashed' }).click();
+  await expect.poll(() => code(page)).toContain('#wh/2 -> #wh/1 dashed');
+  await page.locator('.inspector button', { hasText: 'Delete arrow' }).click();
+  await expect.poll(() => code(page)).toContain('#wh/2 -> #wh/1 hide');
+  await expect(page.locator('.arrow-hit')).toHaveCount(0);
+});
+
+test('panes can be resized', async ({ page }) => {
+  await page.goto('./');
+  const pane = page.locator('.code-pane');
+  const w0 = (await pane.boundingBox())!.width;
+  const sp = (await page.locator('.code-pane .splitter').boundingBox())!;
+  await page.mouse.move(sp.x + sp.width / 2, sp.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(sp.x + sp.width / 2 + 120, sp.y + 200, { steps: 5 });
+  await page.mouse.up();
+  const w1 = (await pane.boundingBox())!.width;
+  expect(w1).toBeGreaterThan(w0 + 80);
+});
+
+test('selecting another node does not take the keyboard away from the shortcuts', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  const node = (label: string) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label}$`) }) });
+  await node('VP').dblclick();
+  await expect(page.locator('.inspector input[aria-label="Label"]')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await node('NP').click();
+  await expect(page.locator('.inspector input[aria-label="Label"]')).not.toBeFocused();
+  await page.keyboard.press('s');
+  await expect.poll(() => code(page)).toContain('[NP John] [X]');
+});
+
+test('bend points: double-click the arrow to add one, drag it, double-click it to remove it', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP#a what] [C′ did [VP see [DP#b t]]]]\n#b -> #a');
+  const mid = await page.locator('.arrow-hit').first().evaluate((el) => {
+    const p = el as SVGPathElement;
+    const pt = p.getPointAtLength(p.getTotalLength() / 2);
+    const m = p.getScreenCTM()!;
+    return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
+  });
+  await page.mouse.dblclick(mid.x, mid.y);
+  await expect.poll(() => code(page)).toMatch(/via=(-?\d+,-?\d+;){2}-?\d+,-?\d+/);
+  // few round handles
+  await expect(page.locator('.bend-handle.via')).toHaveCount(3);
+  const h = (await page.locator('.bend-handle.via').nth(1).boundingBox())!;
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h.x + h.width / 2, h.y + 50, { steps: 5 });
+  await page.mouse.up();
+  const before = await code(page);
+  await page.mouse.dblclick(h.x + h.width / 2, h.y + 50);
+  await expect.poll(() => code(page)).not.toBe(before);
+  await expect(page.locator('.bend-handle.via')).toHaveCount(2);
+  await page.locator('.inspector button', { hasText: 'Automatic shape' }).click();
+  await expect.poll(() => code(page)).not.toContain('via=');
+});
+
+test('save the canvas to disk and open it again (download where files cannot be written)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.showSaveFilePicker = undefined;
+    w.showOpenFilePicker = undefined;
+  });
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  await page.locator('.tree-tab').first().locator('.tab-more').click();
+  await page.locator('.tab-menu button', { hasText: 'Linked copy' }).click();
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('ControlOrMeta+s')]);
+  expect(dl.suggestedFilename()).toMatch(/\.nanotrees$/);
+  const { readFileSync } = await import('node:fs');
+  const text = readFileSync((await dl.path())!, 'utf8');
+  const data = JSON.parse(text);
+  expect(data.app).toBe('NanoTrees');
+  expect(data.canvas.w.trees).toHaveLength(2);
+  await expect(page.getByTestId('file-menu')).toContainText('.nanotrees');
+  // something else, then open the file again
+  await setCode(page, '[X other]');
+  await expect(page.locator('.unsaved-dot')).toHaveCount(1);
+  page.once('dialog', (d) => d.accept());
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.keyboard.press('ControlOrMeta+o')]);
+  await chooser.setFiles({ name: 'mine.nanotrees', mimeType: 'application/json', buffer: Buffer.from(text) });
+  await expect(page.locator('.tree-tab')).toHaveCount(2);
+  await expect(page.locator('.cm-content')).toContainText('John');
+  await expect(page.locator('.unsaved-dot')).toHaveCount(0);
+});
+
+test('save into a connected file, again with Ctrl+S, and keep it up to date', async ({ page }) => {
+  await page.addInitScript(() => {
+    const files: Record<string, string> = {};
+    const w = window as unknown as Record<string, unknown>;
+    w.__files = files;
+    w.showSaveFilePicker = async (o: { suggestedName: string }) => {
+      const name = o.suggestedName;
+      return { name, createWritable: async () => ({ write: async (t: string) => (files[name] = t), close: async () => undefined }) };
+    };
+  });
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  await page.getByTestId('file-menu').click();
+  await page.getByRole('menuitem', { name: /Save to disk/ }).click();
+  const files = () => page.evaluate(() => (window as unknown as { __files: Record<string, string> }).__files);
+  await expect.poll(async () => Object.keys(await files())).toEqual(['trees.nanotrees']);
+  await setCode(page, '[S [NP Mary] [VP runs]]');
+  await page.keyboard.press('ControlOrMeta+s');
+  await expect.poll(async () => (await files())['trees.nanotrees']).toContain('Mary');
+  // automatic saving into the file
+  await page.getByTestId('file-menu').click();
+  await page.locator('.menu-toggle input').check();
+  await page.keyboard.press('Escape');
+  await setCode(page, '[S [NP Bill] [VP runs]]');
+  await expect.poll(async () => (await files())['trees.nanotrees']).toContain('Bill');
+  await expect(page.locator('.unsaved-dot')).toHaveCount(0);
 });
