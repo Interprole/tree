@@ -275,6 +275,12 @@ function FileMenu() {
             <strong>{t('myTrees')}…</strong>
             <small>Trees kept in this browser.</small>
           </button>
+          {location.protocol !== 'file:' && (
+            <a role="menuitem" class="menu-link" href="nanotrees.html" download="nanotrees.html" onClick={() => (open.value = false)}>
+              <strong>NanoTrees for offline use</strong>
+              <small>The whole app in one file (≈ 11 MB): open it by double-click, without the internet.</small>
+            </a>
+          )}
         </div>
       )}
     </div>

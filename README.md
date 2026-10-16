@@ -40,6 +40,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
   - LaTeX code, tested by compiling it with `pdflatex`, `xelatex` and `lualatex`;
   - save the canvas to disk (a `.nanotrees` file with all its trees; in Chrome and Edge Ctrl+S writes into the same file again, optionally on every change) and open it again;
   - share links, autosave in the browser, a list of saved trees.
+- **Offline:** [nanotrees.html](https://interprole.github.io/tree/nanotrees.html) is the whole app in one file (File → NanoTrees for offline use): open it by double-click, no internet needed.
 - **Interface:** resizable panes (drag the borders); every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
 
 ## Bracket notation
@@ -109,6 +110,7 @@ npm install
 npm run dev          # http://localhost:5173/tree/
 npm test             # unit tests (Vitest); LaTeX compilation runs when pdflatex + forest are installed
 npm run build && npm run e2e          # Playwright tests
+npm run build:offline                 # dist-offline/nanotrees.html: the whole app in one file, opens by double-click
 npm run screenshots  # screenshots of all examples → screenshots/out
 ```
 
