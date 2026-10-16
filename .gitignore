@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-offline
 coverage
 test-results
 playwright-report

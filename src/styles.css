@@ -2035,3 +2035,26 @@ body.resizing .splitter::after {
 .menu-toggle input {
   margin-top: 3px;
 }
+
+.menu-link {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.menu-link:hover {
+  background: var(--surface-2);
+}
+
+.menu-link small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.topbar .seg {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
