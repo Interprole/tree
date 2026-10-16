@@ -64,14 +64,15 @@ test('interactions', async ({ page }) => {
   await page.mouse.click(mid.x, mid.y);
   await page.screenshot({ path: `${OUT}/ui-arrow-selected.png` });
   await page.keyboard.press('Escape');
+  // a node: everything about it in the edit panel beside the canvas
   await page.locator('[data-node]').nth(4).click();
-  await page.locator('.node-bar button[aria-label="Colours"]').click();
-  await page.screenshot({ path: `${OUT}/ui-node-style.png` });
-  // a node at the top: the toolbar stays above it, the popover opens below the node
-  await page.keyboard.press('Escape');
-  await page.locator('[data-node]').first().click();
-  await page.locator('.node-bar button[aria-label="Meaning ⟦ ⟧"]').click();
-  await page.screenshot({ path: `${OUT}/ui-node-top-popover.png` });
+  await page.screenshot({ path: `${OUT}/ui-node-panel.png` });
+  // several trees: a linked copy drawn with traces
+  await page.locator('.tree-tab').first().locator('.tab-more').click();
+  await page.locator('.tab-menu button', { hasText: 'Linked copy' }).click();
+  await page.locator('.chain-switch button', { hasText: 'Traces' }).click();
+  await page.locator('button[aria-label="Fit to window"]').click();
+  await page.screenshot({ path: `${OUT}/ui-several-trees.png` });
 });
 
 test('presets and modes', async ({ page }) => {

@@ -124,6 +124,7 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
   cases.push({ name: 'atb-traces', src: examples.find((e) => e.id === 'atb')!.src, build: { chains: 'traces', chainIndices: true } });
   cases.push({ name: 'arrow-styles', src: '[CP#c [C′ [C#d did] [TP [DP#y you] [VP [V see] [DP#w what]]]]]\n#w -> #c dashed "wh"\n#y <-> #d curve dotted @blue\n#y -- #w @#2a7', style: { copyStyle: 'strike', leavesAtBottom: true } });
   cases.push({ name: 'round3-decorations', src: '[TP;spread=20 [DP#s;edge=red;width=2 **she** &"focus" &left"✓"@5,-3] [T\' [T;len=15 ~~will~~ *x*] [VP #s"herself" [V sing]]]]\n#s/2 -> #s/1 @blue above"*A*-mvt" below"x"' });
+  cases.push({ name: 'bend-points-and-ends', src: '[TP [DP#s she] [T\' [T#t -s] [VP #s [V#v sing] [DP [D the] [NP song]]]]]\n#v -> #t plain to=node via=0,40;-20,70 "x"\n#s/2 -> #s/1 curve via=-30,-10' });
   cases.push({ name: 'latex-symbols', src: `[S [A ${Object.keys(LATEX_SYMBOLS).slice(0, 120).map((k) => '\\' + k).join(' ')}] [B ${Object.keys(LATEX_SYMBOLS).slice(120).map((k) => '\\' + k).join(' ')}]]` });
   cases.push({ name: 'special-chars', src: '[S [A 50\\% \\& \\$ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
 

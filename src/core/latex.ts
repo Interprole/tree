@@ -1,4 +1,5 @@
-import { layoutArrows } from './arrows';
+import { arrowEnd, layoutArrows } from './arrows';
+import type { ArrowGeom } from './arrows';
 import { noteSide, semDisplay } from './layout';
 import type { Layout } from './layout';
 import type { DArrow, DNode, DTree } from './model';
@@ -156,29 +157,17 @@ function labelTex(n: DNode, style: TreeStyle): string {
   return lines.join('\\\\ ');
 }
 
-/** The descendant whose bottom is lowest (where an "under" arrow attaches). */
-function bottomNode(n: DNode, layout: Layout | undefined): DNode {
-  let best = n;
-  let bestY = -Infinity;
-  const seen = new Set<DNode>();
-  const visit = (x: DNode, depth: number) => {
-    if (seen.has(x)) return;
-    seen.add(x);
-    const ln = layout?.nodes.get(x);
-    const y = ln ? ln.y + ln.block.fullH : depth;
-    const lx = layout?.nodes.get(n)?.x ?? 0;
-    const dist = ln ? Math.abs(ln.x - lx) : 0;
-    if (y > bestY + 0.5 || (Math.abs(y - bestY) <= 0.5 && dist < Math.abs((layout?.nodes.get(best)?.x ?? 0) - lx))) {
-      best = x;
-      bestY = y;
-    }
-    for (const c of x.children) visit(c, depth + 1);
-  };
-  visit(n, 0);
-  return best;
+/** The node and anchor an arrow end is drawn at: the same choice as on the canvas. */
+function endAnchor(a: DArrow, which: 'from' | 'to', layout: Layout | undefined, geom: ArrowGeom | undefined): { node: DNode; anchor: string } {
+  if (a.route === 'curve') return which === 'from' ? { node: a.from, anchor: 'north' } : { node: a.to, anchor: 'south' };
+  const e = arrowEnd(a, which);
+  if (e.mode === 'bottom') return { node: e.node, anchor: 'south' };
+  const ln = layout?.nodes.get(e.node);
+  const p = geom && (which === 'from' ? geom.segs[0][0] : geom.segs[geom.segs.length - 1][3]);
+  return { node: e.node, anchor: ln && p && p[0] > ln.x ? 'east' : 'west' };
 }
 
-function arrowTikz(a: DArrow, names: Map<DNode, string>, layout: Layout | undefined, level: number, colors: Colors): string {
+function arrowTikz(a: DArrow, names: Map<DNode, string>, level: number, colors: Colors, geom: ArrowGeom | undefined, layout: Layout | undefined): string {
   const opts: string[] = [];
   opts.push(a.head === 'both' ? '{Stealth}-{Stealth}' : a.head === 'start' ? '{Stealth}-' : a.head === 'none' ? '-' : '-{Stealth}');
   if (a.line !== 'solid') opts.push(a.line);
@@ -192,15 +181,22 @@ function arrowTikz(a: DArrow, names: Map<DNode, string>, layout: Layout | undefi
       return ` node[midway, ${side}${shift}, font=\\small\\itshape]{${texRuns(l.runs)}}`;
     })
     .join('');
-  if (a.route === 'curve') {
-    const s = names.get(a.from)!;
-    const t = names.get(a.to)!;
-    return `\\draw[${opts.join(', ')}] (${s}.north) to[out=150, in=-60, looseness=1.1]${label} (${t}.south);`;
+  const es = endAnchor(a, 'from', layout, geom);
+  const et = endAnchor(a, 'to', layout, geom);
+  const sa = `${names.get(es.node)!}.${es.anchor}`;
+  const ta = `${names.get(et.node)!}.${et.anchor}`;
+  if (a.via?.length && geom) {
+    // the same smooth curve through the bend points, placed relative to the middle of the two ends
+    const rel = ([x, y]: [number, number]) => `($(${sa})!0.5!(${ta})+(${px2pt(x - geom.mid[0])}pt,${px2pt(geom.mid[1] - y)}pt)$)`;
+    const parts = geom.segs.map((c, i) => `.. controls ${rel(c[1])} and ${rel(c[2])} .. ${i === geom.segs.length - 1 ? `(${ta})` : rel(c[3])}`);
+    // labels sit at the middle of the path: on the middle segment
+    const k = Math.floor(geom.segs.length / 2);
+    if (label) parts[k] = parts[k].replace(/ \.\. (\S+)$/, (_, end: string) => ` ..${label} ${end}`);
+    return `\\draw[${opts.join(', ')}] (${sa}) ${parts.join(' ')};`;
   }
-  const s = names.get(bottomNode(a.from, layout))!;
-  const t = names.get(bottomNode(a.to, layout))!;
+  if (a.route === 'curve') return `\\draw[${opts.join(', ')}] (${sa}) to[out=150, in=-60, looseness=1.1]${label} (${ta});`;
   const depth = (1.6 + level * 0.9 + (a.bend[1] ?? 0) / 20).toFixed(2);
-  return `\\draw[${opts.join(', ')}] (${s}.south) .. controls ($(${s}.south |- tf-bottom)+(0,-${depth}em)$) and ($(${t}.south |- tf-bottom)+(0,-${depth}em)$) ..${label} (${t}.south);`;
+  return `\\draw[${opts.join(', ')}] (${sa}) .. controls ($(${sa} |- tf-bottom)+(0,-${depth}em)$) and ($(${ta} |- tf-bottom)+(0,-${depth}em)$) ..${label} (${ta});`;
 }
 
 /* ---------------------------------------------------------------- forest */
@@ -218,10 +214,11 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     return s;
   };
   // arrow endpoints and multidominance participants need names
-  for (const a of tree.arrows) {
-    nameOf(a.route === 'under' ? bottomNode(a.from, layout) : a.from);
-    nameOf(a.route === 'under' ? bottomNode(a.to, layout) : a.to);
-  }
+  const geoms = arrowGeoms(tree, layout);
+  tree.arrows.forEach((a, i) => {
+    nameOf(endAnchor(a, 'from', layout, geoms[i]).node);
+    nameOf(endAnchor(a, 'to', layout, geoms[i]).node);
+  });
   // where to write each shared node: under its lowest mother (last in order)
   const depth = new Map<DNode, number>();
   const order = new Map(tree.nodes.map((n, i) => [n, i]));
@@ -282,18 +279,17 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     const ec = colors.name(n.branchColor);
     tikz.push(`\\draw${ec ? `[${ec}]` : ''} (${names.get(p)}.south) -- (${names.get(n)}.north);`);
   }
-  const levels = arrowLevels(tree, layout);
-  tree.arrows.forEach((a, i) => tikz.push(arrowTikz(a, names, layout, levels[i], colors)));
+  tree.arrows.forEach((a, i) => tikz.push(arrowTikz(a, names, geoms[i]?.level ?? i, colors, geoms[i], layout)));
   const forest = ['\\begin{forest}', treeOpts.join(',\n'), body, ...tikz, '\\end{forest}'].join('\n');
   if (!standalone) return forest;
   const doc = preamble(forest, colors.preamble(), ['\\usepackage[linguistics]{forest}', '\\usetikzlibrary{arrows.meta, calc}']);
   return `${doc}\n\\begin{document}\n${forest}\n\\end{document}\n`;
 }
 
-function arrowLevels(tree: DTree, layout: Layout | undefined): number[] {
-  if (!layout) return tree.arrows.map((_, i) => i);
+function arrowGeoms(tree: DTree, layout: Layout | undefined): (ArrowGeom | undefined)[] {
+  if (!layout) return tree.arrows.map(() => undefined);
   const { geoms } = layoutArrows(layout, tree.arrows);
-  return tree.arrows.map((a) => geoms.find((g) => g.arrow === a)?.level ?? 0);
+  return tree.arrows.map((a) => geoms.find((g) => g.arrow === a));
 }
 
 /* ---------------------------------------------------------------- tikz-qtree */
@@ -302,12 +298,13 @@ export function exportQtree(tree: DTree, style: TreeStyle, layout: Layout | unde
   const colors = new Colors();
   const names = new Map<DNode, string>();
   let counter = 0;
-  for (const a of tree.arrows) {
-    for (const n of [a.from, a.to]) {
-      const b = a.route === 'under' ? bottomNode(n, layout) : n;
-      if (!names.has(b)) names.set(b, `q${++counter}`);
+  const geoms = arrowGeoms(tree, layout);
+  tree.arrows.forEach((a, i) => {
+    for (const w of ['from', 'to'] as const) {
+      const n = endAnchor(a, w, layout, geoms[i]).node;
+      if (!names.has(n)) names.set(n, `q${++counter}`);
     }
-  }
+  });
   const seen = new Set<DNode>();
   const emit = (n: DNode, parent: DNode | null): string => {
     const content = labelTex(n, style).replace(/\\\\ /g, '\\\\');
@@ -328,12 +325,7 @@ export function exportQtree(tree: DTree, style: TreeStyle, layout: Layout | unde
   if (shared) lines.push('% tikz-qtree cannot draw multidominance: shared nodes are repeated. Use the forest export instead.');
   lines.push('\\begin{tikzpicture}[every tree node/.style={align=center, anchor=north}]', `\\Tree ${emit(tree.root, null)}`);
   if (tree.arrows.length) lines.push('\\coordinate (tf-bottom) at (current bounding box.south);');
-  const levels = arrowLevels(tree, layout);
-  tree.arrows.forEach((a, i) => {
-    const n2 = new Map<DNode, string>();
-    for (const n of [a.from, a.to]) n2.set(n, names.get(a.route === 'under' ? bottomNode(n, layout) : n)!);
-    lines.push(arrowTikz(a, a.route === 'under' ? names : n2, layout, levels[i], colors));
-  });
+  tree.arrows.forEach((a, i) => lines.push(arrowTikz(a, names, geoms[i]?.level ?? i, colors, geoms[i], layout)));
   lines.push('\\end{tikzpicture}');
   const pic = lines.join('\n');
   if (!standalone) return pic;

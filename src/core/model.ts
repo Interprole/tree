@@ -84,6 +84,13 @@ export interface DArrow {
   labels: DLabel[];
   color?: string;
   bend: [number, number];
+  /** bend points (relative to the middle of the two ends) */
+  via?: [number, number][];
+  /** just an arrow, not head movement */
+  plain?: boolean;
+  /** ends at a node with only a word: the word (default) or the node */
+  fromAt?: 'node' | 'word';
+  toAt?: 'node' | 'word';
   /** drawn automatically between the positions of a chain */
   auto?: boolean;
   /** chain link of an automatic arrow: occurrence numbers (1 = highest) */

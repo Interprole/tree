@@ -5,7 +5,7 @@ import type { LatexFormat } from '../core/latex';
 import { serialize } from '../core/serialize';
 import { copyImage, copyText, download, fileBase, pdfBlob, pngBlob, svgString } from '../export';
 import { t } from '../i18n';
-import { currentName, modal, scene, showToast, source, style, tree } from '../state';
+import { activeTree, currentName, modal, scene, showToast, source, style, tree, trees } from '../state';
 import { Modal, Seg, Toggle } from './controls';
 import { ICopy, IDownload } from './icons';
 
@@ -20,7 +20,9 @@ export function ExportDialog() {
   const sc = scene.value;
   const tr = tree.value;
   const close = () => (modal.value = null);
-  const base = fileBase(sc, currentName.value);
+  // with several trees on the canvas, each is exported on its own, under its name
+  const many = trees.value.length > 1;
+  const base = fileBase(sc, many ? activeTree.value.name : currentName.value);
 
   const latex = useMemo(() => (sc && tr ? exportLatex(tr, sc, style.value, { format: format.value, standalone: standalone.value }) : ''), [sc, tr, format.value, standalone.value]);
 
@@ -39,7 +41,8 @@ export function ExportDialog() {
   const hasMd = tr?.nodes.some((n) => n.parents.length > 1);
 
   return (
-    <Modal title={t('exportTitle')} onClose={close} wide>
+    <Modal title={many ? `${t('exportTitle')}: ${activeTree.value.name}` : t('exportTitle')} onClose={close} wide>
+      {many && <p class="hint">Exports the tree that is being edited. Click another tree on the canvas to export it.</p>}
       <div class="tabs" role="tablist">
         <button role="tab" aria-selected={tab.value === 'image'} class={tab.value === 'image' ? 'on' : ''} onClick={() => (tab.value = 'image')}>
           {t('image')}

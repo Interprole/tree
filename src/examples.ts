@@ -49,6 +49,18 @@ export const examples: Example[] = [
 #v -> #t`,
   },
   {
+    id: 'copy-words',
+    title: 'Copies pronounced differently: Wambeek Dutch pronoun copy',
+    note: 'A lower copy is spelled out with other words: #subj"zij | she" shows the pronoun (with a gloss) in the position of the copy.',
+    build: { chainIndices: true },
+    src: `% Wambeek Dutch pronoun copy (van Craenenbroeck & van Koppen 2002: 56)
+% 'That woman is going.' The lower copy of the subject is pronounced as a pronoun.
+[CP [DP#subj Dei vrou | that woman]
+    [C' [C gui | go]
+        [TP #subj"zij | she"
+            [T' [T ∅] [VP [V ∅]]]]]]`,
+  },
+  {
     id: 'atb',
     title: 'Multidominance: ATB wh-movement',
     note: 'One wh-phrase with three mothers: [DP#wh …] defines it, #wh re-merges it.',

@@ -194,6 +194,27 @@ export function restructure(src: string, n: ANode, shape: 'right' | 'left'): Edi
   };
 }
 
+/** Give a node (or a terminal) a new mother: X → [Y X]. */
+export function addMother(n: ANode | ALeaf, label = 'X'): Edit {
+  const span = n.kind === 'leaf' ? n.fullSpan : n.span;
+  return {
+    changes: [
+      { from: span.from, to: span.from, insert: `[${label} ` },
+      { from: span.to, to: span.to, insert: ']' },
+    ],
+    select: { from: span.from + 1, to: span.from + 1 + label.length },
+  };
+}
+
+/** Words a position of a chain is pronounced with (#id"zij | she"); null = the same words. */
+export function setRefText(r: ARef, text: string | null): Edit {
+  const t = text?.trim().replace(/"/g, "''") || '';
+  // other words make the position pronounced; "?" (silent) would contradict them
+  const flag = r.pronounce === undefined || (t && r.pronounce === false) ? '' : r.pronounce ? '!' : '?';
+  const ins = `#${r.id}${t ? flag.replace('?', '') : flag}${t ? `"${t}"` : ''}${r.sem !== undefined ? `$${r.sem}$` : ''}`;
+  return { changes: [{ from: r.span.from, to: r.span.to, insert: ins }] };
+}
+
 export function addSister(n: ANode | ALeaf, label = 'X'): Edit {
   const at = n.kind === 'leaf' ? n.fullSpan.to : n.span.to;
   const ins = ` [${label}]`;
@@ -274,11 +295,15 @@ export function arrowLine(a: Omit<AArrow, 'span'>): string {
   const end = (id: string, occ?: number) => `#${id}${occ ? '/' + occ : ''}`;
   const parts = [`${end(a.from, a.fromOcc)} ${op} ${end(a.to, a.toOcc)}`];
   if (a.hidden) parts.push('hide');
+  if (a.plain) parts.push('plain');
+  if (a.fromAt === 'node') parts.push('from=node');
+  if (a.toAt === 'node') parts.push('to=node');
   if (a.line !== 'solid') parts.push(a.line);
   if (a.route !== 'under') parts.push(a.route);
   if (a.color) parts.push('@' + a.color);
   for (const l of a.labels ?? []) parts.push(labelToken(l));
   if (a.bend && (Math.round(a.bend[0]) !== 0 || Math.round(a.bend[1]) !== 0)) parts.push(`bend=${Math.round(a.bend[0])},${Math.round(a.bend[1])}`);
+  if (a.via?.length) parts.push('via=' + a.via.map(([x, y]) => `${Math.round(x)},${Math.round(y)}`).join(';'));
   return parts.join(' ');
 }
 

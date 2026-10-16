@@ -89,6 +89,13 @@ export interface AArrow {
   color?: string;
   /** user offset of the control handle */
   bend?: [number, number];
+  /** bend points the arrow passes through, relative to the middle of its two ends: via=x,y;x,y */
+  via?: [number, number][];
+  /** just an arrow: never head movement (no strike-through, no complex head) */
+  plain?: boolean;
+  /** an end at a node with only a word: at the word (default) or at the node itself (from=node) */
+  fromAt?: 'node' | 'word';
+  toAt?: 'node' | 'word';
   span: Span;
 }
 
