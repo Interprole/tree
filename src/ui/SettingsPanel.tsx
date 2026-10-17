@@ -5,7 +5,7 @@ import { defaultStyle, FONT_FAMILIES, isLocalFont, presets } from '../core/style
 import type { BuiltinFont, FontId, PresetId, TreeStyle } from '../core/style';
 import { canListLocalFonts, listLocalFamilies } from '../fonts';
 import { t } from '../i18n';
-import { build, fitRequest, setBuild, setStyle, showToast, style } from '../state';
+import { build, setBuild, setStyle, showToast, style } from '../state';
 import { ColorField, ResetBtn, Section, Seg, Select, Slider, Toggle } from './controls';
 
 /** reset handler for a style key, or undefined when it already has its default value */
@@ -73,6 +73,7 @@ export function ChainOptions() {
       )}
       {b.chains !== 'multidominance' && <Toggle label="Arrows between positions" checked={b.chainArrows} reset={rb('chainArrows')} onChange={(v) => setBuild({ chainArrows: v })} />}
       <Toggle label="Movement indices (DPᵢ … tᵢ)" checked={b.chainIndices} reset={rb('chainIndices')} onChange={(v) => setBuild({ chainIndices: v })} />
+      <Toggle label="Arrows for head movement" hint="Without them, head movement still shows: the struck source and the complex head (V+v)" checked={b.headArrows} reset={rb('headArrows')} onChange={(v) => setBuild({ headArrows: v })} />
     </>
   );
 }
@@ -144,7 +145,6 @@ export function SettingsPanel() {
   const b = build.value;
   const applyPreset = (p: PresetId) => {
     setStyle(presets[p]);
-    fitRequest.value++;
   };
   const anyStyleChanged = (Object.keys(defaultStyle) as (keyof TreeStyle)[]).some((k) => s[k] !== defaultStyle[k]);
   return (
@@ -162,7 +162,6 @@ export function SettingsPanel() {
             disabled={!anyStyleChanged}
             onClick={() => {
               style.value = { ...defaultStyle };
-              fitRequest.value++;
             }}
           >
             <strong>{t('reset')}</strong>

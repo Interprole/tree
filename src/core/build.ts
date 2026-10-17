@@ -31,6 +31,8 @@ export interface BuildOptions {
   chainArrows: boolean;
   /** movement indices on the positions of a chain */
   chainIndices: boolean;
+  /** draw the arrows of head movement (without them, V+v and the struck source still show it) */
+  headArrows: boolean;
   /** show null heads/specifiers (∅) */
   showEmpty: boolean;
   semantics: SemanticsOptions;
@@ -42,6 +44,7 @@ export const defaultBuildOptions: BuildOptions = {
   chains: 'copies',
   chainArrows: true,
   chainIndices: false,
+  headArrows: true,
   showEmpty: true,
   semantics: { show: true, compute: true, types: false, rules: true },
 };
@@ -202,12 +205,15 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     return byId.get(id) ?? ch?.instances[0];
   };
   const hidden: [DNode, DNode][] = [];
+  /** hidden arrows still mean head movement: it is shown without an arrow */
+  const silentMoves: DArrow[] = [];
   doc.arrows.forEach((a, index) => {
     const from = resolve(a.from, a.fromOcc);
     const to = resolve(a.to, a.toOcc);
     if (!from || !to) return;
     if (a.hidden) {
       hidden.push([from, to]);
+      if (!a.plain) silentMoves.push({ from, to, head: a.head, line: a.line, route: a.route, labels: [], bend: [0, 0], src: a, index });
       return;
     }
     const labels = a.labels.map((l, i) => ({ runs: parseRich(l.text), side: l.side, off: l.off, index: i }));
@@ -226,7 +232,8 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     }
   }
 
-  applyHeadMovement(arrows);
+  const moved = applyHeadMovement([...arrows, ...silentMoves]);
+  if (!opts.headArrows) for (let i = arrows.length - 1; i >= 0; i--) if (moved.has(arrows[i])) arrows.splice(i, 1);
   if (opts.semantics.show) {
     computeSemantics(root, meanings, opts.semantics);
     for (const n of collectNodes(root)) {
@@ -405,13 +412,14 @@ const isHead = (n: DNode) => n.kind === 'phrase' && n.children.every((c) => c.ki
  * An explicit arrow between two heads is head movement: the source is struck through and the
  * target is labelled with the complex head (V+v+T for successive steps).
  */
-function applyHeadMovement(arrows: DArrow[]) {
+function applyHeadMovement(arrows: DArrow[]): Set<DArrow> {
   const head = (n: DNode) => (n.kind === 'leaf' ? n.parents[0] : n);
   const moves = arrows
     .filter((a) => !a.auto && !a.plain)
-    .map((a) => ({ from: head(a.from), to: head(a.to) }))
+    .map((a) => ({ from: head(a.from), to: head(a.to), arrow: a }))
     .filter((m) => m.from && m.to && m.from !== m.to && isHead(m.from) && isHead(m.to));
-  if (!moves.length) return;
+  const moved = new Set(moves.map((m) => m.arrow));
+  if (!moves.length) return moved;
   const original = new Map<DNode, Runs>();
   for (const m of moves) for (const n of [m.from, m.to]) if (!original.has(n)) original.set(n, cloneRuns(n.label));
   const into = new Map<DNode, DNode[]>();
@@ -458,6 +466,7 @@ function applyHeadMovement(arrows: DArrow[]) {
       n.children = n.children.filter((c) => c.kind !== 'leaf' || c === leaf);
     } else n.children = [{ key: `${n.key}~hm`, kind: 'leaf', label: parseRich(text), children: [], parents: [n], indices: [], synthetic: true }];
   }
+  return moved;
 }
 
 /* ------------------------------------------------------------ semantics */

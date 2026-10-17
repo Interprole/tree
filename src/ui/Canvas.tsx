@@ -34,8 +34,16 @@ export function Canvas() {
   const size = useSignal({ w: 800, h: 600 });
   const hover = useSignal<string | null>(null);
 
+  /** the view was moved or zoomed by hand: it is not fitted again by itself */
+  const touched = useRef(false);
+  const setView = (v: View) => {
+    touched.current = true;
+    view.value = v;
+  };
+
   // ---------- fit: all trees of the canvas
   const fit = () => {
+    touched.current = false;
     const sheets = allSheets();
     if (!sheets.length) return;
     const x1 = Math.min(...sheets.map((s) => s.x));
@@ -62,11 +70,15 @@ export function Canvas() {
     return () => ro.disconnect();
   }, []);
 
+  // another tree (an example, a file, a link): fit it, after the new scene is computed
   useSignalEffect(() => {
     void fitRequest.value;
-    void fontEpoch.value;
-    // after the new scene is computed
     requestAnimationFrame(() => fit());
+  });
+  // a font has loaded and the picture changed size: fit again, unless the view was set by hand
+  useSignalEffect(() => {
+    void fontEpoch.value;
+    requestAnimationFrame(() => !touched.current && fit());
   });
 
   const sc = scene.value;
@@ -162,7 +174,7 @@ export function Canvas() {
       const p = pinch.current;
       const zoom = Math.min(6, Math.max(0.15, (p.zoom * Math.hypot(a.x - b.x, a.y - b.y)) / p.d));
       const k = zoom / p.zoom;
-      view.value = { zoom, x: p.cx - (p.cx - p.vx) * k, y: p.cy - (p.cy - p.vy) * k };
+      setView({ zoom, x: p.cx - (p.cx - p.vx) * k, y: p.cy - (p.cy - p.vy) * k });
       return;
     }
     const d = drag.current;
@@ -172,7 +184,7 @@ export function Canvas() {
     if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
     if (!d.moved) return;
     const z = view.value.zoom;
-    if (d.kind === 'pan') view.value = { ...view.value, x: d.vx + dx, y: d.vy + dy };
+    if (d.kind === 'pan') setView({ ...view.value, x: d.vx + dx, y: d.vy + dy });
     else if (d.kind === 'tree') moveTree(d.id, d.x + dx / z, d.y + dy / z);
     else if (d.kind === 'label') labelGhost.value = { box: d.label.box, dx: dx / z, dy: dy / z };
     else if (d.kind === 'via') bendOverride.value = { index: d.index, via: d.via.map((p, i) => (i === d.point ? [p[0] + dx / z, p[1] + dy / z] : p)) };
@@ -304,7 +316,7 @@ export function Canvas() {
       const z = Math.min(6, Math.max(0.15, z0 * Math.exp(-e.deltaY * 0.01)));
       zoomAt(z, e.clientX - r.left, e.clientY - r.top);
     } else {
-      view.value = { ...view.value, x: view.value.x - e.deltaX, y: view.value.y - e.deltaY };
+      setView({ ...view.value, x: view.value.x - e.deltaX, y: view.value.y - e.deltaY });
     }
   };
   useEffect(() => {
@@ -316,7 +328,7 @@ export function Canvas() {
   const zoomAt = (z: number, cx: number, cy: number) => {
     const z0 = view.value.zoom;
     const k = z / z0;
-    view.value = { zoom: z, x: cx - (cx - view.value.x) * k, y: cy - (cy - view.value.y) * k };
+    setView({ zoom: z, x: cx - (cx - view.value.x) * k, y: cy - (cy - view.value.y) * k });
   };
   const zoomBy = (f: number) => zoomAt(Math.min(6, Math.max(0.15, view.value.zoom * f)), size.value.w / 2, size.value.h / 2);
 

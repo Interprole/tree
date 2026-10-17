@@ -7,6 +7,7 @@ import { approxMeasure, canvasMeasure } from './core/measure';
 import type { Measure } from './core/measure';
 import type { DTree } from './core/model';
 import { parse } from './core/parser';
+import { formatDoc } from './core/format';
 import { buildScene } from './core/scene';
 import type { Scene } from './core/scene';
 import { defaultStyle, fontCss } from './core/style';
@@ -39,7 +40,8 @@ export const arrowSource = signal<string | null>(null);
 export const relationOf = signal<string | null>(null);
 /** picking an existing constituent on the canvas to add it again (a new chain position) */
 export const pick = signal<null | { kind: 'daughter' | 'sister'; key: string }>(null);
-export const panelOpen = signal(false);
+/** the right side panel: editing the selection, or the appearance settings */
+export const sideTab = signal<'edit' | 'appearance'>('edit');
 export type Modal = null | 'export' | 'trees' | 'help' | 'shortcuts';
 export const modal = signal<Modal>(null);
 export const mobileTab = signal<'code' | 'tree' | 'settings'>('tree');
@@ -429,15 +431,17 @@ export function restore(snap: Snapshot) {
 
 /** An example goes into the active tree (which stops sharing its code with other trees). */
 export function loadExample(ex: Example) {
+  // laid out like code edited on the canvas
+  const src = formatDoc(ex.src);
   if (trees.value.length < 2) {
-    restore({ s: ex.src, b: ex.build, st: ex.style });
+    restore({ s: src, b: ex.build, st: ex.style });
     currentName.value = null;
     return;
   }
   const e = activeTree.value;
   if (linkedIds.value.has(e.id)) unlinkTree(e.id);
   batch(() => {
-    source.value = ex.src;
+    source.value = src;
     build.value = mergeBuild(defaultBuildOptions, ex.build);
     style.value = { ...defaultStyle, ...(ex.style ?? {}) };
     selection.value = null;
@@ -497,7 +501,7 @@ function lsSet(k: string, v: unknown) {
 }
 
 /** widths of the code pane and the settings pane (px; null = default), changed by dragging their borders */
-export const paneWidths = signal<{ code: number | null; settings: number; inspector: number }>({ code: null, settings: 330, inspector: 300, ...(lsGet<object>('nanotrees:panes') ?? {}) });
+export const paneWidths = signal<{ code: number | null; inspector: number }>({ code: null, inspector: 320, ...(lsGet<object>('nanotrees:panes') ?? {}) });
 effect(() => lsSet('nanotrees:panes', paneWidths.value));
 
 export const savedTrees = signal<SavedTree[]>(lsGet<SavedTree[]>(TREES) ?? []);

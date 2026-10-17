@@ -6,14 +6,14 @@ import { examples } from '../examples';
 import { copyText } from '../export';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, linkTree, loadExample, mobileTab, modal, panelOpen, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, setBuild, shareUrl, showToast, source, theme, toast, tool, tree, trees, unlinkTree,
+  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, linkTree, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, setBuild, shareUrl, showToast, sideTab, source, theme, toast, tool, tree, trees, unlinkTree,
 } from '../state';
 import { Canvas, canvasApi } from './Canvas';
 import { Seg } from './controls';
 import { Help, MyTrees, Shortcuts } from './Dialogs';
 import { Editor } from './Editor';
 import { ExportDialog } from './ExportDialog';
-import { IAuto, IBook, IChevron, IHelp, IDownload, IFolder, IFormat, IKeyboard, ILink, IMoon, IMore, IPlus, IRedo, ISliders, ISun, IUndo, IClose } from './icons';
+import { IAuto, IBook, IChevron, IHelp, IDownload, IEdit, IFolder, IFormat, IKeyboard, ILink, IMoon, IMore, IPlus, IRedo, ISliders, ISun, IUndo, IClose } from './icons';
 import { Inspector } from './Inspector';
 import { autoSaveFile, canWriteFiles, fileHandle, fileName, loadFile, openFromDisk, saveToDisk, unsaved } from '../files';
 import { ChainOptions, ModeOptions, SettingsPanel } from './SettingsPanel';
@@ -61,6 +61,41 @@ function navigate(dir: 'up' | 'down' | 'left' | 'right') {
 }
 
 function useShortcuts() {
+  // copy and paste of nodes (when the keyboard is not in the code or a field)
+  useEffect(() => {
+    let sister = false;
+    const busy = (e: Event) => modal.value !== null || isTyping(e as KeyboardEvent);
+    const onCopy = (e: ClipboardEvent) => {
+      if (busy(e) || selection.value?.kind !== 'node') return;
+      const c = A.copyNode();
+      if (!c) return;
+      e.preventDefault();
+      e.clipboardData?.setData('text/plain', A.clipText(c));
+      if (e.type === 'cut') A.deleteNode();
+      else showToast('Copied: Ctrl+V pastes it as a daughter, Ctrl+Shift+V as a sister, or as a new tree when nothing is selected.');
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (busy(e)) return;
+      const c = A.clipFromText(e.clipboardData?.getData('text/plain') ?? '') ?? A.clip.value;
+      if (!c) return;
+      e.preventDefault();
+      A.paste(c, A.selectedNode(), sister ? 'sister' : 'daughter');
+      sister = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') sister = e.shiftKey;
+    };
+    window.addEventListener('copy', onCopy);
+    window.addEventListener('cut', onCopy);
+    window.addEventListener('paste', onPaste);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('copy', onCopy);
+      window.removeEventListener('cut', onCopy);
+      window.removeEventListener('paste', onPaste);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -95,6 +130,11 @@ function useShortcuts() {
       if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         A.redo();
+        return;
+      }
+      if (mod && !e.shiftKey && e.key.toLowerCase() === 'd' && selection.value?.kind === 'node') {
+        e.preventDefault();
+        A.duplicateNode();
         return;
       }
       if (mod || e.altKey) return;
@@ -290,6 +330,8 @@ function FileMenu() {
 /** Tabs of the trees on the canvas, with copying and linking. */
 function TreeTabs() {
   const menu = useSignal<string | null>(null);
+  /** the menu is placed over everything (the strip of tabs scrolls and would cut it off) */
+  const menuAt = useSignal<{ left: number; top: number }>({ left: 0, top: 0 });
   const editing = useSignal<string | null>(null);
   const linked = linkedIds.value;
   useEffect(() => {
@@ -330,11 +372,20 @@ function TreeTabs() {
               {linked.has(e.id) && <span class="link-mark"><ILink size={11} /></span>}
             </button>
           )}
-          <button class="tab-more" aria-label={`More for ${e.name}`} title="Copy, link, rename, delete" onClick={() => (menu.value = menu.value === e.id ? null : e.id)}>
+          <button
+            class="tab-more"
+            aria-label={`More for ${e.name}`}
+            title="Copy, link, rename, delete"
+            onClick={(ev) => {
+              const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+              menuAt.value = { left: Math.max(8, Math.min(r.left, window.innerWidth - 300)), top: r.bottom + 4 };
+              menu.value = menu.value === e.id ? null : e.id;
+            }}
+          >
             <IMore size={14} />
           </button>
           {menu.value === e.id && (
-            <div class="menu-pop tab-menu" role="menu">
+            <div class="menu-pop tab-menu" role="menu" style={{ left: `${menuAt.value.left}px`, top: `${menuAt.value.top}px` }}>
               <button role="menuitem" onClick={() => ((menu.value = null), duplicateTree(e.id, false))}>
                 <strong>Copy</strong>
                 <small>An independent copy: change it without touching this one.</small>
@@ -414,6 +465,12 @@ const clampW = (w: number, min: number) => Math.round(Math.min(Math.max(w, min),
 export function App() {
   useTheme();
   useShortcuts();
+  // picking something on the tree brings the editing back
+  useSignalEffect(() => {
+    if (selection.value) sideTab.value = 'edit';
+  });
+  /** on narrow screens the right panel is a sheet, shown only when it has something to show */
+  const sideOpen = sideTab.value === 'appearance' || !!selection.value;
   const b = build.value;
   const th = theme.value;
   const nextTheme = th === 'auto' ? 'light' : th === 'light' ? 'dark' : 'auto';
@@ -433,11 +490,10 @@ export function App() {
         e.preventDefault();
         void loadFile(f);
       }}
-      class={`app ${panelOpen.value ? 'panel-open' : ''} ${selection.value ? 'has-selection' : ''} tab-${mobileTab.value}`}
+      class={`app side-${sideTab.value} ${selection.value ? 'has-selection' : ''} ${sideOpen ? 'side-open' : ''} tab-${mobileTab.value}`}
       style={{
         '--code-w': paneWidths.value.code ? `${paneWidths.value.code}px` : 'minmax(300px, 30%)',
-        '--insp-w': `${paneWidths.value.inspector}px`,
-        '--set-w': `${paneWidths.value.settings}px`,
+        '--side-w': `${paneWidths.value.inspector}px`,
       }}
     >
       <header class="topbar">
@@ -493,7 +549,14 @@ export function App() {
           <button class="icon-btn" title={`${t('theme')}: ${t(th === 'auto' ? 'themeAuto' : th === 'light' ? 'themeLight' : 'themeDark')}`} aria-label={t('theme')} onClick={() => (theme.value = nextTheme)}>
             {th === 'auto' ? <IAuto /> : th === 'light' ? <ISun /> : <IMoon />}
           </button>
-          <button class={`icon-btn panel-toggle ${panelOpen.value ? 'active' : ''}`} title={t('settings')} aria-label={t('settings')} aria-pressed={panelOpen.value} onClick={() => (panelOpen.value = !panelOpen.value)} data-testid="settings-toggle">
+          <button
+            class={`icon-btn panel-toggle ${sideTab.value === 'appearance' ? 'active' : ''}`}
+            title={`${t('settings')} (the right panel: Edit / Appearance)`}
+            aria-label={t('settings')}
+            aria-pressed={sideTab.value === 'appearance'}
+            onClick={() => (sideTab.value = sideTab.value === 'appearance' ? 'edit' : 'appearance')}
+            data-testid="settings-toggle"
+          >
             <ISliders />
           </button>
         </div>
@@ -518,25 +581,44 @@ export function App() {
         <section class="pane canvas-pane" aria-label={t('tree')}>
           <Canvas />
         </section>
-        <aside class="pane inspector-pane" aria-label="Edit the selection">
-          <Splitter side="left" label="Width of the edit panel" onReset={() => (paneWidths.value = { ...paneWidths.value, inspector: 300 })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, inspector: clampW(w0 - dx, 220) })} />
-          <Inspector />
-        </aside>
-        <aside class="pane settings-pane" aria-label={t('settings')}>
-          <Splitter side="left" label="Width of the settings" onReset={() => (paneWidths.value = { ...paneWidths.value, settings: 330 })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, settings: clampW(w0 - dx, 240) })} />
-          <div class="settings-head">
-            <h2>{t('settings')}</h2>
-            <button class="icon-btn hide-mobile" aria-label={t('close')} onClick={() => (panelOpen.value = false)}>
-              <IClose />
+        <aside class="pane side-pane" aria-label="Edit and appearance">
+          <Splitter side="left" label="Width of the right panel" onReset={() => (paneWidths.value = { ...paneWidths.value, inspector: 320 })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, inspector: clampW(w0 - dx, 240) })} />
+          <div class="side-tabs" role="tablist" aria-label="Right panel">
+            <button role="tab" aria-selected={sideTab.value === 'edit'} class={sideTab.value === 'edit' ? 'on' : ''} onClick={() => (sideTab.value = 'edit')} data-testid="side-edit">
+              <IEdit size={15} /> Edit
+            </button>
+            <button role="tab" aria-selected={sideTab.value === 'appearance'} class={sideTab.value === 'appearance' ? 'on' : ''} onClick={() => (sideTab.value = 'appearance')} data-testid="side-appearance">
+              <ISliders size={15} /> {t('settings')}
+            </button>
+            <button
+              class="icon-btn small side-close"
+              title="Close"
+              aria-label="Close the panel"
+              onClick={() => {
+                selection.value = null;
+                sideTab.value = 'edit';
+              }}
+            >
+              <IClose size={14} />
             </button>
           </div>
-          <SettingsPanel />
+          <div class="side-body">{sideTab.value === 'edit' ? <Inspector /> : <SettingsPanel />}</div>
         </aside>
       </main>
 
       <nav class="mobile-tabs" role="tablist">
         {(['code', 'tree', 'settings'] as const).map((k) => (
-          <button key={k} role="tab" aria-selected={mobileTab.value === k} class={mobileTab.value === k ? 'on' : ''} onClick={() => (mobileTab.value = k)}>
+          <button
+            key={k}
+            role="tab"
+            aria-selected={mobileTab.value === k}
+            class={mobileTab.value === k ? 'on' : ''}
+            onClick={() => {
+              mobileTab.value = k;
+              if (k === 'settings') sideTab.value = 'appearance';
+              else if (k === 'tree') sideTab.value = 'edit';
+            }}
+          >
             {k === 'code' ? t('code') : k === 'tree' ? t('tree') : t('settings')}
             {k === 'code' && error.value && <span class="err-dot" />}
           </button>
