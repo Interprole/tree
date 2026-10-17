@@ -554,15 +554,6 @@ function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
           {nVia ? `${nVia} bend point${nVia > 1 ? 's' : ''}: drag a round handle to move it, double-click it to remove it.` : 'Drag the round handle to bend the arrow. Double-click the arrow to add bend points.'}
         </p>
         <div class="row tight">
-          <button
-            class="btn small"
-            onClick={() => {
-              const g = A.arrowGeom(index);
-              if (g) A.setVia(a, A.addViaAtMiddle(g));
-            }}
-          >
-            + Bend point
-          </button>
           <button class="btn small" disabled={!nVia && !a.bend[0] && !a.bend[1]} onClick={() => up({ bend: [0, 0], via: undefined })} title={t('arrowResetBend')}>
             ⟲ Automatic shape
           </button>
