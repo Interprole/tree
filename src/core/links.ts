@@ -1,5 +1,5 @@
 import type { ADoc, ANode } from './ast';
-import { applyChanges } from './edits';
+import { applyChanges, renameIds } from './edits';
 import type { TextChange } from './edits';
 import { formatNode } from './format';
 import { parse, walkAst } from './parser';
@@ -11,7 +11,6 @@ import { parse, walkAst } from './parser';
  * matched by their order, so every copy keeps its own names.
  */
 
-const ID_REF = /(?<!\\)#([\p{L}\p{N}_\-.:]+)/gu;
 
 export interface LinkInstance {
   group: string;
@@ -81,7 +80,7 @@ function matchIds(w: { id: string; label: string }[], t: { id: string; label: st
 }
 
 function rename(text: string, map: Map<string, string>): string {
-  return text.replace(ID_REF, (m, id: string) => (map.has(id) ? '#' + map.get(id) : m));
+  return renameIds(text, map);
 }
 
 /** The content of a branch, independent of its own id names and of line breaks and indentation. */

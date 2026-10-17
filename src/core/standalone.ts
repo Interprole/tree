@@ -1,5 +1,5 @@
 import type { ADoc, ANode, Span } from './ast';
-import { applyChanges } from './edits';
+import { applyChanges, renameIds } from './edits';
 import type { TextChange } from './edits';
 import { stripLinks } from './links';
 import { walkAst } from './parser';
@@ -11,8 +11,6 @@ import { walkAst } from './parser';
  * a silent copy of a constituent that left becomes the constituent, pronounced.
  */
 
-const esc = (id: string) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const refRe = (id: string) => new RegExp(`(?<!\\\\)#${esc(id)}(?![\\p{L}\\p{N}_\\-.:])`, 'gu');
 
 const inside = (s: Span, span: Span) => s.from >= span.from && s.to <= span.to;
 
@@ -46,7 +44,7 @@ function writtenOut(src: string, def: ANode, keepId: boolean, used: Set<string>,
   walkAst(def, (n) => {
     if (n === def || !n.id) return;
     const name = used.has(n.id) ? fresh(n.id, used) : (used.add(n.id), n.id);
-    if (name !== n.id) text = text.replace(refRe(n.id), '#' + name);
+    if (name !== n.id) text = renameIds(text, new Map([[n.id, name]]));
     ids.push(name);
   });
   return { text, ids };

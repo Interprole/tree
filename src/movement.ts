@@ -238,7 +238,7 @@ export function unmove(a: DArrow, keepArrow: boolean) {
     let k = 2;
     while (used.has(id + k)) k++;
     used.add(id + k);
-    text = text.replace(new RegExp(`(?<!\\\\)#${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_\\-.:])`, 'gu'), `#${id + k}`);
+    text = E.renameIds(text, new Map([[id, id + k]]));
   }
   if (ref.text !== undefined) text = `[${def.label} ${ref.text.split(/\s*\|\s*/)[0]}]`;
   let copyId = '';

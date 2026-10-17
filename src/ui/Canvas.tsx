@@ -13,7 +13,7 @@ import {
   activateTree, activeId, activeTree, addTree, appearanceScope, setStyle, arrowSource, EMPTY_SHEET, sideTab, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
 } from '../state';
 import type { Tool } from '../state';
-import { IArrowTool, ICcommand, IDominance, IFit, ILink, IMinus, IPlus, IPointer, ITrash } from './icons';
+import { IArrowTool, IFit, ILink, IMinus, IPlus, IPointer, ITrash } from './icons';
 
 interface View {
   zoom: number;
@@ -669,8 +669,6 @@ export function Canvas() {
       <div class="canvas-tools" role="toolbar">
         <ToolBtn id="select" icon={<IPointer />} label={t('toolSelect')} />
         <ToolBtn id="arrow" icon={<IArrowTool />} label={t('toolArrow')} />
-        <ToolBtn id="ccommand" icon={<ICcommand />} label={t('toolCcommand')} />
-        <ToolBtn id="dominance" icon={<IDominance />} label={t('toolDominance')} />
         <span class="sep" />
         <button class="icon-btn" title={t('zoomOut')} aria-label={t('zoomOut')} onClick={() => zoomBy(1 / 1.2)}>
           <IMinus />
