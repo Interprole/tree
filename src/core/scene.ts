@@ -176,7 +176,10 @@ export function buildSheetScene(tree: DTree, style: TreeStyle, measure: Measure)
   return buildScene(tree, { ...scaleStyle(style, k), sheetWidth: W, sheetHeight: H }, measure);
 }
 
-export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layoutIn?: Layout): Scene {
+/** a picture frame kept as it was (while an arrow is reshaped, the tree must not shift or rescale) */
+export type Frame = Pick<Scene, 'width' | 'height' | 'dx' | 'dy'>;
+
+export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layoutIn?: Layout, frame?: Frame): Scene {
   const layout = layoutIn ?? layoutTree(tree, style, measure);
   const m = metricsFor(style);
   const arrowFs = metricsFor(style).fs * 0.8;
@@ -185,10 +188,10 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   // a sheet larger than the tree: the tree in its middle
   const natW = box.x2 - box.x1 + 2 * pad;
   const natH = box.y2 - box.y1 + 2 * pad;
-  const sheetW = Math.max(natW, style.sheetWidth || 0);
-  const sheetH = Math.max(natH, style.sheetHeight || 0);
-  const dx = pad - box.x1 + (sheetW - natW) / 2;
-  const dy = pad - box.y1 + (sheetH - natH) / 2;
+  const sheetW = frame?.width ?? Math.max(natW, style.sheetWidth || 0);
+  const sheetH = frame?.height ?? Math.max(natH, style.sheetHeight || 0);
+  const dx = frame?.dx ?? pad - box.x1 + (sheetW - natW) / 2;
+  const dy = frame?.dy ?? pad - box.y1 + (sheetH - natH) / 2;
   const X = (x: number) => x + dx;
   const Y = (y: number) => y + dy;
   const prims: Prim[] = [];

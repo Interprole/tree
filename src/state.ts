@@ -8,7 +8,7 @@ import type { Measure } from './core/measure';
 import type { DTree } from './core/model';
 import { parse } from './core/parser';
 import { formatDoc } from './core/format';
-import { buildSheetScene } from './core/scene';
+import { buildScene, buildSheetScene } from './core/scene';
 import type { Scene } from './core/scene';
 import { defaultStyle, fontCss } from './core/style';
 import type { TreeStyle } from './core/style';
@@ -102,14 +102,23 @@ export const tree = computed<DTree | null>(() => {
   }
 });
 
+/** the picture as it was when an arrow's bend began to be dragged: the tree stays put meanwhile */
+let dragFrom: Scene | null = null;
+let lastScene: Scene | null = null;
+
 export const scene = computed<Scene | null>(() => {
   void fontEpoch.value;
   let t = tree.value;
   if (!t) return null;
   const o = bendOverride.value;
-  if (o) t = { ...t, arrows: t.arrows.map((a, i) => (i === o.index ? { ...a, ...(o.bend ? { bend: o.bend } : {}), ...(o.via ? { via: o.via } : {}) } : a)) };
+  if (!o) dragFrom = null;
+  else {
+    dragFrom ??= lastScene;
+    t = { ...t, arrows: t.arrows.map((a, i) => (i === o.index ? { ...a, ...(o.bend ? { bend: o.bend } : {}), ...(o.via ? { via: o.via } : {}) } : a)) };
+  }
   try {
-    return buildSheetScene(t, style.value, currentMeasure());
+    if (o && dragFrom) return buildScene(t, dragFrom.style, currentMeasure(), undefined, dragFrom);
+    return (lastScene = buildSheetScene(t, style.value, currentMeasure()));
   } catch (e) {
     console.error(e);
     return null;
