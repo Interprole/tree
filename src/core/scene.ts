@@ -155,8 +155,13 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   const arrowFs = metricsFor(style).fs * 0.8;
   const { geoms, box } = layoutArrows(layout, tree.arrows, (runs) => runsWidth(runs, { font: style.font, size: arrowFs, italic: true }, measure));
   const pad = style.padding;
-  const dx = pad - box.x1;
-  const dy = pad - box.y1;
+  // a sheet larger than the tree: the tree in its middle
+  const natW = box.x2 - box.x1 + 2 * pad;
+  const natH = box.y2 - box.y1 + 2 * pad;
+  const sheetW = Math.max(natW, style.sheetWidth || 0);
+  const sheetH = Math.max(natH, style.sheetHeight || 0);
+  const dx = pad - box.x1 + (sheetW - natW) / 2;
+  const dy = pad - box.y1 + (sheetH - natH) / 2;
   const X = (x: number) => x + dx;
   const Y = (y: number) => y + dy;
   const prims: Prim[] = [];
@@ -339,8 +344,8 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   });
 
   return {
-    width: Math.ceil(box.x2 - box.x1 + 2 * pad),
-    height: Math.ceil(box.y2 - box.y1 + 2 * pad),
+    width: Math.ceil(sheetW),
+    height: Math.ceil(sheetH),
     background: style.background,
     prims,
     hits,

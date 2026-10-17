@@ -48,6 +48,9 @@ export interface TreeStyle {
   nodeBold: boolean;
   /** background of the exported picture ('transparent' allowed) */
   background: string;
+  /** size of the sheet (px); 0 = as large as the tree needs. The tree sits in its middle. */
+  sheetWidth: number;
+  sheetHeight: number;
 }
 
 export const defaultStyle: TreeStyle = {
@@ -70,6 +73,8 @@ export const defaultStyle: TreeStyle = {
   handDrawn: false,
   nodeBold: false,
   background: '#ffffff',
+  sheetWidth: 0,
+  sheetHeight: 0,
 };
 
 export type PresetId = 'paper' | 'slides' | 'board';

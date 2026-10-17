@@ -10,7 +10,7 @@ import type { DNode } from '../core/model';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, activeTree, addTree, appearanceScope, arrowSource, EMPTY_SHEET, sideTab, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
+  activateTree, activeId, activeTree, addTree, appearanceScope, setStyle, arrowSource, EMPTY_SHEET, sideTab, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
 } from '../state';
 import type { Tool } from '../state';
 import { IArrowTool, ICcommand, IDominance, IFit, ILink, IMinus, IPlus, IPointer } from './icons';
@@ -29,6 +29,8 @@ type Drag =
   | { kind: 'via'; index: number; point: number; via: [number, number][] }
   | { kind: 'label'; label: { kind: 'note' | 'arrow'; owner: string | number; index: number; off: [number, number]; box: Box } }
   | { kind: 'tree'; id: string; x: number; y: number }
+  /** the corner of the sheet: its size */
+  | { kind: 'sheet'; w: number; h: number }
   /** a branch dragged by its root */
   | { kind: 'node'; key: string; target: Element }
   /** a rectangle drawn with Shift: selects the smallest branch with everything in it */
@@ -194,6 +196,10 @@ export function Canvas() {
       if (en) drag.current = { ...base, kind: 'tree', id, x: en.x, y: en.y };
       return;
     }
+    if (target.closest('[data-sheet-resize]') && scene.value) {
+      drag.current = { ...base, kind: 'sheet', w: scene.value.width, h: scene.value.height };
+      return;
+    }
     const via = target.closest('[data-via]');
     if (via) {
       const [index, point] = via.getAttribute('data-via')!.split('|').map(Number);
@@ -257,6 +263,7 @@ export function Canvas() {
     const z = view.value.zoom;
     if (d.kind === 'pan') setView({ ...view.value, x: d.vx + dx, y: d.vy + dy });
     else if (d.kind === 'tree') moveTree(d.id, d.x + dx / z, d.y + dy / z);
+    else if (d.kind === 'sheet') setStyle({ sheetWidth: Math.max(40, Math.round(d.w + dx / z)), sheetHeight: Math.max(40, Math.round(d.h + dy / z)) });
     else if (d.kind === 'label') labelGhost.value = { box: d.label.box, dx: dx / z, dy: dy / z };
     else if (d.kind === 'node') {
       // where it would land: a node under the pointer, not inside the dragged branch
@@ -293,6 +300,7 @@ export function Canvas() {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
+    if (d.kind === 'sheet') return;
     if (d.kind === 'tree') {
       if (!d.moved) activateTree(d.id);
       appearanceScope.value = 'tree';
@@ -448,6 +456,11 @@ export function Canvas() {
   const onDblClick = (e: MouseEvent) => {
     // pointer capture sends the double-click to the canvas itself: look at what is under the pointer
     const target = document.elementFromPoint(e.clientX, e.clientY) ?? (e.target as Element);
+    // the corner of the sheet: as large as the tree needs again
+    if (target.closest('[data-sheet-resize]')) {
+      setStyle({ sheetWidth: 0, sheetHeight: 0 });
+      return;
+    }
     // a bend point: remove it
     const via = target.closest('[data-via]');
     if (via) {
@@ -627,6 +640,9 @@ export function Canvas() {
               {labelGhost.value && (
                 <rect x={labelGhost.value.box.x1 + labelGhost.value.dx} y={labelGhost.value.box.y1 + labelGhost.value.dy} width={labelGhost.value.box.x2 - labelGhost.value.box.x1} height={labelGhost.value.box.y2 - labelGhost.value.box.y1} rx="3" class="label-ghost" />
               )}
+              <rect class="sheet-resize" data-sheet-resize="1" x={sc.width - 9 / v.zoom} y={sc.height - 9 / v.zoom} width={14 / v.zoom} height={14 / v.zoom} rx={2 / v.zoom}>
+                <title>Drag to change the size of the sheet · double-click: as large as the tree needs</title>
+              </rect>
               {selArrow &&
                 selArrowData &&
                 (selArrowData.via?.length ? viaPoints(selArrow.geom) : selArrow.geom.knots.slice(1, -1)).map(([x, y], i) => (

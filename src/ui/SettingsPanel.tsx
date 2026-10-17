@@ -9,6 +9,7 @@ import { activeTree, appearanceScope, showToast, shownBuild as build, shownStyle
 import { applyBuild as setBuild, applyStyle as setStyle } from '../overrides';
 import { overridePolicy } from '../ask';
 import { ColorField, ResetBtn, Section, Seg, Select, Slider, Toggle } from './controls';
+import { NumField } from './Inspector';
 
 /** reset handler for a style key, or undefined when it already has its default value */
 function rs<K extends keyof TreeStyle>(k: K): (() => void) | undefined {
@@ -218,6 +219,11 @@ export function SettingsPanel() {
         <Slider label={t('levelGap')} value={s.levelGap} min={6} max={90} unit="px" reset={rs('levelGap')} onInput={(v) => setStyle({ levelGap: v })} />
         <Slider label={t('siblingGap')} value={s.siblingGap} min={4} max={80} unit="px" reset={rs('siblingGap')} onInput={(v) => setStyle({ siblingGap: v })} />
         <Slider label={t('padding')} value={s.padding} min={0} max={80} unit="px" reset={rs('padding')} onInput={(v) => setStyle({ padding: v })} />
+        <div class="num-row two">
+          <NumField label="Sheet width (px)" value={s.sheetWidth || undefined} placeholder="fit" min={0} step={10} onCommit={(v) => setStyle({ sheetWidth: v ? Number(v) : 0 })} />
+          <NumField label="Sheet height (px)" value={s.sheetHeight || undefined} placeholder="fit" min={0} step={10} onCommit={(v) => setStyle({ sheetHeight: v ? Number(v) : 0 })} />
+        </div>
+        <p class="hint">Empty: as large as the tree needs. Or drag the corner of the sheet on the canvas.</p>
         <Toggle label={t('leavesAtBottom')} checked={s.leavesAtBottom} reset={rs('leavesAtBottom')} onChange={(v) => setStyle({ leavesAtBottom: v })} />
       </Section>
 
