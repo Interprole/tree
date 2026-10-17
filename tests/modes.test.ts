@@ -232,3 +232,44 @@ describe('copies pronounced with other words, plain arrows', () => {
     expect(plainArrow.arrows).toHaveLength(1);
   });
 });
+
+describe('one position of a chain styled on its own', () => {
+  test('#wh^@colour: the silent copy is a triangle in that colour, the pronounced one is not', () => {
+    const t = mkTree2('[CP [DP#wh [D which] [NP book]] [VP [V buy] #wh^@blue]]');
+    const [top, low] = t.nodes.filter((n) => plainText(n.label) === 'DP');
+    expect(top.triangle).toBeFalsy();
+    expect(top.posColor).toBeUndefined();
+    expect(low.triangle).toBe(true);
+    expect(plainText(low.children[0].label)).toBe('which book');
+    expect(low.posColor).toBe('blue');
+    expect(low.children[0].posColor).toBe('blue');
+  });
+  test('a trace as a triangle', () => {
+    const t = mkTree2('[CP [DP#wh what] [VP [V buy] #wh^]]', { chains: 'traces' });
+    const tr = t.nodes.find((n) => n.trace && n.kind === 'phrase')!;
+    expect(tr.triangle).toBe(true);
+  });
+});
+
+describe('this copy or all copies', () => {
+  const src = '[CP [DP#wh [D which] [NP book] &"focus"] [VP [V buy] #wh]]';
+  test('what is written on the constituent goes to every copy', () => {
+    const t = mkTree2(src);
+    const dps = t.nodes.filter((n) => plainText(n.label) === 'DP');
+    expect(dps).toHaveLength(2);
+    for (const d of dps) expect(d.notes?.map((x) => plainText(x.runs))).toEqual(['focus']);
+  });
+  test('a line #wh/1: styles the pronounced copy only, #wh/2: the silent one only', () => {
+    const t = mkTree2(src + '\n#wh/1: @red {uφ} &"top"\n#wh/2: ^ edge=blue width=2 $x : e$');
+    const [top, low] = t.nodes.filter((n) => plainText(n.label) === 'DP');
+    expect(top.posColor).toBe('red');
+    expect(top.features?.map(plainText)).toEqual(['uφ']);
+    expect(top.notes?.map((x) => plainText(x.runs))).toEqual(['focus', 'top']);
+    expect(top.triangle).toBeFalsy();
+    expect(low.posColor).toBeUndefined();
+    expect(low.triangle).toBe(true);
+    expect(low.edgeColor).toBe('blue');
+    expect(low.edgeWidth).toBe(2);
+    expect(low.notes?.map((x) => plainText(x.runs))).toEqual(['focus']);
+  });
+});

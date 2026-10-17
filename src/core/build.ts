@@ -1,4 +1,4 @@
-import type { ADoc, ALeaf, ANode } from './ast';
+import type { ADoc, ALeaf, ANode, APosStyle } from './ast';
 import { analyseLabel, applyXbar } from './modes';
 import type { XbarOptions } from './modes';
 import { collectNodes, relink } from './model';
@@ -165,7 +165,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
       else {
         const child = mk(doc.ids.get(c.id)!, `${key}.${i}`);
         d.children.push(child);
-        setOcc(a, child, { flag: c.pronounce ?? (c.text !== undefined ? true : undefined), text: c.text, sem: c.sem });
+        setOcc(a, child, { flag: c.pronounce ?? (c.text !== undefined ? true : undefined), text: c.text, sem: c.sem, triangle: c.triangle, color: c.color });
       }
     });
     if (d.triangle) {
@@ -192,7 +192,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
   relink(root);
 
   // ---- movement chains
-  const chains = resolveChains(root, occFlags, opts, meanings);
+  const chains = resolveChains(root, occFlags, opts, meanings, doc.posStyles);
   const nodes = relink(root);
 
   // ---- arrows
@@ -288,6 +288,9 @@ function markCopy(n: DNode) {
   n.children.forEach(markCopy);
 }
 
+/** notes of one position are numbered from here (the shared notes of the constituent come first) */
+export const POS_NOTE = 1000;
+
 const INDEX_LETTERS = 'ijklmnopqrsuvwxyzabcdfgh'.split('');
 
 /**
@@ -302,9 +305,13 @@ interface OccInfo {
   text?: string;
   /** meaning of this position */
   sem?: string;
+  /** this position only as a triangle / in a colour */
+  triangle?: boolean;
+  color?: string;
 }
 
-function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, opts: BuildOptions, meanings: Map<DNode, Meaning>): Map<string, Chain> {
+function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, opts: BuildOptions, meanings: Map<DNode, Meaning>, posStyles: APosStyle[] = []): Map<string, Chain> {
+  const posOf = new Map(posStyles.map((p) => [`${p.id}/${p.occ}`, p.mods]));
   const chains = new Map<string, Chain>();
   relink(root);
   const all = collectNodes(root);
@@ -341,7 +348,20 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
       });
     }
     slots.sort((a, b) => (d.get(a.parent) ?? 0) - (d.get(b.parent) ?? 0) || (ord.get(a.parent) ?? 0) - (ord.get(b.parent) ?? 0));
-    const overt = slots.map((sl, i) => sl.info.flag ?? i === 0);
+    // what each position has on its own: its #ref (#wh^@red"words"), and its line (#wh/2: …)
+    const own = slots.map((sl, i) => {
+      const L = posOf.get(`${s.id}/${i + 1}`);
+      const text = L?.text ?? sl.info.text;
+      return {
+        L,
+        flag: L?.pronounce ?? (L?.text !== undefined ? true : undefined) ?? sl.info.flag,
+        text,
+        sem: L?.sem ?? sl.info.sem,
+        triangle: L?.triangle ?? sl.info.triangle,
+        color: L?.color ?? sl.info.color,
+      };
+    });
+    const overt = slots.map((_, i) => own[i].flag ?? i === 0);
     const chain: Chain = { instances: [], overt };
     if (opts.chainIndices) chain.index = pickIndex(s.id!);
     const indexRun = chain.index ? [{ text: chain.index, sub: true }] : [];
@@ -355,15 +375,11 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
     // clone before marking anything silent
     const clones = slots.map((_, i) => {
       if (i === 0) return s;
-      // notes and the edge above belong to the position where they are written
-      const c = cloneSubtree(s, `~c${++cloneCounter}`);
-      delete c.notes;
-      delete c.edgeColor;
-      delete c.edgeWidth;
-      delete c.edgeLen;
-      return c;
+      // everything written on the constituent is shared by all its positions
+      return cloneSubtree(s, `~c${++cloneCounter}`);
     });
     slots.forEach((sl, i) => {
+      const info = own[i];
       let inst: DNode;
       if (overt[i] || opts.chains === 'copies') {
         inst = clones[i];
@@ -372,27 +388,52 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
       } else {
         // trace: the category with a "t"
         const t: DNode = { key: `${s.key}~t${++cloneCounter}`, kind: 'leaf', label: [{ text: 't' }, ...indexRun], children: [], parents: [], indices: [], trace: true, synthetic: true };
-        inst = { key: `${s.key}~tp${cloneCounter}`, kind: 'phrase', label: cloneRuns(s.label), children: [t], parents: [], indices: [], src: s.src, trace: true, copyOf: s.key, color: s.color, branchColor: s.branchColor };
+        inst = { key: `${s.key}~tp${cloneCounter}`, kind: 'phrase', label: cloneRuns(s.label), children: [t], parents: [], indices: [], src: s.src, trace: true, copyOf: s.key, color: s.color, branchColor: s.branchColor, notes: s.notes, edgeColor: s.edgeColor, edgeWidth: s.edgeWidth, edgeLen: s.edgeLen };
       }
       // pronounced with other words: #wh!"whom"
-      if (sl.info.text !== undefined && overt[i]) {
+      if (info.text !== undefined && overt[i]) {
         // "zij | she": the words, then gloss lines
-        const [words, ...gloss] = sl.info.text.split(/\s*\|\s*/);
+        const [words, ...gloss] = info.text.split(/\s*\|\s*/);
         const leaf: DNode = { key: `${inst.key}~w`, kind: 'leaf', label: parseRich(words), children: [], parents: [], indices: [], synthetic: true };
         if (gloss.length) leaf.gloss = gloss.map((g) => parseRich(g, { smallCaps: true }));
         inst.children = [leaf];
         inst.triangle = false;
       }
+      // this position only as a triangle over its words (the structure stays in the code): #wh^
+      if (info.triangle && !(info.text !== undefined && overt[i])) {
+        if (!inst.trace) {
+          const words: string[] = [];
+          const walk = (x: DNode) => (x.kind === 'leaf' ? words.push(plain(x.label).trim()) : x.children.forEach(walk));
+          inst.children.forEach(walk);
+          inst.children = [{ key: `${inst.key}~tri`, kind: 'leaf', label: parseRich(words.filter(Boolean).join(' ') || '…'), children: [], parents: [], indices: [], synthetic: true, copy: inst.copy }];
+        }
+        inst.triangle = true;
+      }
+      // this position only in a colour: #wh@gray
+      if (info.color) {
+        const paint = (x: DNode) => {
+          x.posColor = info.color;
+          x.children.forEach(paint);
+        };
+        paint(inst);
+      }
       // meaning of this position: #wh$x : e$ (e.g. a trace as a variable)
-      if (sl.info.sem !== undefined) {
+      if (info.sem !== undefined) {
         try {
-          const m = parseMeaning(sl.info.sem);
+          const m = parseMeaning(info.sem);
           meanings.set(inst, m);
-          inst.sem = { runs: formulaRuns(sl.info.sem), type: showTy(m.ty) };
+          inst.sem = { runs: formulaRuns(info.sem), type: showTy(m.ty) };
         } catch (e) {
-          inst.sem = { runs: formulaRuns(sl.info.sem), error: (e as Error).message };
+          inst.sem = { runs: formulaRuns(info.sem), error: (e as Error).message };
         }
       }
+      // features, notes and the edge above of this position only
+      const L = info.L;
+      if (L?.features) inst.features = L.features.map((f) => parseRich(f));
+      if (L?.notes) inst.notes = [...(inst.notes ?? []), ...L.notes.map((n, j) => ({ runs: parseRich(n.text), side: n.side, off: n.off, index: POS_NOTE + j, pos: { id: s.id!, occ: i + 1 } }))];
+      if (L?.edge) inst.edgeColor = L.edge;
+      if (L?.width && Number.isFinite(Number(L.width))) inst.edgeWidth = Number(L.width);
+      if (L?.len && Number.isFinite(Number(L.len))) inst.edgeLen = Number(L.len);
       inst.chainRef = { id: s.id!, occ: i + 1 };
       sl.parent.children[sl.index] = inst;
       chain.instances.push(inst);

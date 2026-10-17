@@ -1,4 +1,4 @@
-import type { AArrow, AChild, ADoc, ALabel, ALeaf, ANode, ARef, LabelSide } from './ast';
+import type { AArrow, AChild, ADoc, ALabel, ALeaf, ANode, APosStyle, ARef, LabelSide, PosMods } from './ast';
 import { walkAst } from './parser';
 
 /**
@@ -161,8 +161,7 @@ export function setMeaning(n: ANode, formula: string): Edit {
 export function setPronounce(occurrence: { node: ANode } | { ref: ARef }, value: boolean | undefined): Edit {
   if ('node' in occurrence) return { changes: [setModifiers(occurrence.node, { pronounce: value })] };
   const r = occurrence.ref;
-  const id = r.id;
-  return { changes: [{ from: r.span.from, to: r.span.to, insert: `#${id}${value === undefined ? '' : value ? '!' : '?'}` }] };
+  return { changes: [{ from: r.span.from, to: r.span.to, insert: refToken({ ...r, pronounce: value }) }] };
 }
 
 /**
@@ -206,13 +205,24 @@ export function addMother(n: ANode | ALeaf, label = 'X'): Edit {
   };
 }
 
+/** The code of one position of a chain: #id, then ! / ?, ^, @colour, "words", $meaning$. */
+export function refToken(r: Pick<ARef, 'id' | 'pronounce' | 'text' | 'sem' | 'triangle' | 'color'>): string {
+  const flag = r.pronounce === undefined ? '' : r.pronounce ? '!' : '?';
+  return `#${r.id}${flag}${r.triangle ? '^' : ''}${r.color ? '@' + r.color : ''}${r.text !== undefined ? `"${r.text}"` : ''}${r.sem !== undefined ? `$${r.sem}$` : ''}`;
+}
+
+/** Style one position of a chain only (e.g. a silent copy as a triangle, or in a colour). */
+export function setRefStyle(r: ARef, patch: { triangle?: boolean; color?: string | null }): Edit {
+  const next = { ...r, ...('triangle' in patch ? { triangle: patch.triangle || undefined } : {}), ...('color' in patch ? { color: patch.color ?? undefined } : {}) };
+  return { changes: [{ from: r.span.from, to: r.span.to, insert: refToken(next) }] };
+}
+
 /** Words a position of a chain is pronounced with (#id"zij | she"); null = the same words. */
 export function setRefText(r: ARef, text: string | null): Edit {
   const t = text?.trim().replace(/"/g, "''") || '';
   // other words make the position pronounced; "?" (silent) would contradict them
-  const flag = r.pronounce === undefined || (t && r.pronounce === false) ? '' : r.pronounce ? '!' : '?';
-  const ins = `#${r.id}${t ? flag.replace('?', '') : flag}${t ? `"${t}"` : ''}${r.sem !== undefined ? `$${r.sem}$` : ''}`;
-  return { changes: [{ from: r.span.from, to: r.span.to, insert: ins }] };
+  const pronounce = t && r.pronounce === false ? undefined : r.pronounce;
+  return { changes: [{ from: r.span.from, to: r.span.to, insert: refToken({ ...r, pronounce, text: t || undefined }) }] };
 }
 
 export function addSister(n: ANode | ALeaf, label = 'X'): Edit {
@@ -245,6 +255,7 @@ export function deleteElement(src: string, doc: ADoc, target: ANode | ALeaf): Ed
         for (const c of n.children) if (c.kind === 'ref' && ids.has(c.id)) changes.push(removeRange(src, c.span.from, c.span.to));
       });
       for (const a of doc.arrows) if (ids.has(a.from) || ids.has(a.to)) changes.push(removeRange(src, a.span.from, a.span.to));
+      for (const p of doc.posStyles) if (ids.has(p.id)) changes.push(removeRange(src, p.span.from, p.span.to));
     }
   }
   return { changes: dedupe(changes) };
@@ -342,4 +353,40 @@ export function deleteArrow(src: string, a: AArrow): Edit {
   // also drop a trailing comment on the same line
   while (to < src.length && src[to] !== '\n') to++;
   return { changes: [removeRange(src, a.span.from, to)] };
+}
+
+/** The line of a position style: #wh/2: ^ @red edge=blue {uφ} &"focus" $x : e$ */
+export function posStyleLine(id: string, occ: number, m: PosMods): string | null {
+  const parts: string[] = [];
+  if (m.pronounce !== undefined) parts.push(m.pronounce ? '!' : '?');
+  if (m.triangle) parts.push('^');
+  if (m.color) parts.push('@' + m.color);
+  if (m.edge) parts.push('edge=' + m.edge);
+  if (m.width) parts.push('width=' + m.width);
+  if (m.len) parts.push('len=' + m.len);
+  if (m.features?.length) parts.push(`{${m.features.join(', ')}}`);
+  for (const n of m.notes ?? []) if (n.text.trim()) parts.push('&' + labelToken(n));
+  if (m.text !== undefined) parts.push(`"${m.text.replace(/"/g, "''")}"`);
+  if (m.sem !== undefined && m.sem.trim()) parts.push(`$${m.sem.trim().replace(/\$/g, '\\$')}$`);
+  return parts.length ? `#${id}/${occ}: ${parts.join(' ')}` : null;
+}
+
+/** Change what one position of a chain has on its own (undefined in the patch: back to the shared value). */
+export function setPosStyle(src: string, doc: ADoc, id: string, occ: number, patch: Partial<PosMods>): Edit {
+  const cur: APosStyle | undefined = doc.posStyles.find((p) => p.id === id && p.occ === occ);
+  const next: PosMods = { ...(cur?.mods ?? {}) };
+  for (const [k, v] of Object.entries(patch) as [keyof PosMods, unknown][]) {
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) delete next[k];
+    else (next as Record<string, unknown>)[k] = v;
+  }
+  const line = posStyleLine(id, occ, next);
+  if (cur) {
+    if (line) return { changes: [{ from: cur.span.from, to: cur.span.to, insert: line }] };
+    let to = cur.span.to;
+    while (to < src.length && src[to] !== '\n') to++;
+    return { changes: [removeRange(src, cur.span.from, to)] };
+  }
+  if (!line) return { changes: [] };
+  const end = src.replace(/\s+$/, '').length;
+  return { changes: [{ from: end, to: src.length, insert: '\n' + line + '\n' }] };
 }

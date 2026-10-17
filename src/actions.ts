@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals';
-import type { AArrow, ALeaf, ANode, ARef } from './core/ast';
+import type { AArrow, ALabel, ALeaf, ANode, ARef, PosMods } from './core/ast';
+import { POS_NOTE } from './core/build';
 import { parse, walkAst } from './core/parser';
 import * as E from './core/edits';
 import type { Edit } from './core/edits';
@@ -168,7 +169,11 @@ export function copyNode(n: DNode | null = selectedNode()): TreeClip | null {
   const ids: string[] = [];
   if (s.kind === 'node') walkAst(s, (x) => void (x.id && ids.push(x.id)));
   const src = source.value;
-  const arrows = (doc.value?.arrows ?? []).filter((a) => ids.includes(a.from) && ids.includes(a.to)).map((a) => src.slice(a.span.from, a.span.to));
+  // the arrows among its positions and the styles of single positions come along
+  const arrows = [
+    ...(doc.value?.arrows ?? []).filter((a) => ids.includes(a.from) && ids.includes(a.to)).map((a) => src.slice(a.span.from, a.span.to)),
+    ...(doc.value?.posStyles ?? []).filter((p) => ids.includes(p.id)).map((p) => src.slice(p.span.from, p.span.to)),
+  ];
   clip.value = { text: src.slice(span.from, span.to), ids, arrows };
   return clip.value;
 }
@@ -183,7 +188,7 @@ export function clipFromText(text: string): TreeClip | null {
     const r = parse(t);
     if (r.ok && r.doc.root) {
       const end = r.doc.root.span.to;
-      return { text: t.slice(0, end), ids: [...r.doc.ids.keys()], arrows: r.doc.arrows.map((a) => t.slice(a.span.from, a.span.to)) };
+      return { text: t.slice(0, end), ids: [...r.doc.ids.keys()], arrows: [...r.doc.arrows, ...r.doc.posStyles].map((a) => t.slice(a.span.from, a.span.to)) };
     }
     return { text: t, ids: [], arrows: [] };
   }
@@ -275,7 +280,73 @@ export function deleteNode(n: DNode | null = selectedNode()) {
   selection.value = parentKey ? { kind: 'node', key: parentKey } : null;
 }
 
+/**
+ * The #ref of the lower position of a chain a node belongs to (the node itself, or anything inside
+ * that copy or trace): styling there applies to this position only.
+ */
+export function positionRef(n: DNode | null): ARef | null {
+  const inst = instanceOf(n);
+  return inst ? chainRef(inst) : null;
+}
+
+/* ------------------------------------------------------------ one copy, or all copies */
+
+/** Edits of a position of a chain go to this copy only, or to the constituent (all its copies). */
+export const copyScope = signal<'this' | 'all'>('this');
+
+/** The position of a chain a node is, or is inside of (a copy or a trace and what it contains). */
+export function instanceOf(n: DNode | null): DNode | null {
+  if (build.value.chains === 'multidominance') return null;
+  let cur: DNode | undefined = n ?? undefined;
+  while (cur && !cur.chainRef && (cur.copyOf || cur.synthetic)) cur = cur.parents[0];
+  return cur?.chainRef ? cur : null;
+}
+
+/** #id/occ of the position a node is (the node itself must be the position) */
+export function positionAt(n: DNode | null): { id: string; occ: number } | null {
+  return n?.chainRef && build.value.chains !== 'multidominance' ? n.chainRef : null;
+}
+
+/** what a position has on its own (its line #id/occ: …) */
+export function posStyle(pos: { id: string; occ: number } | null) {
+  return pos ? doc.value?.posStyles.find((p) => p.id === pos.id && p.occ === pos.occ) ?? null : null;
+}
+
+/** Give one position of a chain something of its own (undefined: back to what all copies share). */
+export function setPos(inst: DNode, patch: Partial<PosMods>) {
+  if (!editable.value || !doc.value || !inst.chainRef) return;
+  const { id, occ } = inst.chainRef;
+  const edit = E.setPosStyle(source.value, doc.value, id, occ, patch);
+  // the same written in the #ref itself (#wh^@red) gives way to the line
+  const ref = chainRef(inst);
+  if (ref) {
+    const strip: { triangle?: boolean; color?: null } = {};
+    if ('triangle' in patch && ref.triangle) strip.triangle = false;
+    if ('color' in patch && ref.color) strip.color = null;
+    let r = ref;
+    if ('sem' in patch && ref.sem !== undefined) r = { ...r, sem: undefined };
+    if ('text' in patch && ref.text !== undefined) r = { ...r, text: undefined };
+    if (Object.keys(strip).length || r !== ref) {
+      const next = E.setRefStyle(r, strip).changes[0];
+      edit.changes.push({ ...next, from: ref.span.from, to: ref.span.to });
+    }
+  }
+  applyEdit(edit);
+}
+
+/** this copy, when the scope says so and the node is (in) a position */
+function thisCopy(n: DNode | null, whole: boolean): DNode | null {
+  if (copyScope.value !== 'this') return null;
+  return whole ? instanceOf(n) : positionAt(n) ? n : null;
+}
+
 export function toggleTriangle(n: DNode | null = selectedNode()) {
+  const inst = thisCopy(n, true);
+  if (inst) {
+    const on = posStyle(inst.chainRef!)?.mods.triangle ?? chainRef(inst)?.triangle ?? false;
+    setPos(inst, { triangle: on ? undefined : true });
+    return;
+  }
   if (!guard(n)) return;
   let s = n.src!;
   if (s.kind === 'leaf') {
@@ -292,12 +363,16 @@ function nodeSrc(n: DNode): ANode | null {
 }
 
 export function setFeatures(n: DNode | null, text: string) {
+  const inst = thisCopy(n, false);
+  if (inst) return setPos(inst, { features: text.split(',').map((x) => x.trim()).filter(Boolean) });
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setFeatures(s, text));
 }
 
 export function setMeaning(n: DNode | null, text: string) {
+  const inst = thisCopy(n, false);
+  if (inst) return setPos(inst, { sem: text.trim() || undefined });
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setMeaning(s, text));
@@ -391,15 +466,27 @@ export function restructure(n: DNode | null, shape: 'right' | 'left') {
 
 /** Edge colour / width / length, spread of daughters, meaning colour of a node. */
 export function setOption(n: DNode | null, key: 'edge' | 'width' | 'len' | 'spread' | 'sem', value: string | null) {
+  const inst = (key === 'edge' || key === 'width' || key === 'len') && thisCopy(n, false);
+  if (inst) return setPos(inst, { [key]: value ?? undefined });
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setOption(s, key, value));
 }
 
 export function setNotes(n: DNode | null, notes: E.LabelSpec[]) {
+  const inst = thisCopy(n, false);
+  if (inst) return setPos(inst, { notes: notes.filter((x) => x.text.trim()).map((x) => ({ ...x, span: { from: 0, to: 0 } })) });
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setNotes(source.value, s, notes));
+}
+
+/** a note of one position of a chain: its line's notes and which one */
+function posNotes(n: DNode, index: number): { list: ALabel[]; i: number } | null {
+  const lbl = n.notes?.find((x) => x.index === index);
+  if (!lbl?.pos) return null;
+  const list = posStyle(lbl.pos)?.mods.notes ?? [];
+  return { list, i: index - POS_NOTE };
 }
 
 /** Drag a note or an arrow label to a new offset. */
@@ -407,6 +494,11 @@ export function moveLabel(kind: 'note' | 'arrow', owner: string | number, index:
   if (!editable.value) return;
   if (kind === 'note') {
     const n = nodeByKey(owner as string);
+    const own = n && posNotes(n, index);
+    if (own) {
+      setPos(n!, { notes: own.list.map((x, i) => (i === own.i ? { ...x, off } : x)) });
+      return;
+    }
     const s = n && nodeSrc(n);
     const note = s?.notes?.[index];
     if (note) applyEdit(E.setNoteOffset(note, off));
@@ -425,6 +517,11 @@ export function editLabel(kind: 'note' | 'arrow', owner: string | number, index:
     list.flatMap((l, i) => (i !== index ? [l] : text === null || !text.trim() ? [] : [{ ...l, text }]));
   if (kind === 'note') {
     const n = nodeByKey(owner as string);
+    const own = n && posNotes(n, index);
+    if (own) {
+      setPos(n!, { notes: own.list.flatMap((l, i) => (i !== own.i ? [l] : text === null || !text.trim() ? [] : [{ ...l, text }])) });
+      return;
+    }
     const s = n && nodeSrc(n);
     if (s?.notes) applyEdit(E.setNotes(source.value, s, apply(s.notes)));
     return;
@@ -437,6 +534,8 @@ export function editLabel(kind: 'note' | 'arrow', owner: string | number, index:
 export function labelText(kind: 'note' | 'arrow', owner: string | number, index: number): string | undefined {
   if (kind === 'note') {
     const n = nodeByKey(owner as string);
+    const own = n && posNotes(n, index);
+    if (own) return own.list[own.i]?.text;
     return (n && nodeSrc(n))?.notes?.[index]?.text;
   }
   return tree.value?.arrows[owner as number]?.src?.labels[index]?.text;
@@ -456,6 +555,9 @@ export function reverseArrow(a: DArrow | null = selectedArrow()) {
 }
 
 export function setColor(n: DNode | null, color: string | null, branch: boolean) {
+  // this copy only: the whole copy (or trace) gets the colour
+  const inst = thisCopy(n, true);
+  if (inst) return setPos(inst, { color: color ?? undefined });
   if (!guard(n)) return;
   const s = n.src!.kind === 'node' ? (n.src as ANode) : parentSrc(n);
   if (!s) return;

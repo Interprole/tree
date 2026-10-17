@@ -245,9 +245,9 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     const content = labelTex(n, style);
     if (content.includes('\\\\')) opts.push('align=center', 'base=top');
     if (parent?.triangle && n.kind === 'leaf') opts.push('roof');
-    const tc = colors.name(n.copy && style.copyStyle === 'gray' ? undefined : n.color);
+    const tc = colors.name(n.posColor ?? (n.copy && style.copyStyle === 'gray' ? undefined : n.color));
     if (tc) opts.push(`text=${tc}`);
-    const ec = n.edgeColor ? colors.name(n.edgeColor) : parent && parent.branchColor === n.branchColor ? colors.name(n.branchColor) : null;
+    const ec = n.posColor && parent?.posColor === n.posColor ? colors.name(n.posColor) : n.edgeColor ? colors.name(n.edgeColor) : parent && parent.branchColor === n.branchColor ? colors.name(n.branchColor) : null;
     const edgeOpts = [ec, n.edgeWidth !== undefined ? `line width=${px2pt(n.edgeWidth)}pt` : null].filter(Boolean);
     if (edgeOpts.length && parent) opts.push(`edge={${edgeOpts.join(', ')}}`);
     if (n.edgeLen) opts.push(`l+=${px2pt(n.edgeLen)}pt`);
