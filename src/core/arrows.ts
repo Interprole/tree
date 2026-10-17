@@ -640,8 +640,10 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
     return Math.min(b, treeBottom);
   };
   const geomOf = new Map<DArrow, ArrowGeom>();
-  /** radius of the turns of an arrow */
+  /** radius of the turns of an arrow (at least: how deep it dips below what it passes) */
   const R = Math.max(14, m.fs * 1.8);
+  /** a bend may take up to half of each stretch next to it: wide, smooth turns */
+  const BEND = R * 8;
   for (const a of ordered) {
     const [ef, et] = endsOf.get(a)!;
     const lf = layout.nodes.get(ef.node);
@@ -666,7 +668,7 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
         const B = pick(startsT, vias[vias.length - 1]);
         // the same round corners as an arrow that found its own way: taking it over changes nothing
         const route: P[] = [A.attach, ...vias, B.attach];
-        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), R);
+        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), BEND);
         g = { arrow: a, segs, knots: route, mid, handle: vias[0], labels: [], level };
       } else {
         // the arrow turns below what stands between its two ends, not below the whole tree
@@ -691,7 +693,7 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
         // (from a label's side the channel's own start, just under the turn, is left out: it would make the turn tight)
         const inner = (c: P[], e: Exit) => c.slice(e.lead ? 1 : 0, -1);
         const route: P[] = [...side(chA.exit), ...inner(ca, chA.exit), [xa + dx, bottom], [xb + dx, bottom], ...inner(cb, chB.exit).reverse(), ...side(chB.exit).reverse()];
-        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), R);
+        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), BEND);
         const handle: P = [(xa + xb) / 2 + dx, bottom];
         // every bend of the route is a point that can be dragged or removed
         g = { arrow: a, segs, knots: route, mid, handle, labels: [], level };
