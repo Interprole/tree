@@ -7,7 +7,6 @@ import type { Edit } from './core/edits';
 import { diffChange, formatDoc, tidyEdit } from './core/format';
 import { standalonePiece, withoutBranch } from './core/standalone';
 import { askOverride } from './ask';
-import { cubicAt, insertVia } from './core/arrows';
 import type { ArrowGeom } from './core/arrows';
 import type { DArrow, DNode } from './core/model';
 import { t } from './i18n';
@@ -1004,11 +1003,6 @@ export function deleteArrow(a: DArrow | null = selectedArrow()) {
 /** Geometry of an arrow as drawn (picture coordinates). */
 export function arrowGeom(index: number): ArrowGeom | null {
   return scene.value?.arrows[index]?.geom ?? null;
-}
-
-/** One more bend point: the handle of an arrow without any, or a point in the middle of the arrow. */
-export function addViaAtMiddle(g: ArrowGeom): [number, number][] {
-  return insertVia(g, g.arrow.via?.length ? cubicAt(g, 0.5) : g.handle);
 }
 
 /** Explicit arrow lines that start or end at a node (by its #id): e.g. its head movement, drawn or not. */

@@ -78,37 +78,69 @@ export function geomEnd(g: Pick<ArrowGeom, 'segs'>, which: 'start' | 'end'): [P,
 
 const line = (a: P, b: P): Cubic => [a, [a[0] + (b[0] - a[0]) / 3, a[1] + (b[1] - a[1]) / 3], [a[0] + ((b[0] - a[0]) * 2) / 3, a[1] + ((b[1] - a[1]) * 2) / 3], b];
 
+const unit = (v: P): P => {
+  const l = Math.hypot(v[0], v[1]) || 1;
+  return [v[0] / l, v[1] / l];
+};
+/** the direction t mirrored in the line along c (both unit vectors) */
+const mirror = (t: P, c: P): P => {
+  const k = 2 * (t[0] * c[0] + t[1] * c[1]);
+  return [k * c[0] - t[0], k * c[1] - t[1]];
+};
+
+/** the direction of a curve through each inner point: halfway between the way in and the way out */
+function innerTangents(pts: P[]): P[] {
+  const out: P[] = [];
+  for (let i = 1; i + 1 < pts.length; i++) {
+    const a = unit([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+    const b = unit([pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]]);
+    const s: P = [a[0] + b[0], a[1] + b[1]];
+    out.push(Math.hypot(s[0], s[1]) < 1e-6 ? b : unit(s));
+  }
+  return out;
+}
+
 /**
- * A smooth curve through all points (centripetal Catmull–Rom: round, without loops or cusps).
- * The ends continue the direction of their neighbours.
+ * The directions at the two ends of a curve through bend points that make its first and last
+ * pieces arcs of a circle (the way TikZ bends: round, never pointed at a bend point).
+ */
+export function arcEnds(pts: P[]): { start: P; end: P } {
+  const n = pts.length;
+  const ts = innerTangents(pts);
+  if (!ts.length) {
+    const c = unit([pts[n - 1][0] - pts[0][0], pts[n - 1][1] - pts[0][1]]);
+    return { start: c, end: c };
+  }
+  const c0 = unit([pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]]);
+  const c1 = unit([pts[n - 1][0] - pts[n - 2][0], pts[n - 1][1] - pts[n - 2][1]]);
+  return { start: mirror(ts[0], c0), end: mirror(ts[ts.length - 1], c1) };
+}
+
+/**
+ * A smooth curve through all points, each piece as close to an arc of a circle as its end
+ * directions allow (handles as TikZ sets them: a third of the chord, longer as the turn grows).
+ * start and end are the directions of travel at the two ends.
  */
 export function splinePath(pts: P[], dirs: { start?: P; end?: P } = {}): Cubic[] {
   const q = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 0.5);
   if (q.length < 2) return [line(pts[0], pts[pts.length - 1])];
   const n = q.length;
   if (n === 2 && !dirs.start && !dirs.end) return [line(q[0], q[1])];
-  const ext = (a: P, b: P): P => [2 * a[0] - b[0], 2 * a[1] - b[1]];
-  // a given direction at an end: a point behind the end in that direction
-  const len = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]);
-  const lenE = Math.hypot(q[n - 1][0] - q[n - 2][0], q[n - 1][1] - q[n - 2][1]);
-  const before: P = dirs.start ? [q[0][0] - dirs.start[0] * len, q[0][1] - dirs.start[1] * len] : ext(q[0], q[1]);
-  const after: P = dirs.end ? [q[n - 1][0] + dirs.end[0] * lenE, q[n - 1][1] + dirs.end[1] * lenE] : ext(q[n - 1], q[n - 2]);
-  const all: P[] = [before, ...q, after];
+  const ends = arcEnds(q);
+  const tan: P[] = [dirs.start ?? ends.start, ...innerTangents(q), dirs.end ?? ends.end];
   const segs: Cubic[] = [];
-  for (let i = 1; i < all.length - 2; i++) {
-    const [p0, p1, p2, p3] = [all[i - 1], all[i], all[i + 1], all[i + 2]];
-    const d1 = Math.sqrt(Math.hypot(p1[0] - p0[0], p1[1] - p0[1])) || 1e-6;
-    const d2 = Math.sqrt(Math.hypot(p2[0] - p1[0], p2[1] - p1[1])) || 1e-6;
-    const d3 = Math.sqrt(Math.hypot(p3[0] - p2[0], p3[1] - p2[1])) || 1e-6;
-    const c1: P = [
-      (d1 * d1 * p2[0] - d2 * d2 * p0[0] + (2 * d1 * d1 + 3 * d1 * d2 + d2 * d2) * p1[0]) / (3 * d1 * (d1 + d2)),
-      (d1 * d1 * p2[1] - d2 * d2 * p0[1] + (2 * d1 * d1 + 3 * d1 * d2 + d2 * d2) * p1[1]) / (3 * d1 * (d1 + d2)),
-    ];
-    const c2: P = [
-      (d3 * d3 * p1[0] - d2 * d2 * p3[0] + (2 * d3 * d3 + 3 * d3 * d2 + d2 * d2) * p2[0]) / (3 * d3 * (d3 + d2)),
-      (d3 * d3 * p1[1] - d2 * d2 * p3[1] + (2 * d3 * d3 + 3 * d3 * d2 + d2 * d2) * p2[1]) / (3 * d3 * (d3 + d2)),
-    ];
-    segs.push([p1, c1, c2, p2]);
+  for (let i = 0; i + 1 < n; i++) {
+    const [a, b] = [q[i], q[i + 1]];
+    const chord = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const c = unit([b[0] - a[0], b[1] - a[1]]);
+    // the handle of an arc turning by 2φ over its chord: chord / (3 cos²(φ/2))
+    const handle = (t: P) => {
+      const phi = Math.acos(Math.max(-1, Math.min(1, t[0] * c[0] + t[1] * c[1])));
+      return Math.min(chord / (3 * Math.cos(Math.min(phi, 2.2) / 2) ** 2), chord);
+    };
+    const h0 = handle(tan[i]);
+    const h1 = handle(tan[i + 1]);
+    segs.push([a, [a[0] + tan[i][0] * h0, a[1] + tan[i][1] * h0], [b[0] - tan[i + 1][0] * h1, b[1] - tan[i + 1][1] * h1], b]);
   }
   return segs;
 }
@@ -716,18 +748,61 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
     const notBelow = (deg: number, side: boolean, toward: P, from: P) => (side && deg > 20 && deg < 160 ? (toward[0] < from[0] ? 180 : 0) : deg);
     /** a smooth curve through bend points: leaving one node and entering the other along the line to its centre */
     const through = (wps: P[]): { segs: Cubic[]; p0: P; p3: P } => {
-      const t0 = fixedOut ?? notBelow(angleTo(cf, wps[0]), sideF, wps[0], cf);
-      const t1 = fixedIn ?? notBelow(angleTo(ct, wps[wps.length - 1]), sideT, wps[wps.length - 1], ct);
-      const p0 = anchor(bf, t0);
-      const p3 = anchor(bt, t1);
+      // the ends leave and enter as the arcs through the bend points want (found from the centres, then from the borders)
+      let p0 = cf;
+      let p3 = ct;
+      let t0 = 0;
+      let t1 = 0;
+      for (let k = 0; k < 2; k++) {
+        const e = arcEnds([p0, ...wps, p3]);
+        t0 = fixedOut ?? notBelow(angleTo([0, 0], e.start), sideF, wps[0], cf);
+        t1 = fixedIn ?? notBelow(angleTo(e.end, [0, 0]), sideT, wps[wps.length - 1], ct);
+        p0 = anchor(bf, t0);
+        p3 = anchor(bt, t1);
+      }
       const d1 = dir(t1);
       return { segs: splinePath([p0, ...wps, p3], { start: dir(t0), end: [-d1[0], -d1[1]] }), p0, p3 };
+    };
+    /**
+     * One bend point: still one curve as TikZ draws it, through that point at its middle (so moving
+     * the handle of an automatic arrow only reshapes it). null when no such curve fits.
+     */
+    const curveThrough = (v: P): Cubic | null => {
+      const grid = (side: boolean) => Array.from({ length: 24 }, (_, i) => i * 15 - 165).filter((d) => !side || d <= 20 || d >= 160);
+      const outs = fixedOut !== undefined ? [fixedOut] : grid(sideF);
+      const ins = fixedIn !== undefined ? [fixedIn] : grid(sideT);
+      let best: { c: Cubic; score: number } | null = null;
+      for (const t0 of outs) {
+        for (const t1 of ins) {
+          const p0 = anchor(bf, t0);
+          const p3 = anchor(bt, t1);
+          const d0 = dir(t0);
+          const d1 = dir(t1);
+          // B(½) = v: L0·d0 + L1·d1 = 8/3 (v − middle of the ends)
+          const sx = (8 / 3) * (v[0] - (p0[0] + p3[0]) / 2);
+          const sy = (8 / 3) * (v[1] - (p0[1] + p3[1]) / 2);
+          const det = d0[0] * d1[1] - d0[1] * d1[0];
+          if (Math.abs(det) < 1e-3) continue;
+          const L0 = (sx * d1[1] - sy * d1[0]) / det;
+          const L1 = (d0[0] * sy - d0[1] * sx) / det;
+          if (L0 < R || L1 < R) continue;
+          const c: Cubic = [p0, [p0[0] + d0[0] * L0, p0[1] + d0[1] * L0], [p3[0] + d1[0] * L1, p3[1] + d1[1] * L1], p3];
+          const q = cost([c], mine);
+          const score = q.hits * 1000 + q.cross * 300 + q.arrows * 120 + sidePenalty(t0, sideF) + sidePenalty(t1, sideT) + Math.abs(Math.log(L0 / L1)) * 60 + curveLength([c]) * 0.08;
+          if (!best || score < best.score) best = { c, score };
+        }
+      }
+      return best?.c ?? null;
     };
     let g: ArrowGeom;
     if (a.via?.length) {
       const vias = a.via.map(([x, y]) => [mid[0] + x, mid[1] + y] as P);
-      const c = through(vias);
-      g = { arrow: a, segs: c.segs, knots: [c.p0, ...vias, c.p3], mid, handle: vias[0], labels: [], level: 0 };
+      const one = vias.length === 1 ? curveThrough(vias[0]) : null;
+      if (one) g = { arrow: a, segs: [one], knots: [one[0], vias[0], one[3]], mid, handle: vias[0], labels: [], level: 0 };
+      else {
+        const c = through(vias);
+        g = { arrow: a, segs: c.segs, knots: [c.p0, ...vias, c.p3], mid, handle: vias[0], labels: [], level: 0 };
+      }
     } else {
       // one curve, as TikZ draws "to[out=…, in=…, looseness=…]": the sides and the looseness that touch nothing
       const outs = fixedOut !== undefined ? [fixedOut] : sideF ? SIDE_ANGLES : AUTO_ANGLES;
