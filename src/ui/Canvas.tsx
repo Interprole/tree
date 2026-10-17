@@ -13,7 +13,7 @@ import {
   activateTree, activeId, activeTree, addTree, appearanceScope, setStyle, arrowSource, EMPTY_SHEET, sideTab, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
 } from '../state';
 import type { Tool } from '../state';
-import { IArrowTool, ICcommand, IDominance, IFit, ILink, IMinus, IPlus, IPointer } from './icons';
+import { IArrowTool, ICcommand, IDominance, IFit, ILink, IMinus, IPlus, IPointer, ITrash } from './icons';
 
 interface View {
   zoom: number;
@@ -683,6 +683,16 @@ export function Canvas() {
         </button>
         <button class="icon-btn" title={t('fit')} aria-label={t('fit')} onClick={() => fit()}>
           <IFit />
+        </button>
+        <span class="sep" />
+        <button
+          class="icon-btn danger"
+          title="Clear the canvas: all trees go"
+          aria-label="Clear the canvas"
+          data-testid="clear-canvas"
+          onClick={() => confirm('Clear the canvas? All its trees go (save them to disk or in My trees first if you need them).') && clearCanvas()}
+        >
+          <ITrash />
         </button>
       </div>
 

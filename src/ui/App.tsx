@@ -9,7 +9,7 @@ import { examples } from '../examples';
 import { copyText } from '../export';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, shareUrl, showToast, sideTab, clearCanvas, source, theme, toast, tool, tree, trees, unlinkTree,
+  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, shareUrl, showToast, sideTab, source, theme, toast, tool, tree, trees, unlinkTree,
 } from '../state';
 import { Canvas, canvasApi } from './Canvas';
 import { Seg } from './controls';
@@ -358,10 +358,6 @@ function FileMenu() {
               </span>
             </label>
           )}
-          <button role="menuitem" class="danger" onClick={run(() => confirm('Clear the canvas? All its trees go (save them to disk or in My trees first if you need them).') && clearCanvas())}>
-            <strong>Clear the canvas</strong>
-            <small>Start again with one empty tree.</small>
-          </button>
           <button role="menuitem" onClick={run(() => (modal.value = 'trees'))}>
             <strong>{t('myTrees')}…</strong>
             <small>Trees kept in this browser.</small>
