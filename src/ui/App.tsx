@@ -1,6 +1,7 @@
 import { useSignal, useSignalEffect } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import * as A from '../actions';
+import * as M from '../movement';
 import { lineCol } from '../core/parser';
 import { examples } from '../examples';
 import { copyText } from '../export';
@@ -160,7 +161,10 @@ function useShortcuts() {
       if (key === 'w') return handled(), (tool.value = 'arrow');
       if (key === 'c') return handled(), ((tool.value = 'ccommand'), (relationOf.value = sel?.kind === 'node' ? sel.key : null));
       if (key === 'd') return handled(), ((tool.value = 'dominance'), (relationOf.value = sel?.kind === 'node' ? sel.key : null));
-      if (sel?.kind === 'arrow' && (key === 'Delete' || key === 'Backspace')) return handled(), A.deleteArrow();
+      if (sel?.kind === 'arrow' && (key === 'Delete' || key === 'Backspace')) {
+        const a = A.selectedArrow();
+        return handled(), a && M.deleteArrow(a);
+      }
       if (sel?.kind !== 'node') {
         if (key.startsWith('Arrow')) return handled(), navigate('down');
         return;

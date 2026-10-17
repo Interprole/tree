@@ -186,7 +186,7 @@ const GUIDE: GuideSection[] = [
         <p>On the canvas: select a position → ⋯ → <em>Pronounce / Silence this position</em>.</p>
         <h4>Arrows and indices</h4>
         <p>
-          Arrows between the positions of a chain are drawn automatically (switch: <em>Arrows between positions</em>). Each one can still be edited: click it to change line, head, route or label, or drag its round handle to bend it. Editing writes a line like <code>#wh/2 -&gt; #wh/1 dashed</code> into the code (<code>/2</code> = the second position from the top); deleting writes <code>… hide</code>.
+          Arrows between the positions of a chain are drawn automatically (switch: <em>Arrows for phrasal movement</em>). Each one can still be edited: click it to change line, head, route or label, or drag its round handle to bend it. Editing writes a line like <code>#wh/2 -&gt; #wh/1 dashed</code> into the code (<code>/2</code> = the second position from the top); deleting the arrow (keeping the movement) writes <code>… hide</code>; with the switch off, <code>… visible</code> shows one arrow anyway.
         </p>
         <p>
           <em>Movement indices</em> adds subscripts to all positions of each chain. They are separate from indices you type yourself (<code>DP_i</code>, used for binding): movement indices come from the # ids and never reuse a letter you already typed.

@@ -39,6 +39,8 @@ export interface DNode {
   chainRef?: { id: string; occ: number };
   /** source of a head-movement arrow: drawn struck through */
   struck?: boolean;
+  /** head movement written on this head: the id of the head it moves to */
+  headTo?: string;
   /** colour of one position of a chain (#wh@gray): its labels and the edges inside it */
   posColor?: string;
   /** per-node styling from ;edge= ;width= ;len= ;spread= ;sem= */
@@ -99,6 +101,8 @@ export interface DArrow {
   auto?: boolean;
   /** chain link of an automatic arrow: occurrence numbers (1 = highest) */
   chain?: { id: string; from: number; to: number };
+  /** the arrow of a head movement written with ;to= (ids of the two heads) */
+  headMove?: { from: string; to: string };
   src?: AArrow;
   /** index into doc.arrows for explicit arrows */
   index?: number;

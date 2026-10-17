@@ -84,8 +84,10 @@ export interface AArrow {
   /** a particular position of a chain: #wh/2 (1 = highest) */
   fromOcc?: number;
   toOcc?: number;
-  /** "hide": suppresses the automatic arrow between these positions */
+  /** "hide": the arrow of this movement is not drawn (the movement stays) */
   hidden?: boolean;
+  /** "visible": the arrow of this movement is drawn although movement arrows are switched off */
+  visible?: boolean;
   head: ArrowHead;
   line: ArrowLine;
   route: ArrowRoute;

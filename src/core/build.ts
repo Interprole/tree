@@ -134,6 +134,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     if (o.len && Number.isFinite(Number(o.len))) d.edgeLen = Number(o.len);
     if (o.spread && Number.isFinite(Number(o.spread))) d.spread = Number(o.spread);
     if (o.sem) d.semColor = o.sem;
+    if (o.to) d.headTo = o.to;
     if (a.notes) d.notes = a.notes.map((n, index) => ({ runs: parseRich(n.text), side: n.side, off: n.off, index }));
     if (a.color) d.color = a.color;
     if (a.branchColor) {
@@ -204,39 +205,74 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     if (occ !== undefined && ch) return ch.instances[occ - 1];
     return byId.get(id) ?? ch?.instances[0];
   };
-  const hidden: [DNode, DNode][] = [];
-  /** hidden arrows still mean head movement: it is shown without an arrow */
+  /**
+   * Movement is written in the tree: chains (#id … #id) and head movement (;to= on the moved head).
+   * Their arrows are drawn when arrows for that kind of movement are on (or the arrow is marked
+   * visible), unless marked hide; an arrow line between the same two places only restyles it.
+   * Other arrow lines are just arrows (plain), or head movement written the older way.
+   */
+  const headMoves = nodes
+    .filter((n) => n.headTo && !n.copyOf)
+    .map((n) => ({ from: n, to: byId.get(n.headTo!)! }))
+    .filter((m) => m.to && m.to !== m.from);
+  const covered: [DNode, DNode][] = [];
+  const isCovered = (x: DNode, y: DNode) => covered.some(([a, b]) => (a === x && b === y) || (a === y && b === x));
   const silentMoves: DArrow[] = [];
+  const legacy = new Set<DArrow>();
   doc.arrows.forEach((a, index) => {
-    // a line between two positions of one chain restyles its automatic arrow: there is none in the
-    // multidominance view or with the arrows between positions switched off
-    if (a.from === a.to && a.fromOcc && a.toOcc && (opts.chains === 'multidominance' || !opts.chainArrows)) return;
+    const labels = a.labels.map((l, i) => ({ runs: parseRich(l.text), side: l.side, off: l.off, index: i }));
+    const styled = (from: DNode, to: DNode, extra: Partial<DArrow> = {}): DArrow => ({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], via: a.via, plain: a.plain, fromAt: a.fromAt, toAt: a.toAt, src: a, index, ...extra });
+    // a link of a chain
+    if (a.from === a.to && a.fromOcc && a.toOcc && !a.plain) {
+      if (opts.chains === 'multidominance') return;
+      const from = resolve(a.from, a.fromOcc);
+      const to = resolve(a.to, a.toOcc);
+      if (!from || !to || from === to) return;
+      covered.push([from, to]);
+      if (!a.hidden && (opts.chainArrows || a.visible)) arrows.push(styled(from, to, { chain: { id: a.from, from: a.fromOcc, to: a.toOcc } }));
+      return;
+    }
     const from = resolve(a.from, a.fromOcc);
     const to = resolve(a.to, a.toOcc);
     if (!from || !to || from === to) return;
-    if (a.hidden) {
-      hidden.push([from, to]);
-      if (!a.plain) silentMoves.push({ from, to, head: a.head, line: a.line, route: a.route, labels: [], bend: [0, 0], src: a, index });
+    // the arrow of a head movement written on the head
+    const hm = !a.plain && headMoves.find((m) => m.from === from && m.to === to);
+    if (hm) {
+      covered.push([from, to]);
+      if (!a.hidden && (opts.headArrows || a.visible)) arrows.push(styled(from, to, { headMove: { from: a.from, to: a.to } }));
       return;
     }
-    const labels = a.labels.map((l, i) => ({ runs: parseRich(l.text), side: l.side, off: l.off, index: i }));
-    arrows.push({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], via: a.via, plain: a.plain, fromAt: a.fromAt, toAt: a.toAt, src: a, index });
+    if (a.hidden) {
+      // an arrow written the older way: hidden, its head movement stays
+      if (!a.plain) silentMoves.push(styled(from, to));
+      covered.push([from, to]);
+      return;
+    }
+    const d = styled(from, to);
+    if (!a.plain) legacy.add(d);
+    arrows.push(d);
   });
   if (opts.chains !== 'multidominance' && opts.chainArrows) {
-    const covered = (x: DNode, y: DNode) =>
-      arrows.some((a) => (a.from === x && a.to === y) || (a.from === y && a.to === x)) || hidden.some(([a, b]) => (a === x && b === y) || (a === y && b === x));
     for (const [id, ch] of chains) {
       for (let k = 1; k < ch.instances.length; k++) {
         const from = ch.instances[k];
         const to = ch.instances[k - 1];
-        if (covered(from, to)) continue;
+        if (isCovered(from, to)) continue;
         arrows.push({ from, to, head: 'end', line: 'solid', route: 'under', labels: [], bend: [0, 0], auto: true, chain: { id, from: k + 1, to: k } });
       }
     }
   }
+  if (opts.headArrows) {
+    for (const m of headMoves) {
+      if (isCovered(m.from, m.to)) continue;
+      arrows.push({ from: m.from, to: m.to, head: 'end', line: 'solid', route: 'under', labels: [], bend: [0, 0], auto: true, headMove: { from: m.from.id ?? m.from.key, to: m.to.id! } });
+    }
+  }
 
-  const moved = applyHeadMovement([...arrows, ...silentMoves]);
-  if (!opts.headArrows) for (let i = arrows.length - 1; i >= 0; i--) if (moved.has(arrows[i])) arrows.splice(i, 1);
+  const moves: DArrow[] = [...[...legacy], ...silentMoves, ...headMoves.map((m) => ({ from: m.from, to: m.to, head: 'end' as const, line: 'solid' as const, route: 'under' as const, labels: [], bend: [0, 0] as [number, number] }))];
+  const moved = applyHeadMovement(moves);
+  // older head-movement arrows follow the switch too (unless marked visible)
+  if (!opts.headArrows) for (let i = arrows.length - 1; i >= 0; i--) if (moved.has(arrows[i]) && legacy.has(arrows[i]) && !arrows[i].src?.visible) arrows.splice(i, 1);
   if (opts.semantics.show) {
     computeSemantics(root, meanings, opts.semantics);
     for (const n of collectNodes(root)) {
@@ -459,7 +495,7 @@ const isHead = (n: DNode) => n.kind === 'phrase' && n.children.every((c) => c.ki
 function applyHeadMovement(arrows: DArrow[]): Set<DArrow> {
   const head = (n: DNode) => (n.kind === 'leaf' ? n.parents[0] : n);
   const moves = arrows
-    .filter((a) => !a.auto && !a.plain)
+    .filter((a) => !a.auto && !a.plain && !a.headMove)
     .map((a) => ({ from: head(a.from), to: head(a.to), arrow: a }))
     .filter((m) => m.from && m.to && m.from !== m.to && isHead(m.from) && isHead(m.to));
   const moved = new Set(moves.map((m) => m.arrow));

@@ -27,26 +27,23 @@ export const examples: Example[] = [
   {
     id: 'wh',
     title: 'Wh-movement (chain) and T-to-C (head movement)',
-    note: '[DP#wh …] and #wh are two positions of one constituent: switch between copies, traces and multidominance. T-to-C is head movement: an arrow between the heads makes C show T+C.',
-    src: `% #wh marks the positions of a moved phrase; the arrow #t -> #c is head movement
+    note: '[DP#wh …] and #wh are two positions of one constituent: switch between copies, traces and multidominance. T-to-C is head movement (;to=c on T): C shows T+C.',
+    src: `% #wh marks the positions of a moved phrase; ;to=c on T is head movement to C
 [CP [DP#wh what]
     [C' [C#c ∅]
         [TP [DP Mary]
-            [T' [T#t did]
-                [VP [V buy] #wh]]]]]
-#t -> #c`,
+            [T' [T#t;to=c did]
+                [VP [V buy] #wh]]]]]`,
   },
   {
     id: 'head',
     title: 'Head movement: V-to-v-to-T',
-    note: 'An arrow between two heads is head movement: the source is struck through, the target becomes V+v.',
+    note: ';to=v on a head is head movement to the head #v: the source is struck through, the target becomes V+v; the arrow is drawn by itself.',
     src: `[TP [DP#subj she]
     [T' [T#t -s]
         [vP #subj
-            [v' [v#v ∅]
-                [VP [V#root sing] [DP songs]]]]]]
-#root -> #v
-#v -> #t`,
+            [v' [v#v;to=t ∅]
+                [VP [V#root;to=v sing] [DP songs]]]]]]`,
   },
   {
     id: 'copy-words',

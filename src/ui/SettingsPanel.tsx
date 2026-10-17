@@ -71,9 +71,9 @@ export function ChainOptions() {
           { v: 'angle', label: '⟨Angle brackets⟩' },
         ]} />
       )}
-      {b.chains !== 'multidominance' && <Toggle label="Arrows between positions" checked={b.chainArrows} reset={rb('chainArrows')} onChange={(v) => setBuild({ chainArrows: v })} />}
+      {b.chains !== 'multidominance' && <Toggle label="Arrows for phrasal movement" hint="Arrows between the copies of a chain (just-arrows stay)" checked={b.chainArrows} reset={rb('chainArrows')} onChange={(v) => setBuild({ chainArrows: v })} />}
       <Toggle label="Movement indices (DPᵢ … tᵢ)" checked={b.chainIndices} reset={rb('chainIndices')} onChange={(v) => setBuild({ chainIndices: v })} />
-      <Toggle label="Arrows for head movement" hint="Without them, head movement still shows: the struck source and the complex head (V+v)" checked={b.headArrows} reset={rb('headArrows')} onChange={(v) => setBuild({ headArrows: v })} />
+      <Toggle label="Arrows for head movement" hint="Without them, head movement still shows: the struck source and the complex head (V+v); just-arrows stay" checked={b.headArrows} reset={rb('headArrows')} onChange={(v) => setBuild({ headArrows: v })} />
     </>
   );
 }
