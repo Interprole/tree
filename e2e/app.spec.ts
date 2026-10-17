@@ -670,8 +670,7 @@ test('one copy open although all copies are triangles; expression; code panel; c
   await expect(page.locator('.ctx-menu .ctx-title')).toBeVisible();
   await page.keyboard.press('Escape');
   page.once('dialog', (d) => d.accept());
-  await page.locator('.canvas').click({ button: 'right', position: { x: 20, y: 20 } });
-  await page.locator('.ctx-menu button', { hasText: 'Clear the canvas' }).click();
+  await page.getByTestId('clear-canvas').click();
   await expect(page.locator('.tree-tab')).toHaveCount(1);
   await expect(page.locator('.cm-placeholder')).toBeVisible();
 });
