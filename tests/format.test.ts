@@ -90,6 +90,24 @@ describe('arrows and chains in the code', () => {
     ]);
     expect(E.arrowLine(a)).toBe('#a -> #b plain via=0,40;-12,60');
   });
+  test('one position styled on its own: modifiers in any order are kept', () => {
+    const src = '[CP [DP#s x] [TP #s?"y"$z : e$]]';
+    const ref = find(doc(src), 'TP').children[0] as never;
+    const once = E.applyChanges(src, E.setRefStyle(ref, { triangle: true, color: '#888' }).changes);
+    expect(once).toBe('[CP [DP#s x] [TP #s?^@#888"y"$z : e$]]');
+    const ref2 = find(doc(once), 'TP').children[0] as never;
+    expect(E.applyChanges(once, E.setRefStyle(ref2, { color: null }).changes)).toBe('[CP [DP#s x] [TP #s?^"y"$z : e$]]');
+    expect(E.applyChanges(once, E.setPronounce({ ref: ref2 }, true).changes)).toBe('[CP [DP#s x] [TP #s!^@#888"y"$z : e$]]');
+  });
+  test('position lines: written, changed and removed', () => {
+    const src = '[CP [DP#wh what] [VP buy #wh]]';
+    const once = E.applyChanges(src, E.setPosStyle(src, doc(src), 'wh', 2, { triangle: true, color: '#888', notes: [{ text: 'x', side: 'left', span: { from: 0, to: 0 } }] }).changes);
+    expect(once).toBe('[CP [DP#wh what] [VP buy #wh]]\n#wh/2: ^ @#888 &left"x"\n');
+    const twice = E.applyChanges(once, E.setPosStyle(once, doc(once), 'wh', 2, { color: undefined, sem: 'x : e' }).changes);
+    expect(twice).toBe('[CP [DP#wh what] [VP buy #wh]]\n#wh/2: ^ &left"x" $x : e$\n');
+    const gone = E.applyChanges(twice, E.setPosStyle(twice, doc(twice), 'wh', 2, { triangle: undefined, notes: undefined, sem: undefined }).changes);
+    expect(gone.trim()).toBe(src);
+  });
   test('a lower position pronounced with other words', () => {
     const src = '[CP [DP#s dei vrou] [TP #s [VP #s?]]]';
     const d = doc(src);

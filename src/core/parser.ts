@@ -1,4 +1,4 @@
-import type { AArrow, ADoc, ALeaf, ANode, ARef, ArrowHead, LabelSide, ParseError, ParseResult, Span } from './ast';
+import type { AArrow, ADoc, ALeaf, ANode, APosStyle, ARef, ArrowHead, LabelSide, ParseError, ParseResult, Span } from './ast';
 
 /**
  * Bracket-notation parser.
@@ -289,28 +289,43 @@ class Parser {
         const id = this.src.slice(s + 1, k);
         if (!id) this.fail('Expected an id after "#" (a reference to a shared node, e.g. #1)', s, s + 1);
         let pronounce: boolean | undefined;
-        if (this.src[k] === '!' || this.src[k] === '?') {
-          pronounce = this.src[k] === '!';
-          k++;
-        }
         let text: string | undefined;
-        if (this.src[k] === '"') {
-          const q = this.src.indexOf('"', k + 1);
-          if (q < 0) this.fail('Unclosed quotation mark', k, k + 1);
-          text = this.src.slice(k + 1, q);
-          k = q + 1;
-        }
         let sem: string | undefined;
-        if (this.src[k] === '$') {
-          const q = this.src.indexOf('$', k + 1);
-          if (q < 0) this.fail('Unclosed "$"', k, k + 1);
-          sem = this.src.slice(k + 1, q).trim();
-          k = q + 1;
+        let triangle: boolean | undefined;
+        let color: string | undefined;
+        // modifiers of this position, in any order: ! ? ^ @colour "words" $meaning$
+        for (;;) {
+          const m = this.src[k];
+          if ((m === '!' || m === '?') && pronounce === undefined) {
+            pronounce = m === '!';
+            k++;
+          } else if (m === '^' && !triangle) {
+            triangle = true;
+            k++;
+          } else if (m === '@' && color === undefined && /[#A-Za-z0-9]/.test(this.src[k + 1] ?? '')) {
+            let e = k + 1;
+            if (this.src[e] === '#') e++;
+            while (e < this.src.length && /[A-Za-z0-9]/.test(this.src[e])) e++;
+            color = this.src.slice(k + 1, e);
+            k = e;
+          } else if (m === '"' && text === undefined) {
+            const q = this.src.indexOf('"', k + 1);
+            if (q < 0) this.fail('Unclosed quotation mark', k, k + 1);
+            text = this.src.slice(k + 1, q);
+            k = q + 1;
+          } else if (m === '$' && sem === undefined) {
+            const q = this.src.indexOf('$', k + 1);
+            if (q < 0) this.fail('Unclosed "$"', k, k + 1);
+            sem = this.src.slice(k + 1, q).trim();
+            k = q + 1;
+          } else break;
         }
         const ref: ARef = { kind: 'ref', id, span: { from: s, to: k } };
         if (pronounce !== undefined) ref.pronounce = pronounce;
         if (text !== undefined) ref.text = text;
         if (sem !== undefined) ref.sem = sem;
+        if (triangle) ref.triangle = true;
+        if (color) ref.color = color;
         this.refs.push(ref);
         node.children.push(ref);
         this.i = k;
@@ -350,6 +365,66 @@ class Parser {
       // merge with directly preceding leaf (separated only by a comment)
       node.children.push(leaf);
     }
+  }
+
+  /** #wh/2: ^ @red edge=blue width=2 len=10 {uφ, EPP} &"focus" $x : e$ "words" ! ? */
+  parsePosStyle(): APosStyle {
+    const start = this.i;
+    let end = this.src.indexOf('\n', start);
+    if (end < 0) end = this.src.length;
+    const m = /^#([\p{L}\p{N}_\-.:]+?)\/(\d+)\s*:/u.exec(this.src.slice(start, end));
+    if (!m) this.fail('A position style looks like  #wh/2: ^ @red', start, end);
+    const style: APosStyle = { id: m![1], occ: Number(m![2]), mods: {}, span: { from: start, to: end } };
+    const mods = style.mods;
+    let k = start + m![0].length;
+    for (;;) {
+      while (k < end && (this.src[k] === ' ' || this.src[k] === '\t')) k++;
+      if (k >= end || this.src[k] === '%') break;
+      const c = this.src[k];
+      const rest = this.src.slice(k, end);
+      let mm: RegExpExecArray | null;
+      if (c === '^') {
+        mods.triangle = true;
+        k++;
+      } else if (c === '!' || c === '?') {
+        mods.pronounce = c === '!';
+        k++;
+      } else if ((mm = /^@(#?[A-Za-z0-9]+)/.exec(rest))) {
+        mods.color = mm[1];
+        k += mm[0].length;
+      } else if ((mm = /^(edge|width|len)=(#?[^\s%]+)/.exec(rest))) {
+        mods[mm[1] as 'edge' | 'width' | 'len'] = mm[2];
+        k += mm[0].length;
+      } else if (c === '{') {
+        this.i = k;
+        this.skipGroup();
+        mods.features = splitTopLevel(this.src.slice(k + 1, this.i - 1), ',').map((x) => x.trim()).filter(Boolean);
+        k = this.i;
+      } else if (c === '&') {
+        const lab = matchLabel(this.src.slice(k + 1, end));
+        if (!lab) this.fail('A note looks like &"text"', k, k + 1);
+        (mods.notes ??= []).push({ text: lab!.text, side: lab!.side, off: lab!.off, span: { from: k, to: k + 1 + lab!.length } });
+        k += 1 + lab!.length;
+      } else if (c === '$') {
+        const q = this.src.indexOf('$', k + 1);
+        if (q < 0 || q > end) this.fail('Unclosed "$"', k, k + 1);
+        mods.sem = this.src.slice(k + 1, q).trim();
+        k = q + 1;
+      } else if (c === '"') {
+        const q = this.src.indexOf('"', k + 1);
+        if (q < 0 || q > end) this.fail('Unclosed quotation mark', k, k + 1);
+        mods.text = this.src.slice(k + 1, q);
+        k = q + 1;
+      } else {
+        let e = k;
+        while (e < end && !/\s/.test(this.src[e])) e++;
+        this.fail(`Unknown position option "${this.src.slice(k, e)}". Use ^, @colour, edge=, width=, len=, {features}, &"note", $meaning$, "words", ! or ?`, k, e);
+      }
+    }
+    style.span.to = Math.min(end, k);
+    while (style.span.to > start && /\s/.test(this.src[style.span.to - 1])) style.span.to--;
+    this.i = end;
+    return style;
   }
 
   parseArrow(): AArrow {
@@ -434,6 +509,7 @@ class Parser {
   parseDoc(): ADoc {
     let root: ANode | null = null;
     const arrows: AArrow[] = [];
+    const posStyles: APosStyle[] = [];
     for (;;) {
       this.skipWs();
       const c = this.peek();
@@ -446,7 +522,9 @@ class Parser {
       } else if (c === ']') {
         this.fail('Unexpected "]": there is no open bracket to close', this.i, this.i + 1);
       } else if (c === '#') {
-        arrows.push(this.parseArrow());
+        const line = this.src.slice(this.i, (this.src.indexOf('\n', this.i) + 1 || this.src.length + 1) - 1);
+        if (/^#[\p{L}\p{N}_\-.:]+?\/\d+\s*:/u.test(line)) posStyles.push(this.parsePosStyle());
+        else arrows.push(this.parseArrow());
       } else {
         const s = this.i;
         let e = s;
@@ -466,8 +544,11 @@ class Parser {
         }
       }
     }
+    for (const p of posStyles) {
+      if (!this.ids.has(p.id)) this.fail(`No node with id "#${p.id}"`, p.span.from, p.span.from + p.id.length + 1);
+    }
     if (root) this.checkCycles(root);
-    return { root, arrows, ids: this.ids };
+    return { root, arrows, posStyles, ids: this.ids };
   }
 
   checkCycles(root: ANode) {

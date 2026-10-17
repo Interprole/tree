@@ -165,11 +165,14 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
 
   const grayCopy = (n: DNode) => n.copy && style.copyStyle === 'gray';
   const colourOf = (n: DNode) => {
+    if (n.posColor) return n.posColor;
     if (grayCopy(n)) return GRAY;
     return n.color ?? (n.kind === 'leaf' ? style.leafColor : style.nodeColor);
   };
   /** ;edge= colours the edge above a node; a coloured branch colours the edges inside it, not the one above it */
   const edgeColour = (parent: DNode, child: DNode) => {
+    // a coloured position of a chain: the edges inside it, not the one above it
+    if (child.posColor && parent.posColor === child.posColor) return child.posColor;
     if (grayCopy(child)) return GRAY;
     if (child.edgeColor) return child.edgeColor;
     if (child.branchColor && parent.branchColor === child.branchColor) return child.branchColor;

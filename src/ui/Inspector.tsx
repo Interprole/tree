@@ -263,6 +263,15 @@ function NodePanel({ n }: { n: DNode }) {
   const overt = !n.copy && !n.trace;
   const ref = A.chainRef(n);
   const lines = A.arrowLinesOf(n);
+  /** inside a lower position of a chain: triangle and colour apply to this position only */
+  // a position of a chain (or inside one): edits go to this copy only, or to all copies
+  const inst = A.instanceOf(n);
+  const scopeThis = !!inst && A.copyScope.value === 'this';
+  const own = scopeThis ? A.posStyle(A.positionAt(n))?.mods : undefined;
+  const instRef = inst ? A.chainRef(inst) : null;
+  const instMods = inst ? A.posStyle(inst.chainRef!)?.mods : undefined;
+  /** this copy: what it has of its own, else what all share */
+  const pick = <T,>(mine: T | undefined, shared: T): T => (scopeThis && A.positionAt(n) && mine !== undefined ? mine : shared);
   const focus = useSignal(0);
   // a double-click, Enter or a new node: type the label right away (each request once)
   useSignalEffect(() => {
@@ -278,7 +287,7 @@ function NodePanel({ n }: { n: DNode }) {
     else if (target.value === 'branch') A.setColor(n, c, true);
     else A.setOption(n, target.value === 'edge' ? 'edge' : 'sem', c);
   };
-  const currentColor = target.value === 'label' ? n.color : target.value === 'branch' ? n.branchColor : target.value === 'edge' ? n.edgeColor : n.semColor;
+  const currentColor = scopeThis && (target.value === 'label' || target.value === 'branch') ? instMods?.color ?? instRef?.color : target.value === 'label' ? n.color : target.value === 'branch' ? n.branchColor : target.value === 'edge' ? n.edgeColor : n.semColor;
   const kind = n.kind === 'leaf' ? 'Terminal' : n.trace ? 'Trace' : n.copy ? 'Silent copy' : 'Node';
   return (
     <div class="insp-panel">
@@ -286,13 +295,33 @@ function NodePanel({ n }: { n: DNode }) {
         <h2>{kind}</h2>
         {inChain && <span class="chip" title="A position of a movement chain">#{n.chainRef?.id ?? n.id}{n.chainRef ? `/${n.chainRef.occ}` : ''}</span>}
       </header>
-      {n.synthetic && <p class="hint">{t('syntheticNode')}</p>}
+      {inst && (
+        <div class="scope">
+          <span class="end-lbl">Apply to</span>
+          <div class="seg small grow">
+            <button class={A.copyScope.value === 'this' ? 'on' : ''} onClick={() => (A.copyScope.value = 'this')} title="Colour, triangle, features, meaning, notes and the edge of this copy only">
+              This copy #{inst.chainRef!.id}/{inst.chainRef!.occ}
+            </button>
+            <button class={A.copyScope.value === 'all' ? 'on' : ''} onClick={() => (A.copyScope.value = 'all')} title="The constituent: every copy of it">
+              All copies
+            </button>
+          </div>
+        </div>
+      )}
+      {n.synthetic && !inst && <p class="hint">{t('syntheticNode')}</p>}
       <TextField key={n.key} label={n.kind === 'leaf' ? 'Words' : 'Label'} value={labelValue} live autoFocusOn={focus.value} onCommit={(v) => A.renameNode(n, v)} placeholder={n.kind === 'leaf' ? 'words' : 'e.g. DP, T′, V_i'} />
       <ToolRow>
         <Tool title={t('addChild')} icon={<IChild />} text="Daughter" disabled={disabled} onClick={() => A.addChild(n)} />
         <Tool title={t('addSister')} icon={<ISister />} text="Sister" disabled={disabled || !n.parents.length} onClick={() => A.addSister(n)} />
         <Tool title="Add a mother above (P)" icon={<IMother />} text="Mother" disabled={disabled} onClick={() => A.addMother(n)} />
-        <Tool title={t('triangle')} icon={<ITriangle />} text="Triangle" disabled={disabled} active={!!n.triangle || !!n.parents[0]?.triangle} onClick={() => A.toggleTriangle(n)} />
+        <Tool
+          title={scopeThis ? 'Triangle over this copy only (the other copies stay as they are)' : t('triangle')}
+          icon={<ITriangle />}
+          text="Triangle"
+          disabled={disabled && !scopeThis}
+          active={scopeThis ? !!(instMods?.triangle ?? instRef?.triangle) : !!n.triangle || !!n.parents[0]?.triangle}
+          onClick={() => A.toggleTriangle(n)}
+        />
         <Tool title="Draw an arrow from here, then click the target (M)" icon={<IArrowTool />} text="Arrow" onClick={() => A.startArrow(n)} />
         <Tool title={t('delete')} icon={<ITrash />} text="Delete" danger disabled={disabled} onClick={() => A.deleteNode(n)} />
       </ToolRow>
@@ -372,8 +401,8 @@ function NodePanel({ n }: { n: DNode }) {
       )}
 
       <Group title="Features and meaning">
-        <TextField key={'f' + n.key} label="Features, separated by commas" value={srcNode?.features?.join(', ') ?? ''} placeholder="uφ, iT, EPP" onCommit={(v) => A.setFeatures(n, v)} />
-        <TextField key={'m' + n.key} mono label="Meaning: formula : type" value={srcNode?.sem ?? ''} placeholder="lambda x. cat(x) : <e,t>" onCommit={(v) => A.setMeaning(n, v)} />
+        <TextField key={'f' + n.key + scopeThis} label="Features, separated by commas" value={pick(own?.features?.join(', '), srcNode?.features?.join(', ') ?? '')} placeholder="uφ, iT, EPP" onCommit={(v) => A.setFeatures(n, v)} />
+        <TextField key={'m' + n.key + scopeThis} mono label="Meaning: formula : type" value={pick(own?.sem ?? (scopeThis ? A.chainRef(n)?.sem : undefined), srcNode?.sem ?? '')} placeholder="lambda x. cat(x) : <e,t>" onCommit={(v) => A.setMeaning(n, v)} />
         {n.sem?.computed && n.sem.source && (
           <button class="btn small" onClick={() => A.keepComputedMeaning(n)} title={n.sem.source}>
             Write the computed meaning into the code
@@ -383,7 +412,9 @@ function NodePanel({ n }: { n: DNode }) {
       </Group>
 
       <Group title="Notes beside the node">
-        <LabelList key={'n' + n.key + (srcNode?.notes?.length ?? 0)} initial={(srcNode?.notes ?? []).map((x) => ({ text: x.text, side: x.side, off: x.off }))} placeholder="e.g. focus, [+wh], ✓" onApply={(l) => A.setNotes(n, l)} />
+        <LabelList
+          key={'n' + n.key + scopeThis + (srcNode?.notes?.length ?? 0) + (own?.notes?.length ?? 0)}
+          initial={(scopeThis && A.positionAt(n) ? own?.notes ?? [] : srcNode?.notes ?? []).map((x) => ({ text: x.text, side: x.side, off: x.off }))} placeholder="e.g. focus, [+wh], ✓" onApply={(l) => A.setNotes(n, l)} />
       </Group>
 
       <Group title="Colour">
@@ -395,6 +426,7 @@ function NodePanel({ n }: { n: DNode }) {
           ))}
         </div>
         <ColorPicker value={currentColor} onPick={applyColor} />
+        {scopeThis && (target.value === 'label' || target.value === 'branch') && <p class="hint">This copy only, as a whole (with what it contains); the other copies keep their colours.</p>}
       </Group>
 
       <Group title="Spacing" hint="Width and length apply to the edge above this node; spread widens the gaps between its daughters (px).">

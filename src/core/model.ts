@@ -39,6 +39,8 @@ export interface DNode {
   chainRef?: { id: string; occ: number };
   /** source of a head-movement arrow: drawn struck through */
   struck?: boolean;
+  /** colour of one position of a chain (#wh@gray): its labels and the edges inside it */
+  posColor?: string;
   /** per-node styling from ;edge= ;width= ;len= ;spread= ;sem= */
   edgeColor?: string;
   edgeWidth?: number;
@@ -73,6 +75,8 @@ export interface DLabel {
   off?: [number, number];
   /** position in the source list (for edits) */
   index: number;
+  /** a note of one position of a chain (written in its line #id/occ: …) */
+  pos?: { id: string; occ: number };
 }
 
 export interface DArrow {

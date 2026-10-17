@@ -179,6 +179,7 @@ const GUIDE: GuideSection[] = [
           ['#wh!', 'Pronounce this position too (multiple spell-out).'],
           ['[DP#wh? what]', 'Do not pronounce this position.'],
           ['#wh"whom"', 'Pronounce this copy differently (e.g. a resumptive, a pronoun copy or a partial copy): the position shows the given words.'],
+          ['#wh/2: ^ @gray', 'One position on its own, as a line after the tree: ^ triangle, @colour, edge= width= len=, {features}, &"note", $meaning$, "words", ! or ?. Written on the constituent itself ([DP#wh@red …]) it goes to all copies. On the canvas: select a copy → Apply to: This copy / All copies.'],
           ['#subj"zij | she"', 'Other words with a gloss line, e.g. pronoun copying in Wambeek Dutch: [DP#subj dei vrou] … #subj"zij | she" (see Examples). On the canvas: select the lower position → Pronounced as.'],
           ['#wh$x : e$', 'Give a lower position its own meaning (a trace as a variable). Its sister is then abstracted over it (Predicate Abstraction, shown as PA+…).'],
         ]} />

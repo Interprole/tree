@@ -502,3 +502,33 @@ test('copy a subtree and paste it as a copy: a daughter, a sister, a new tree', 
   await expect(page.locator('.tree-tab')).toHaveCount(2);
   await expect(page.locator('.cm-content')).toContainText('[VP');
 });
+
+test('this copy or all copies: triangle, colour, features; shortcuts with another layout', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP#wh [D which] [NP book]] [VP [V buy] #wh]]');
+  const dp = (i: number) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^DP$/ }) }).nth(i);
+  const insp = page.locator('.inspector');
+  await dp(1).click();
+  await expect(insp.locator('.scope button.on')).toContainText('This copy #wh/2');
+  // the T key with another keyboard layout: a triangle over this copy only
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'τ', code: 'KeyT', bubbles: true })));
+  await expect.poll(() => code(page)).toContain('#wh/2: ^');
+  await expect(page.locator('.prims text', { hasText: 'which book' })).toHaveCount(1);
+  await dp(1).click();
+  await insp.locator('.swatch[title="#15803d"]').click();
+  await expect.poll(() => code(page)).toContain('#wh/2: ^ @#15803d');
+  // the pronounced copy on its own
+  await dp(0).click();
+  await insp.locator('input[aria-label="Features, separated by commas"]').fill('uφ');
+  await insp.locator('input[aria-label="Features, separated by commas"]').press('Enter');
+  await expect.poll(() => code(page)).toContain('#wh/1: {uφ}');
+  // all copies: written on the constituent
+  await dp(0).click();
+  await insp.locator('.scope button', { hasText: 'All copies' }).click();
+  await insp.locator('.swatch[title="#1d4ed8"]').click();
+  await expect.poll(() => code(page)).toContain('[DP#wh@#1d4ed8');
+  // the A key with another layout adds a daughter
+  await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^VP$/ }) }).click();
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'α', code: 'KeyA', bubbles: true })));
+  await expect.poll(() => code(page)).toContain('[X]');
+});

@@ -55,6 +55,10 @@ export interface ARef {
   text?: string;
   /** meaning of this position: #wh$x : e$ */
   sem?: string;
+  /** this position only drawn as a triangle: #wh^ */
+  triangle?: boolean;
+  /** colour of this position only: #wh@gray */
+  color?: string;
   span: Span;
 }
 
@@ -99,9 +103,36 @@ export interface AArrow {
   span: Span;
 }
 
+/** What one position of a chain can have on its own (instead of all positions sharing it). */
+export interface PosMods {
+  pronounce?: boolean;
+  triangle?: boolean;
+  /** colour of the whole position */
+  color?: string;
+  /** the edge above this position */
+  edge?: string;
+  width?: string;
+  len?: string;
+  features?: string[];
+  notes?: ALabel[];
+  sem?: string;
+  /** pronounced with other words */
+  text?: string;
+}
+
+/** A line after the tree that styles one position of a chain: #wh/1: ^ @red {uφ} &"focus" $x : e$ */
+export interface APosStyle {
+  id: string;
+  occ: number;
+  mods: PosMods;
+  span: Span;
+}
+
 export interface ADoc {
   root: ANode | null;
   arrows: AArrow[];
+  /** styles of single positions of chains */
+  posStyles: APosStyle[];
   /** id -> defining node */
   ids: Map<string, ANode>;
 }

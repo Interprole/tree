@@ -65,6 +65,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | `$λx_e.λe_s. agent(e)(x)$` | a meaning (optionally `: <type>`) |
 | `#a -> #b dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; between heads it is head movement |
 | `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
+| `#wh/2: ^ @gray {uφ} &"x" $x : e$` | one copy on its own: triangle, colour, features, note, meaning (also edge=, width=, len=, "words") — written on the constituent it goes to every copy |
 | `#a -> #b plain` | just an arrow: between heads it is not head movement |
 | `#v -> #t hide` | head movement without its arrow (for a chain link: hide that arrow) |
 | `#a -> #b via=0,40;-20,60` | bend points (px from the middle of the two ends) |

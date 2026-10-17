@@ -2073,3 +2073,16 @@ body.resizing .splitter::after {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.scope .end-lbl {
+  width: auto;
+}

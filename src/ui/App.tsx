@@ -32,9 +32,20 @@ function useTheme() {
   });
 }
 
+/**
+ * The key as on a Latin keyboard: shortcuts work the same with any keyboard layout.
+ * Letters and digits come from the physical key; everything else as typed.
+ */
+function keyOf(e: KeyboardEvent): string {
+  if (/^Key[A-Z]$/.test(e.code)) return e.shiftKey && !(e.ctrlKey || e.metaKey) ? e.code.slice(3) : e.code.slice(3).toLowerCase();
+  if (/^Digit\d$/.test(e.code) && !e.shiftKey) return e.code.slice(5);
+  if (e.code === 'Slash' && e.shiftKey) return '?';
+  return e.key;
+}
+
 function isTyping(e: KeyboardEvent) {
   const el = e.target as HTMLElement | null;
-  if (!el) return false;
+  if (!(el instanceof HTMLElement)) return false;
   return el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || !!el.closest('.cm-editor');
 }
 
@@ -83,7 +94,7 @@ function useShortcuts() {
       sister = false;
     };
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') sister = e.shiftKey;
+      if ((e.ctrlKey || e.metaKey) && keyOf(e).toLowerCase() === 'v') sister = e.shiftKey;
     };
     window.addEventListener('copy', onCopy);
     window.addEventListener('cut', onCopy);
@@ -110,36 +121,36 @@ function useShortcuts() {
         return;
       }
       // files: also while typing in the code (instead of the browser saving the page)
-      if (mod && !e.altKey && e.key.toLowerCase() === 's') {
+      if (mod && !e.altKey && keyOf(e).toLowerCase() === 's') {
         e.preventDefault();
         void saveToDisk(e.shiftKey);
         return;
       }
-      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
+      if (mod && !e.altKey && !e.shiftKey && keyOf(e).toLowerCase() === 'o') {
         e.preventDefault();
         void openFromDisk();
         return;
       }
       if (isTyping(e) || modal.value) return;
-      if (mod && e.key.toLowerCase() === 'z') {
+      if (mod && keyOf(e).toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) A.redo();
         else A.undo();
         return;
       }
-      if (mod && e.key.toLowerCase() === 'y') {
+      if (mod && keyOf(e).toLowerCase() === 'y') {
         e.preventDefault();
         A.redo();
         return;
       }
-      if (mod && !e.shiftKey && e.key.toLowerCase() === 'd' && selection.value?.kind === 'node') {
+      if (mod && !e.shiftKey && keyOf(e).toLowerCase() === 'd' && selection.value?.kind === 'node') {
         e.preventDefault();
         A.duplicateNode();
         return;
       }
       if (mod || e.altKey) return;
       const sel = selection.value;
-      const key = e.key;
+      const key = keyOf(e);
       const handled = () => e.preventDefault();
       if (key === '?') return handled(), (modal.value = 'shortcuts');
       if (key === '+' || key === '=') return handled(), canvasApi.zoomIn?.();
