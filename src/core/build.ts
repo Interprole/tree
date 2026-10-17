@@ -208,9 +208,12 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
   /** hidden arrows still mean head movement: it is shown without an arrow */
   const silentMoves: DArrow[] = [];
   doc.arrows.forEach((a, index) => {
+    // a line between two positions of one chain restyles its automatic arrow: there is none in the
+    // multidominance view or with the arrows between positions switched off
+    if (a.from === a.to && a.fromOcc && a.toOcc && (opts.chains === 'multidominance' || !opts.chainArrows)) return;
     const from = resolve(a.from, a.fromOcc);
     const to = resolve(a.to, a.toOcc);
-    if (!from || !to) return;
+    if (!from || !to || from === to) return;
     if (a.hidden) {
       hidden.push([from, to]);
       if (!a.plain) silentMoves.push({ from, to, head: a.head, line: a.line, route: a.route, labels: [], bend: [0, 0], src: a, index });

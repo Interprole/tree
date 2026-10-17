@@ -273,3 +273,14 @@ describe('this copy or all copies', () => {
     expect(low.notes?.map((x) => plainText(x.runs))).toEqual(['focus']);
   });
 });
+
+describe('a restyled chain arrow follows the view', () => {
+  const src = '[CP [DP#wh what] [VP buy #wh]]\n#wh/2 -> #wh/1 dashed';
+  test('drawn with copies and traces, not in multidominance or with the chain arrows off', () => {
+    expect(mkTree2(src).arrows).toHaveLength(1);
+    expect(mkTree2(src).arrows[0].line).toBe('dashed');
+    expect(mkTree2(src, { chains: 'traces' }).arrows).toHaveLength(1);
+    expect(mkTree2(src, { chains: 'multidominance' }).arrows).toHaveLength(0);
+    expect(mkTree2(src, { chainArrows: false }).arrows).toHaveLength(0);
+  });
+});
