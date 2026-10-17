@@ -284,3 +284,30 @@ describe('a restyled chain arrow follows the view', () => {
     expect(mkTree2(src, { chainArrows: false }).arrows).toHaveLength(0);
   });
 });
+
+describe('movement written in the tree', () => {
+  test(';to= is head movement with its arrow; plain lines are just arrows; hide keeps the movement', () => {
+    const src = '[TP [T#t -s] [VP [V#v;to=t sing] [DP it]]]';
+    const t = mkTree2(src);
+    expect(plainText(t.nodes.find((n) => n.id === 't')!.label)).toBe('V+T');
+    expect(t.arrows).toHaveLength(1);
+    expect(t.arrows[0].headMove).toEqual({ from: 'v', to: 't' });
+    expect(mkTree2(src + '\n#v -> #t hide').arrows).toHaveLength(0);
+    expect(plainText(mkTree2(src + '\n#v -> #t hide').nodes.find((n) => n.id === 't')!.label)).toBe('V+T');
+    expect(mkTree2(src, { headArrows: false }).arrows).toHaveLength(0);
+    expect(mkTree2(src + '\n#v -> #t visible', { headArrows: false }).arrows).toHaveLength(1);
+    expect(mkTree2(src + '\n#v -> #t dashed').arrows[0].line).toBe('dashed');
+    const plainOnly = mkTree2('[TP [T#t -s] [VP [V#v sing] [DP it]]]\n#v -> #t plain', { headArrows: false });
+    expect(plainOnly.arrows).toHaveLength(1);
+    expect(plainText(plainOnly.nodes.find((n) => n.id === 't')!.label)).toBe('T');
+  });
+  test('one copy open or in the default colour although all copies are not', () => {
+    const t = mkTree2('[CP [DP#wh@red ^ [D which] [NP book]] [VP buy #wh]]\n#wh/2: open @none');
+    const [top, low] = t.nodes.filter((n) => plainText(n.label) === 'DP');
+    expect(top.triangle).toBe(true);
+    expect(low.triangle).toBe(false);
+    expect(low.children.map((c) => plainText(c.label))).toEqual(['D', 'NP']);
+    expect(low.color).toBeUndefined();
+    expect(top.color).toBe('red');
+  });
+});

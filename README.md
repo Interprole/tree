@@ -41,7 +41,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
   - LaTeX code, tested by compiling it with `pdflatex`, `xelatex` and `lualatex`;
   - save the canvas to disk (a `.nanotrees` file with all its trees; in Chrome and Edge Ctrl+S writes into the same file again, optionally on every change) and open it again;
   - share links, autosave in the browser, a list of saved trees.
-- **Offline:** [nanotrees.html](https://interprole.github.io/tree/nanotrees.html) is the whole app in one file (File → NanoTrees for offline use): open it by double-click, no internet needed.
+- **Offline:** `npm run build:offline` makes `dist-offline/nanotrees.html`, the whole app in one file: open it by double-click, no internet needed.
 - **Interface:** resizable panes (drag the borders); every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
 
 ## Bracket notation
@@ -67,8 +67,10 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | `#a -> #b dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; between heads it is head movement |
 | `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
 | `#wh/2: ^ @gray {uφ} &"x" $x : e$` | one copy on its own: triangle, colour, features, note, meaning (also edge=, width=, len=, "words") — written on the constituent it goes to every copy |
-| `#a -> #b plain` | just an arrow: between heads it is not head movement |
-| `#v -> #t hide` | head movement without its arrow (for a chain link: hide that arrow) |
+| `#a -> #b plain` | just an arrow (what the arrow tool draws); Movement turns it into a chain or head movement |
+| `[V#v;to=t sing]` | head movement of V to the head #t (V is struck through, T shows V+T) |
+| `#v -> #t hide` / `visible` | the arrow of a movement hidden / shown against the switch for that kind of arrows |
+| `#wh/2: open` · `#wh/2: @none` | this copy without the triangle / colour that all copies have |
 | `#a -> #b via=0,40;-20,60` | bend points (px from the middle of the two ends) |
 | `#a -> #b from=node to=node` | ends at the node instead of its word |
 | `% comment` | comment to the end of the line |

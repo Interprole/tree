@@ -289,7 +289,7 @@ function NodePanel({ n }: { n: DNode }) {
     else A.setOption(n, target.value === 'edge' ? 'edge' : 'sem', c);
   };
   const currentColor = scopeThis && (target.value === 'label' || target.value === 'branch') ? instMods?.color ?? instRef?.color : target.value === 'label' ? n.color : target.value === 'branch' ? n.branchColor : target.value === 'edge' ? n.edgeColor : n.semColor;
-  const kind = n.kind === 'leaf' ? 'Terminal' : n.trace ? 'Trace' : n.copy ? 'Silent copy' : 'Node';
+  const kind = n.kind === 'leaf' ? 'Expression' : n.trace ? 'Trace' : n.copy ? 'Silent copy' : 'Node';
   return (
     <div class="insp-panel">
       <header class="insp-head">
@@ -322,7 +322,17 @@ function NodePanel({ n }: { n: DNode }) {
           )}
         </div>
       )}
-      <TextField key={n.key} label={n.kind === 'leaf' ? 'Words' : 'Label'} value={labelValue} live autoFocusOn={focus.value} onCommit={(v) => A.renameNode(n, v)} placeholder={n.kind === 'leaf' ? 'words' : 'e.g. DP, T′, V_i'} />
+      <TextField key={n.key} label={n.kind === 'leaf' ? 'Expression' : 'Label'} value={labelValue} live autoFocusOn={focus.value} onCommit={(v) => A.renameNode(n, v)} placeholder={n.kind === 'leaf' ? 'words' : 'e.g. DP, T′, V_i'} />
+      {n.kind === 'phrase' && !n.synthetic && n.src?.kind === 'node' && (
+        <TextField
+          key={'x' + n.key}
+          label="Expression (its words or morpheme)"
+          value={(n.src.children.find((c) => c.kind === 'leaf') as { text: string } | undefined)?.text ?? ''}
+          live
+          placeholder="e.g. student, -s, ∅"
+          onCommit={(v) => A.setExpression(n, v)}
+        />
+      )}
       <ToolRow>
         <Tool title={t('addChild')} icon={<IChild />} text="Daughter" disabled={disabled} onClick={() => A.addChild(n)} />
         <Tool title={t('addSister')} icon={<ISister />} text="Sister" disabled={disabled || !n.parents.length} onClick={() => A.addSister(n)} />
@@ -332,7 +342,7 @@ function NodePanel({ n }: { n: DNode }) {
           icon={<ITriangle />}
           text="Triangle"
           disabled={disabled && !scopeThis}
-          active={scopeThis ? !!(instMods?.triangle ?? instRef?.triangle) : !!n.triangle || !!n.parents[0]?.triangle}
+          active={scopeThis ? !!inst?.triangle : !!n.triangle || !!n.parents[0]?.triangle}
           onClick={() => A.toggleTriangle(n)}
         />
         <Tool title="Draw an arrow from here, then click the target (M)" icon={<IArrowTool />} text="Arrow" onClick={() => A.startArrow(n)} />

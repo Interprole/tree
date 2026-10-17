@@ -26,8 +26,6 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # the whole app in one file, for offline use: /tree/nanotrees.html
-      - run: npm run build:offline && cp dist-offline/nanotrees.html dist/
       - uses: actions/configure-pages@v5
         with:
           enablement: true

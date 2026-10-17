@@ -5,7 +5,9 @@ import { defaultStyle, FONT_FAMILIES, isLocalFont, presets } from '../core/style
 import type { BuiltinFont, FontId, PresetId, TreeStyle } from '../core/style';
 import { canListLocalFonts, listLocalFamilies } from '../fonts';
 import { t } from '../i18n';
-import { build, setBuild, setStyle, showToast, style } from '../state';
+import { activeTree, appearanceScope, showToast, shownBuild as build, shownStyle as style, trees } from '../state';
+import { applyBuild as setBuild, applyStyle as setStyle } from '../overrides';
+import { overridePolicy } from '../ask';
 import { ColorField, ResetBtn, Section, Seg, Select, Slider, Toggle } from './controls';
 
 /** reset handler for a style key, or undefined when it already has its default value */
@@ -149,6 +151,17 @@ export function SettingsPanel() {
   const anyStyleChanged = (Object.keys(defaultStyle) as (keyof TreeStyle)[]).some((k) => s[k] !== defaultStyle[k]);
   return (
     <div class="settings">
+      <div class="scope appearance-scope">
+        <span class="end-lbl">Settings of</span>
+        <div class="seg small grow">
+          <button class={appearanceScope.value === 'tree' ? 'on' : ''} onClick={() => (appearanceScope.value = 'tree')} title="The tree being edited (click a tree)">
+            {trees.value.length > 1 ? activeTree.value.name : 'This tree'}
+          </button>
+          <button class={appearanceScope.value === 'canvas' ? 'on' : ''} onClick={() => (appearanceScope.value = 'canvas')} title="Every tree of the canvas (click the empty canvas)">
+            All trees
+          </button>
+        </div>
+      </div>
       <Section title={t('presets')}>
         <div class="presets">
           {(['paper', 'slides', 'board'] as PresetId[]).map((p) => (
@@ -161,7 +174,7 @@ export function SettingsPanel() {
             class="preset preset-reset"
             disabled={!anyStyleChanged}
             onClick={() => {
-              style.value = { ...defaultStyle };
+              setStyle({ ...defaultStyle });
             }}
           >
             <strong>{t('reset')}</strong>
@@ -218,6 +231,21 @@ export function SettingsPanel() {
           <ColorField label={t('background')} value={s.background === 'transparent' ? '#ffffff' : s.background} reset={rs('background')} onChange={(v) => setStyle({ background: v })} />
         </div>
         <Toggle label={t('handDrawn')} checked={s.handDrawn} reset={rs('handDrawn')} onChange={(v) => setStyle({ handDrawn: v })} />
+      </Section>
+      <Section title="Values of their own">
+        <Seg
+          label="When a setting for many changes and some items have their own value"
+          small
+          value={overridePolicy.value}
+          reset={overridePolicy.value === 'ask' ? undefined : () => (overridePolicy.value = 'ask')}
+          onChange={(v) => (overridePolicy.value = v)}
+          options={[
+            { v: 'ask', label: 'Ask', title: 'Ask every time' },
+            { v: 'replace', label: 'Replace them', title: 'The new value goes everywhere' },
+            { v: 'keep', label: 'Keep them', title: 'Items with their own value keep it' },
+          ]}
+        />
+        <p class="hint">All trees vs a tree with its own value, a tree vs nodes and arrows with their own colour, width or arrow visibility, all copies vs one copy.</p>
       </Section>
       <p class="hint reset-note">
         <ResetBtn reset={() => undefined} /> next to a setting restores its default.

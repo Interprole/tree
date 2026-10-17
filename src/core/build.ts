@@ -172,6 +172,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     if (d.triangle) {
       const hasPhrase = d.children.some((c) => c.kind === 'phrase');
       const leaves = d.children.filter((c) => c.kind === 'leaf');
+      d.untriangled = d.children;
       if (hasPhrase) {
         // a triangle over a structure: the structure stays in the code, the picture shows its words
         const words = yieldOf(a, doc).join(' ');
@@ -318,7 +319,16 @@ function nearestSrc(n: DNode): ANode | undefined {
 
 let cloneCounter = 0;
 function cloneSubtree(n: DNode, suffix: string): DNode {
-  return { ...n, key: n.key + suffix, label: cloneRuns(n.label), children: n.children.map((ch) => cloneSubtree(ch, suffix)), parents: [], copyOf: n.copyOf ?? n.key, id: undefined };
+  return {
+    ...n,
+    key: n.key + suffix,
+    label: cloneRuns(n.label),
+    children: n.children.map((ch) => cloneSubtree(ch, suffix)),
+    untriangled: n.untriangled?.map((ch) => cloneSubtree(ch, suffix)),
+    parents: [],
+    copyOf: n.copyOf ?? n.key,
+    id: undefined,
+  };
 }
 
 function markCopy(n: DNode) {
@@ -439,6 +449,12 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
         inst.triangle = false;
       }
       // this position only as a triangle over its words (the structure stays in the code): #wh^
+      // this copy open although the constituent is a triangle: open
+      if (info.triangle === false && inst.triangle && inst.untriangled) {
+        inst.children = inst.untriangled;
+        inst.triangle = false;
+        if (!overt[i]) inst.children.forEach(markCopy);
+      }
       if (info.triangle && !(info.text !== undefined && overt[i])) {
         if (!inst.trace) {
           const words: string[] = [];
@@ -449,7 +465,16 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
         inst.triangle = true;
       }
       // this position only in a colour: #wh@gray
-      if (info.color) {
+      if (info.color === 'none') {
+        // the default colour on this copy, although the constituent has one
+        const clear = (x: DNode) => {
+          delete x.color;
+          delete x.branchColor;
+          delete x.posColor;
+          x.children.forEach(clear);
+        };
+        clear(inst);
+      } else if (info.color) {
         const paint = (x: DNode) => {
           x.posColor = info.color;
           x.children.forEach(paint);
