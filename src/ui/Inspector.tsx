@@ -7,7 +7,7 @@ import type { DArrow, DNode } from '../core/model';
 import { hasOnlyExponent } from '../core/arrows';
 import { plain } from '../core/richtext';
 import { t } from '../i18n';
-import { editable, focusLabel, selection, showToast, tree } from '../state';
+import { editable, focusLabel, linkCounts, selection, showToast, tree } from '../state';
 import { IArrowTool, IChild, ICopyNode, IMother, ISister, ITrash, ITriangle } from './icons';
 
 const PALETTE = ['#b91c1c', '#c2410c', '#a16207', '#15803d', '#0f766e', '#1d4ed8', '#6d28d9', '#be185d', '#57534e'];
@@ -264,6 +264,7 @@ function NodePanel({ n }: { n: DNode }) {
   const ref = A.chainRef(n);
   const lines = A.arrowLinesOf(n);
   /** inside a lower position of a chain: triangle and colour apply to this position only */
+  const linked = A.linkedBranchOf(n);
   // a position of a chain (or inside one): edits go to this copy only, or to all copies
   const inst = A.instanceOf(n);
   const scopeThis = !!inst && A.copyScope.value === 'this';
@@ -309,6 +310,18 @@ function NodePanel({ n }: { n: DNode }) {
         </div>
       )}
       {n.synthetic && !inst && <p class="hint">{t('syntheticNode')}</p>}
+      {linked && (
+        <div class="linked-note" style={{ borderColor: 'currentColor' }}>
+          <span>
+            {linked.root === n ? 'A linked branch' : 'Inside a linked branch'} · {linkCounts.value.get(linked.group) ?? 1} copies: what changes {linked.root === n ? 'inside it' : 'here'} changes in all of them; sisters, mothers and moving the branch are free.
+          </span>
+          {linked.root === n && (
+            <button class="btn small" onClick={() => A.unlinkBranch(n)}>
+              Unlink
+            </button>
+          )}
+        </div>
+      )}
       <TextField key={n.key} label={n.kind === 'leaf' ? 'Words' : 'Label'} value={labelValue} live autoFocusOn={focus.value} onCommit={(v) => A.renameNode(n, v)} placeholder={n.kind === 'leaf' ? 'words' : 'e.g. DP, T′, V_i'} />
       <ToolRow>
         <Tool title={t('addChild')} icon={<IChild />} text="Daughter" disabled={disabled} onClick={() => A.addChild(n)} />
@@ -330,6 +343,9 @@ function NodePanel({ n }: { n: DNode }) {
         <div class="row wrap">
           <button class="btn small" disabled={!n.src} onClick={() => A.copyNode(n) && showToast('Copied.')} title="Ctrl+C">
             Copy
+          </button>
+          <button class="btn small" disabled={disabled || n.kind === 'leaf'} onClick={() => A.copyNode(n, true) && showToast('Copied as a linked branch: paste it anywhere, the copies stay in sync.')} title="Pasted, it stays linked: what changes inside one copy changes in all">
+            Copy linked
           </button>
           <button class="btn small" disabled={disabled} onClick={() => A.cutNode(n)} title="Ctrl+X">
             Cut

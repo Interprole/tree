@@ -9,11 +9,14 @@ import { cubicAt, insertVia } from './core/arrows';
 import type { ArrowGeom } from './core/arrows';
 import type { DArrow, DNode } from './core/model';
 import { t } from './i18n';
-import { addTree, arrowSource, build, doc, editable, pick, requestLabelFocus, scene, selection, showToast, source, tool, tree } from './state';
+import { activeTree, addTree, arrowSource, build, doc, duplicateTree, editable, pick, requestLabelFocus, scene, selection, showToast, source, sources, tool, tree, trees } from './state';
+import { stripLinks } from './core/links';
 
 /** Bridge to the code editor, so that canvas edits go through its undo history. */
 export interface EditorBridge {
   apply(edit: Edit): void;
+  /** a change that is not an undo step of its own (it follows from another one: linked branches) */
+  applySilent(changes: E.TextChange[]): void;
   undo(): void;
   redo(): void;
   select(from: number, to: number, focus?: boolean): void;
@@ -23,6 +26,7 @@ let bridge: EditorBridge | null = null;
 export function setEditorBridge(b: EditorBridge | null) {
   bridge = b;
 }
+export const getEditorBridge = () => bridge;
 
 export function applyEdit(edit: Edit) {
   if (!edit.changes.length) return;
@@ -159,12 +163,36 @@ export const clip = signal<TreeClip | null>(null);
 export const clipText = (c: TreeClip) => [c.text, ...c.arrows].join('\n');
 
 /** Copy a node with everything below it (the root: the whole tree with its arrows). */
-export function copyNode(n: DNode | null = selectedNode()): TreeClip | null {
+/** a link group name not used anywhere on the canvas */
+function freshLink(): string {
+  const all = [source.value, ...Object.values(sources.value)].join('\n');
+  for (;;) {
+    const g = Math.random().toString(36).slice(2, 6);
+    if (!all.includes(`;link=${g}`)) return g;
+  }
+}
+
+/**
+ * Copy a node with everything below it (the root: the whole tree with its arrows). linked: the
+ * copy will be a linked branch (the original becomes one too); otherwise a branch of its own.
+ */
+export function copyNode(n: DNode | null = selectedNode(), linked = false): TreeClip | null {
   if (!n?.src) {
     if (n) showToast(t('syntheticNode'));
     return null;
   }
   const s = n.src;
+  if (linked && s.kind !== 'node') {
+    showToast('A word cannot be a linked branch: select a node.');
+    return null;
+  }
+  if (linked && s.kind === 'node' && !s.opts?.link) {
+    // the original becomes a linked branch; the copy is taken from the code with its marker
+    if (!guard(n)) return null;
+    applyEdit(E.setOption(s, 'link', freshLink()));
+    const again = tree.value?.nodes.find((x) => x.key === n.key) ?? null;
+    return copyNode(again, true);
+  }
   const span = s.kind === 'leaf' ? s.fullSpan : s.span;
   const ids: string[] = [];
   if (s.kind === 'node') walkAst(s, (x) => void (x.id && ids.push(x.id)));
@@ -174,8 +202,48 @@ export function copyNode(n: DNode | null = selectedNode()): TreeClip | null {
     ...(doc.value?.arrows ?? []).filter((a) => ids.includes(a.from) && ids.includes(a.to)).map((a) => src.slice(a.span.from, a.span.to)),
     ...(doc.value?.posStyles ?? []).filter((p) => ids.includes(p.id)).map((p) => src.slice(p.span.from, p.span.to)),
   ];
-  clip.value = { text: src.slice(span.from, span.to), ids, arrows };
+  const text = src.slice(span.from, span.to);
+  clip.value = { text: linked ? text : stripLinks(text), ids, arrows };
   return clip.value;
+}
+
+/** The branch is of its own again (its other copies stay linked among themselves). */
+export function unlinkBranch(n: DNode | null = selectedNode()) {
+  const s = n?.src;
+  if (!n || s?.kind !== 'node' || !s.opts?.link || !guard(n)) return;
+  applyEdit(E.setOption(s, 'link', null));
+}
+
+/** The linked branch a node is in (its root), if any. */
+export function linkedBranchOf(n: DNode | null): { group: string; root: DNode } | null {
+  let cur: DNode | undefined = n ?? undefined;
+  while (cur) {
+    const s = cur.src;
+    if (s?.kind === 'node' && s.opts?.link && !cur.copyOf) return { group: s.opts.link, root: cur };
+    cur = cur.parents[0];
+  }
+  return null;
+}
+
+/** A linked copy of a whole tree next to it on the canvas: its root becomes a linked branch. */
+export function duplicateTreeLinked(id: string) {
+  const e = trees.value.find((x) => x.id === id);
+  if (!e) return;
+  const text = e.id === activeTree.value.id ? source.value : sources.value[e.srcId] ?? '';
+  const r = parse(text);
+  if (!r.ok || !r.doc.root) {
+    showToast('Fix the error in the code first.');
+    return;
+  }
+  let g = r.doc.root.opts?.link;
+  let next = text;
+  if (!g) {
+    g = freshLink();
+    next = E.applyChanges(text, E.setOption(r.doc.root, 'link', g).changes);
+    if (e.id === activeTree.value.id) applyEdit({ changes: [{ from: 0, to: text.length, insert: next }] });
+    else sources.value = { ...sources.value, [e.srcId]: next };
+  }
+  duplicateTree(id, false, next);
 }
 
 /** What the system clipboard holds, as a piece of a tree (ours with its ids, or bracket code from elsewhere). */
@@ -207,6 +275,23 @@ export function paste(c: TreeClip | null = clip.value, target: DNode | null = se
     return;
   }
   const d = doc.value;
+  const groups = [...c.text.matchAll(/;link=([^;\s[\]@#]+)/g)].map((m) => m[1]);
+  if (groups.length) {
+    // a linked branch cannot contain a copy of itself
+    for (let cur: DNode | undefined = target ?? undefined; cur; cur = cur.parents[0]) {
+      const g = cur.src?.kind === 'node' ? cur.src.opts?.link : undefined;
+      if (g && groups.includes(g)) {
+        showToast('A linked branch cannot be pasted inside a copy of itself.');
+        return;
+      }
+    }
+    // the branch as it is now (it may have changed since it was copied)
+    const root = /^\[[^\s[\]]*;link=([^;\s[\]@#]+)/.exec(c.text)?.[1];
+    if (root) {
+      const now = currentBranch(root);
+      if (now) c = { ...c, text: now };
+    }
+  }
   const used = new Set<string>(d ? [...d.ids.keys()] : []);
   const ren = new Map<string, string>();
   for (const id of c.ids) {
@@ -253,6 +338,64 @@ export function paste(c: TreeClip | null = clip.value, target: DNode | null = se
   }
   const edit: E.Edit = { changes, select: labelAt !== undefined ? { from: labelAt, to: labelAt } : undefined };
   const out = applyTidy(edit, anchor, up);
+  selectNewNode(out.select?.from, false);
+}
+
+/** The code of a linked branch as it is now, from any tree of the canvas. */
+function currentBranch(group: string): string | null {
+  for (const text of [source.value, ...Object.values(sources.value)]) {
+    const r = parse(text);
+    if (!r.ok || !r.doc.root) continue;
+    let found: string | null = null;
+    walkAst(r.doc.root, (x) => {
+      if (!found && x.opts?.link === group) found = text.slice(x.span.from, x.span.to);
+    });
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Move a branch by its root (drag and drop): as the last daughter of a node or as its next sister;
+ * copy: a copy of its own goes there instead.
+ */
+export function moveNode(n: DNode, target: DNode, mode: 'daughter' | 'sister', copy = false) {
+  if (!editable.value) {
+    showToast(t('editDisabled'));
+    return;
+  }
+  if (copy) {
+    const c = copyNode(n);
+    if (c) paste(c, target, mode);
+    return;
+  }
+  const d = doc.value;
+  // a lower position of a chain moves as its #ref
+  const ref = positionRef(n);
+  const s = n.src;
+  const span = ref ? ref.span : s?.kind === 'leaf' ? s.fullSpan : s?.kind === 'node' ? s.span : null;
+  if (!d || !span || !target.src || (!ref && s === d.root)) {
+    showToast(!span ? t('syntheticNode') : 'The root stays where it is: move a branch below it.');
+    return;
+  }
+  const ts = target.src.kind === 'leaf' || mode === 'sister' ? target.src : (target.src as ANode);
+  const tSpan = ts.kind === 'leaf' ? ts.fullSpan : ts.span;
+  if (tSpan.from >= span.from && tSpan.to <= span.to) {
+    showToast('A branch cannot go inside itself.');
+    return;
+  }
+  if (mode === 'sister' && ts.kind === 'node' && ts === d.root) {
+    showToast('The root cannot have sisters.');
+    return;
+  }
+  const at = mode === 'daughter' && ts.kind === 'node' ? tSpan.to - 1 : tSpan.to;
+  const src = source.value;
+  const edit = E.moveElement(src, span, at);
+  const isNode = src[span.from] === '[';
+  // positions in the text after the move: the piece starts after the inserted space
+  const anchor = E.mapPos(at, [edit.changes[0]]) + 1;
+  if (isNode) edit.select = { from: anchor + 1, to: anchor + 1 };
+  const out = applyTidy(edit, anchor, isNode ? 1 : 0);
   selectNewNode(out.select?.from, false);
 }
 

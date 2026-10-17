@@ -16,7 +16,7 @@ class Fail extends Error {
 
 const isWs = (c: string | undefined) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === ' ';
 const ID_RE = /[\p{L}\p{N}_\-.:]/u;
-const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch']);
+const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch', 'link']);
 const LABEL_RE = /^(left|right|above|below)?"((?:[^"\\]|\\.)*)"(?:@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?))?/;
 
 /** side"text"@dx,dy at the start of s */

@@ -6,7 +6,7 @@ import { examples } from '../examples';
 import { copyText } from '../export';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, linkTree, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, setBuild, shareUrl, showToast, sideTab, source, theme, toast, tool, tree, trees, unlinkTree,
+  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, setBuild, shareUrl, showToast, sideTab, source, theme, toast, tool, tree, trees, unlinkTree,
 } from '../state';
 import { Canvas, canvasApi } from './Canvas';
 import { Seg } from './controls';
@@ -401,24 +401,16 @@ function TreeTabs() {
                 <strong>Copy</strong>
                 <small>An independent copy: change it without touching this one.</small>
               </button>
-              <button role="menuitem" onClick={() => ((menu.value = null), duplicateTree(e.id, true))}>
+              <button role="menuitem" onClick={() => ((menu.value = null), A.duplicateTreeLinked(e.id))}>
                 <strong>Linked copy</strong>
-                <small>Shares the code: an edit in one changes both. Settings (copies / traces, colours, fonts) stay separate.</small>
+                <small>The whole tree as a linked branch: what changes inside it changes in both; above and around its root each tree is free, settings stay separate.</small>
               </button>
-              {linked.has(e.id) && (
+              {list.some((o) => o.id !== e.id && o.srcId === e.srcId) && (
                 <button role="menuitem" onClick={() => ((menu.value = null), unlinkTree(e.id))}>
                   <strong>Unlink</strong>
                   <small>Give this tree its own code again.</small>
                 </button>
               )}
-              {list
-                .filter((o) => o.id !== e.id && o.srcId !== e.srcId)
-                .map((o) => (
-                  <button key={o.id} role="menuitem" onClick={() => ((menu.value = null), linkTree(e.id, o.id))}>
-                    <strong>Link to {o.name}</strong>
-                    <small>Take over the code of {o.name} and keep it shared.</small>
-                  </button>
-                ))}
               <button role="menuitem" onClick={() => ((menu.value = null), (editing.value = e.id))}>
                 <strong>Rename</strong>
               </button>

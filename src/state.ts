@@ -180,11 +180,33 @@ export const trees = signal<TreeEntry[]>([{ id: 't1', name: 'Tree 1', srcId: 's1
 export const sources = signal<Record<string, string>>({ s1: '' });
 export const activeId = signal('t1');
 export const activeTree = computed(() => trees.value.find((e) => e.id === activeId.value) ?? trees.value[0]);
-/** trees whose code is shared with another tree */
+/** how many copies each linked branch has on the whole canvas */
+export const linkCounts = computed(() => {
+  const counts = new Map<string, number>();
+  const act = activeTree.value;
+  const src = sources.value;
+  for (const k of new Set(trees.value.map((e) => e.srcId))) {
+    const text = k === act.srcId ? source.value : src[k] ?? '';
+    for (const m of text.matchAll(/;link=([^;\s[\]@#]+)/g)) counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+  }
+  return counts;
+});
+
+/** trees with a branch linked to another place (or sharing all their code with another tree) */
 export const linkedIds = computed(() => {
   const count = new Map<string, number>();
   for (const e of trees.value) count.set(e.srcId, (count.get(e.srcId) ?? 0) + 1);
-  return new Set(trees.value.filter((e) => count.get(e.srcId)! > 1).map((e) => e.id));
+  const counts = linkCounts.value;
+  const act = activeTree.value;
+  return new Set(
+    trees.value
+      .filter((e) => {
+        if (count.get(e.srcId)! > 1) return true;
+        const text = e.id === act.id ? source.value : sources.value[e.srcId] ?? '';
+        return [...text.matchAll(/;link=([^;\s[\]@#]+)/g)].some((m) => (counts.get(m[1]) ?? 0) > 1);
+      })
+      .map((e) => e.id),
+  );
 });
 
 // the active tree's live state is written back into the workspace (linked copies follow at once)
@@ -280,17 +302,21 @@ export function addTree(text = '[S [NP] [VP]]') {
 }
 
 /** A copy of a tree next to it: independent (its own code) or linked (the same code). */
-export function duplicateTree(id: string, linked: boolean) {
+export function duplicateTree(id: string, linked: boolean, text?: string) {
   const e = trees.value.find((x) => x.id === id);
   if (!e) return;
   const srcId = linked ? e.srcId : newId();
-  const copy: TreeEntry = { ...e, id: newId(), srcId, name: nextName(`${e.name} (${linked ? 'linked' : 'copy'})`), ...freeSpot() };
+  const copy: TreeEntry = { ...e, id: newId(), srcId, name: nextName(`${e.name} (${linked || text !== undefined ? 'linked' : 'copy'})`), ...freeSpot() };
+  const own = text ?? (e.id === activeId.value ? source.value : sources.value[e.srcId] ?? '');
   batch(() => {
-    if (!linked) sources.value = { ...sources.value, [srcId]: sources.value[e.srcId] ?? '' };
+    if (!linked) sources.value = { ...sources.value, [srcId]: text !== undefined ? own : stripLinksText(own) };
     trees.value = [...trees.value, copy];
   });
   activateTree(copy.id);
 }
+
+/** a copy of its own: no link markers */
+const stripLinksText = (t: string) => t.replace(/;link=[^;\s[\]@#]+/g, '');
 
 /** A linked copy gets its own code: later edits no longer reach the other trees. */
 export function unlinkTree(id: string) {

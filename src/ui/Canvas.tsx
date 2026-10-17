@@ -5,10 +5,12 @@ import { cCommandDomain, dominated } from '../core/analysis';
 import { plain } from '../core/richtext';
 import { insertVia, viaPoints } from '../core/arrows';
 import type { NodeHit, Scene } from '../core/scene';
+import { collectNodes } from '../core/model';
+import type { DNode } from '../core/model';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, activeTree, arrowSource, bendOverride, editable, fitRequest, fontEpoch, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
+  activateTree, activeId, activeTree, arrowSource, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
 } from '../state';
 import type { Tool } from '../state';
 import { IArrowTool, ICcommand, IDominance, IFit, ILink, IMinus, IPlus, IPointer } from './icons';
@@ -26,7 +28,59 @@ type Drag =
   | { kind: 'bend'; index: number; bend: [number, number] }
   | { kind: 'via'; index: number; point: number; via: [number, number][] }
   | { kind: 'label'; label: { kind: 'note' | 'arrow'; owner: string | number; index: number; off: [number, number]; box: Box } }
-  | { kind: 'tree'; id: string; x: number; y: number };
+  | { kind: 'tree'; id: string; x: number; y: number }
+  /** a branch dragged by its root */
+  | { kind: 'node'; key: string; target: Element }
+  /** a rectangle drawn with Shift: selects the smallest branch with everything in it */
+  | { kind: 'marquee'; x0: number; y0: number };
+
+/** everything a node dominates, as boxes of the picture */
+function branchBox(root: DNode, hits: Map<string, NodeHit>, pad = 5): Box | null {
+  let b: Box | null = null;
+  for (const n of collectNodes(root)) {
+    const h = hits.get(n.key);
+    if (!h) continue;
+    b = b ? { x1: Math.min(b.x1, h.box.x1), y1: Math.min(b.y1, h.box.y1), x2: Math.max(b.x2, h.box.x2), y2: Math.max(b.y2, h.box.y2) } : { ...h.box };
+  }
+  return b && { x1: b.x1 - pad, y1: b.y1 - pad, x2: b.x2 + pad, y2: b.y2 + pad };
+}
+
+/** a colour per group of linked branches */
+function linkColour(group: string): string {
+  let h = 0;
+  for (const c of group) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${(h * 7) % 360} 70% 45%)`;
+}
+
+/** boxes around the linked branches of a picture (groups with more than one copy) */
+function linkedBoxes(sc: Scene, counts: Map<string, number>): { box: Box; group: string; count: number }[] {
+  const hits = new Map(sc.hits.map((h) => [h.key, h]));
+  const out: { box: Box; group: string; count: number }[] = [];
+  for (const h of sc.hits) {
+    const src = h.node.src;
+    const g = src?.kind === 'node' ? src.opts?.link : undefined;
+    if (!g || h.node.copyOf || (counts.get(g) ?? 0) < 2) continue;
+    const box = branchBox(h.node, hits, 7);
+    if (box) out.push({ box, group: g, count: counts.get(g)! });
+  }
+  return out;
+}
+
+function LinkedFrames({ sc, counts }: { sc: Scene; counts: Map<string, number> }) {
+  return (
+    <>
+      {linkedBoxes(sc, counts).map(({ box, group, count }, i) => (
+        <g key={'lk' + i} class="linked-frame" style={{ color: linkColour(group) }}>
+          <rect x={box.x1} y={box.y1} width={box.x2 - box.x1} height={box.y2 - box.y1} rx="8" />
+          <text x={box.x1 + 4} y={box.y1 - 3}>
+            linked ×{count}
+          </text>
+          <title>Linked branch: what changes inside it changes in its {count - 1} other cop{count === 2 ? 'y' : 'ies'}</title>
+        </g>
+      ))}
+    </>
+  );
+}
 
 export function Canvas() {
   const wrap = useRef<HTMLDivElement>(null);
@@ -111,12 +165,17 @@ export function Canvas() {
 
   // ---------- pointer handling (pan, pinch, drags)
   const labelGhost = useSignal<null | { box: Box; dx: number; dy: number }>(null);
+  const nodeDrag = useSignal<null | { key: string; dx: number; dy: number; over: string | null; sister: boolean; copy: boolean }>(null);
+  const marquee = useSignal<Box | null>(null);
+  const ctx = useSignal<null | { x: number; y: number; key: string | null }>(null);
   const drag = useRef<null | (Drag & { sx: number; sy: number; moved: boolean })>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<null | { d: number; zoom: number; cx: number; cy: number; vx: number; vy: number }>(null);
 
   const onPointerDown = (e: PointerEvent) => {
-    if ((e.target as Element).closest('.canvas-tools, .canvas-hint')) return;
+    if ((e.target as Element).closest('.canvas-tools, .canvas-hint, .ctx-menu')) return;
+    ctx.value = null;
+    if (e.button === 2) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
@@ -164,6 +223,18 @@ export function Canvas() {
         return;
       }
     }
+    // Shift + drag: a rectangle that selects a branch
+    if (e.shiftKey && !target.closest('[data-tree]')) {
+      const [x0, y0] = toLocal(e.clientX, e.clientY);
+      drag.current = { ...base, kind: 'marquee', x0, y0 };
+      return;
+    }
+    // a node: a click selects it, a drag moves its branch
+    const nodeEl = target.closest('[data-node]');
+    if (nodeEl && tool.value === 'select' && !pick.value) {
+      drag.current = { ...base, kind: 'node', key: nodeEl.getAttribute('data-node')!, target };
+      return;
+    }
     drag.current = { ...base, kind: 'pan', vx: view.value.x, vy: view.value.y, target };
   };
 
@@ -187,6 +258,17 @@ export function Canvas() {
     if (d.kind === 'pan') setView({ ...view.value, x: d.vx + dx, y: d.vy + dy });
     else if (d.kind === 'tree') moveTree(d.id, d.x + dx / z, d.y + dy / z);
     else if (d.kind === 'label') labelGhost.value = { box: d.label.box, dx: dx / z, dy: dy / z };
+    else if (d.kind === 'node') {
+      // where it would land: a node under the pointer, not inside the dragged branch
+      const dragged = A.nodeByKey(d.key);
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-node]');
+      const over = el ? A.nodeByKey(el.getAttribute('data-node')) : null;
+      const inside = !!(over && dragged && collectNodes(dragged).includes(over));
+      nodeDrag.value = { key: d.key, dx: dx / z, dy: dy / z, over: over && !inside ? over.key : null, sister: e.shiftKey, copy: e.altKey };
+    } else if (d.kind === 'marquee') {
+      const [x, y] = toLocal(e.clientX, e.clientY);
+      marquee.value = { x1: Math.min(d.x0, x), y1: Math.min(d.y0, y), x2: Math.max(d.x0, x), y2: Math.max(d.y0, y) };
+    }
     else if (d.kind === 'via') bendOverride.value = { index: d.index, via: d.via.map((p, i) => (i === d.point ? [p[0] + dx / z, p[1] + dy / z] : p)) };
     else bendOverride.value = { index: d.index, bend: [d.bend[0] + dx / z, d.bend[1] + dy / z] };
   };
@@ -208,6 +290,28 @@ export function Canvas() {
       if (g && d.moved) A.moveLabel(l.kind, l.owner, l.index, [Math.round(l.off[0] + g.dx), Math.round(l.off[1] + g.dy)]);
       // a click on a label: edit or delete it in the inspector
       else if (!d.moved) selection.value = { kind: 'label', label: l.kind, owner: l.owner, index: l.index };
+      return;
+    }
+    if (d.kind === 'node') {
+      const nd = nodeDrag.value;
+      nodeDrag.value = null;
+      if (!d.moved) {
+        clickNode(d.key);
+        return;
+      }
+      const n = A.nodeByKey(d.key);
+      const over = A.nodeByKey(nd?.over);
+      if (n && over && nd) A.moveNode(n, over, nd.sister ? 'sister' : 'daughter', nd.copy);
+      return;
+    }
+    if (d.kind === 'marquee') {
+      const m = marquee.value;
+      marquee.value = null;
+      if (!d.moved || !m) {
+        selection.value = null;
+        return;
+      }
+      selectInRect(m);
       return;
     }
     if (d.kind === 'bend' || d.kind === 'via') {
@@ -252,6 +356,35 @@ export function Canvas() {
     }
     activateTree(id);
     if (key) queueMicrotask(() => (selection.value = { kind: 'node', key: key! }));
+  };
+
+  /** the smallest branch that has every node touched by the rectangle */
+  const selectInRect = (m: Box) => {
+    const inside = (scene.value?.hits ?? []).filter((h) => h.box.x2 > m.x1 && h.box.x1 < m.x2 && h.box.y2 > m.y1 && h.box.y1 < m.y2).map((h) => h.node);
+    if (!inside.length) {
+      selection.value = null;
+      return;
+    }
+    const chain = (n: DNode) => {
+      const out: DNode[] = [];
+      for (let c: DNode | undefined = n; c; c = c.parents[0]) out.push(c);
+      return out;
+    };
+    const common = inside.slice(1).reduce((acc, n) => {
+      const up = new Set(chain(n));
+      return acc.filter((x) => up.has(x));
+    }, chain(inside[0]));
+    const top = common[0];
+    if (top) selection.value = { kind: 'node', key: top.key };
+  };
+
+  const onContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    const r = wrap.current!.getBoundingClientRect();
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-node]');
+    const key = el?.getAttribute('data-node') ?? null;
+    if (key) selection.value = { kind: 'node', key };
+    ctx.value = { x: e.clientX - r.left, y: e.clientY - r.top, key };
   };
 
   const clickNode = (key: string) => {
@@ -350,11 +483,23 @@ export function Canvas() {
 
   const box = (h: NodeHit, pad = 3) => ({ x: h.box.x1 - pad, y: h.box.y1 - pad, width: h.box.x2 - h.box.x1 + pad * 2, height: h.box.y2 - h.box.y1 + pad * 2 });
 
-  const hint = pick.value
+  const hint = nodeDrag.value
+    ? nodeDrag.value.over
+      ? `Drop: ${nodeDrag.value.copy ? 'a copy' : 'the branch'} goes ${nodeDrag.value.sister ? 'right after this node (its sister)' : 'below this node (its last daughter)'}. Shift: as a sister · Alt: a copy`
+      : 'Drag onto a node: the branch becomes its last daughter (Shift: its sister, Alt: a copy)'
+    : pick.value
     ? `Click the constituent to add again as a ${pick.value.kind} (a new position of the same element). Esc to cancel.`
     : tool.value === 'arrow' ? (srcKey ? t('arrowPickTarget') : t('arrowPickSource')) : tool.value === 'ccommand' ? t('ccHint') : tool.value === 'dominance' ? t('domHint') : null;
 
   const handleR = 6 / Math.sqrt(v.zoom);
+  // the selected branch (what Ctrl+C copies), the branch being dragged and where it would land
+  const selNode = sel?.kind === 'node' ? A.nodeByKey(sel.key) : null;
+  const selBranch = selNode && selNode.children.length && !nodeDrag.value ? branchBox(selNode, hitByKey) : null;
+  const nd = nodeDrag.value;
+  const dragNode = nd ? A.nodeByKey(nd.key) : null;
+  const dragBase = dragNode ? branchBox(dragNode, hitByKey) : null;
+  const dragBox = dragBase && nd ? { x1: dragBase.x1 + nd.dx, y1: dragBase.y1 + nd.dy, x2: dragBase.x2 + nd.dx, y2: dragBase.y2 + nd.dy } : null;
+  const dropHit = nd?.over ? hitByKey.get(nd.over) : undefined;
   const linked = linkedIds.value;
 
   return (
@@ -366,6 +511,7 @@ export function Canvas() {
       onPointerUp={onPointerUp as never}
       onPointerCancel={onPointerUp as never}
       onDblClick={onDblClick as never}
+      onContextMenu={onContextMenu as never}
       tabIndex={0}
       aria-label="Tree canvas"
       data-testid="canvas"
@@ -383,6 +529,8 @@ export function Canvas() {
           {sc && (
             <g transform={`translate(${active.x} ${active.y})`} class="sheet active-sheet">
               <rect class={`paper ${many ? 'paper-active' : ''}`} width={sc.width} height={sc.height} fill={sc.background === 'transparent' ? '#ffffff' : sc.background} filter="url(#paper-shadow)" rx="2" />
+              <LinkedFrames sc={sc} counts={linkCounts.value} />
+              {selBranch && <rect class="branch-sel" x={selBranch.x1} y={selBranch.y1} width={selBranch.x2 - selBranch.x1} height={selBranch.y2 - selBranch.y1} rx="8" />}
               {rel &&
                 [...rel.keys].map((k) => {
                   const h = hitByKey.get(k);
@@ -424,6 +572,9 @@ export function Canvas() {
                   <title>Click to edit or delete, drag to move</title>
                 </rect>
               ))}
+              {dragBox && <rect class="branch-ghost" x={dragBox.x1} y={dragBox.y1} width={dragBox.x2 - dragBox.x1} height={dragBox.y2 - dragBox.y1} rx="8" />}
+              {dropHit && <rect {...box(dropHit, 4)} rx="5" class="drop-target" />}
+              {marquee.value && <rect class="marquee" x={marquee.value.x1} y={marquee.value.y1} width={marquee.value.x2 - marquee.value.x1} height={marquee.value.y2 - marquee.value.y1} />}
               {labelGhost.value && (
                 <rect x={labelGhost.value.box.x1 + labelGhost.value.dx} y={labelGhost.value.box.y1 + labelGhost.value.dy} width={labelGhost.value.box.x2 - labelGhost.value.box.x1} height={labelGhost.value.box.y2 - labelGhost.value.box.y1} rx="3" class="label-ghost" />
               )}
@@ -476,6 +627,8 @@ export function Canvas() {
       </div>
 
       {hint && <div class="canvas-hint">{hint}</div>}
+
+      {ctx.value && <ContextMenu at={ctx.value} close={() => (ctx.value = null)} />}
     </div>
   );
 }
@@ -486,6 +639,7 @@ function OtherSheet({ id, x, y, scene: sc }: { id: string; x: number; y: number;
   return (
     <g transform={`translate(${x} ${y})`} class="sheet other-sheet" data-tree={id}>
       <rect class="paper" width={sc.width} height={sc.height} fill={sc.background === 'transparent' ? '#ffffff' : sc.background} filter="url(#paper-shadow)" rx="2" />
+      <LinkedFrames sc={sc} counts={linkCounts.value} />
       <g class="prims" dangerouslySetInnerHTML={{ __html: html }} />
       <title>Click to edit this tree</title>
     </g>
@@ -500,6 +654,75 @@ function allSheets(): { x: number; y: number; w: number; h: number }[] {
   if (sc) out.push({ x: at.x, y: at.y, w: sc.width, h: sc.height });
   for (const o of otherScenes.value) if (o.scene) out.push({ x: o.entry.x, y: o.entry.y, w: o.scene.width, h: o.scene.height });
   return out;
+}
+
+/** The menu of a right click: copy, paste, link and move branches. */
+function ContextMenu({ at, close }: { at: { x: number; y: number; key: string | null }; close: () => void }) {
+  const n = at.key ? A.nodeByKey(at.key) : null;
+  const linked = A.linkedBranchOf(n);
+  const run = (f: () => void) => () => {
+    close();
+    f();
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const c = A.clip.value;
+  return (
+    <div class="ctx-menu menu-pop" role="menu" style={{ left: `${at.x}px`, top: `${at.y}px` }} onContextMenu={(e) => e.preventDefault()}>
+      {n && (
+        <>
+          <button role="menuitem" onClick={run(() => A.copyNode(n))}>
+            <strong>Copy branch</strong>
+            <small>Ctrl+C · a copy of its own</small>
+          </button>
+          <button role="menuitem" onClick={run(() => A.copyNode(n, true))}>
+            <strong>Copy as a linked branch</strong>
+            <small>Pasted, it stays linked: what changes inside one copy changes in all</small>
+          </button>
+          <button role="menuitem" onClick={run(() => A.cutNode(n))}>
+            <strong>Cut</strong>
+            <small>Ctrl+X</small>
+          </button>
+          {c && (
+            <>
+              <button role="menuitem" onClick={run(() => A.paste(c, n, 'daughter'))}>
+                <strong>Paste as daughter</strong>
+                <small>Ctrl+V</small>
+              </button>
+              {n.parents.length > 0 && (
+                <button role="menuitem" onClick={run(() => A.paste(c, n, 'sister'))}>
+                  <strong>Paste as sister</strong>
+                  <small>Ctrl+Shift+V</small>
+                </button>
+              )}
+            </>
+          )}
+          <button role="menuitem" onClick={run(() => A.duplicateNode(n))}>
+            <strong>Duplicate</strong>
+            <small>Ctrl+D</small>
+          </button>
+          {linked && linked.root === n && (
+            <button role="menuitem" onClick={run(() => A.unlinkBranch(n))}>
+              <strong>Unlink this branch</strong>
+              <small>It becomes a branch of its own</small>
+            </button>
+          )}
+          <button role="menuitem" class="danger" onClick={run(() => A.deleteNode(n))}>
+            <strong>Delete</strong>
+          </button>
+        </>
+      )}
+      {!n && c && (
+        <button role="menuitem" onClick={run(() => A.paste(c, null))}>
+          <strong>Paste as a new tree</strong>
+        </button>
+      )}
+      {!n && !c && <p class="hint ctx-empty">Right-click a node to copy, paste or link its branch. Shift + drag selects a branch.</p>}
+    </div>
+  );
 }
 
 export const canvasApi: { zoomIn?: () => void; zoomOut?: () => void; fit?: () => void } = {};
