@@ -94,7 +94,8 @@ describe('forest export', () => {
   test('arrows are TikZ code after the tree', () => {
     const out = latex('[CP [DP#w what] [C′ did [VP see #w]]]', 'forest', {}, false);
     expect(out).toContain('\\coordinate (tf-bottom) at (current bounding box.south);');
-    expect(out).toMatch(/\\draw\[-\{Stealth\}, semithick\] \(n\d+\.south\) \.\. controls/);
+    // the same curve as on the canvas, from the node at the angle it leaves (TikZ: (n1.-90))
+    expect(out).toMatch(/\\draw\[-\{Stealth\}, semithick\] \(n\d+\.-?\d+\) \.\. controls/);
   });
   test('features and glosses', () => {
     const out = latex('[T{uφ, EPP} [V čitaet | read.PRS]]', 'forest', {}, false);

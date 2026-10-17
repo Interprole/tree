@@ -99,6 +99,9 @@ export interface AArrow {
   via?: [number, number][];
   /** just an arrow: never head movement (no strike-through, no complex head) */
   plain?: boolean;
+  /** where the arrow leaves its source and enters its target (default: chosen) */
+  outSide?: 'below' | 'above' | 'left' | 'right';
+  inSide?: 'below' | 'above' | 'left' | 'right';
   /** an end at a node with only a word: at the word (default) or at the node itself (from=node) */
   fromAt?: 'node' | 'word';
   toAt?: 'node' | 'word';

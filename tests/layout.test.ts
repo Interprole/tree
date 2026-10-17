@@ -207,3 +207,28 @@ describe('movement arrows', () => {
     expect(g.segs.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe('arrows as TikZ draws them', () => {
+  const geomOf = (src: string) => {
+    const t = mkTree(src, { chains: 'traces' });
+    const L = layoutTree(t, ds, am);
+    return { g: layoutArrows(L, t.arrows).geoms[0], L, t };
+  };
+  test('a node with daughters is never entered from below, through its daughters', () => {
+    const { g, L, t } = geomOf('[S [DP#q [D every] [NP cat]] [VP [V likes] [DP [D the] [NP dog]] #q]]');
+    const dp = L.nodes.get(t.nodes.find((n) => n.id === 'q')!)!;
+    const end = g.segs[g.segs.length - 1][3];
+    const below = end[1] > dp.y + dp.block.fullH - 1 && Math.abs(end[0] - dp.x) < dp.block.w / 2;
+    expect(below).toBe(false);
+  });
+  test('one curve when nothing is in the way; the ends point at the centres of the nodes', () => {
+    const { g } = geomOf('[S [A#a x] [B#b y]]\n#b -> #a plain');
+    expect(g.segs).toHaveLength(1);
+    expect(g.knots).toHaveLength(3);
+  });
+  test('the side an end takes can be chosen', () => {
+    const { g, L, t } = geomOf('[S [A#a x] [B#b y]]\n#b -> #a plain out=above in=right');
+    const b = L.nodes.get(t.nodes.find((n) => n.id === 'b')!.children[0])!;
+    expect(g.segs[0][0][1]).toBeLessThan(b.y + 1);
+  });
+});

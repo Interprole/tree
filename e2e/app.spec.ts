@@ -379,7 +379,7 @@ test('bend points: double-click the arrow to add one, drag it, double-click it t
   const p0 = await at(0.5);
   await page.mouse.click(p0.x, p0.y);
   const bends = await page.locator('.bend-handle').count();
-  expect(bends).toBeGreaterThan(1);
+  expect(bends).toBeGreaterThanOrEqual(1);
   const p1 = await at(0.3);
   await page.mouse.dblclick(p1.x, p1.y);
   await expect.poll(() => code(page)).toContain('via=');

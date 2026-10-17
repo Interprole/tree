@@ -67,6 +67,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | `#a -> #b dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; between heads it is head movement |
 | `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
 | `#wh/2: ^ @gray {uφ} &"x" $x : e$` | one copy on its own: triangle, colour, features, note, meaning (also edge=, width=, len=, "words") — written on the constituent it goes to every copy |
+| `#a -> #b out=below in=left` | where the arrow leaves and enters (default: one smooth curve that touches nothing, as TikZ draws `to[out=…, in=…]`) |
 | `#a -> #b plain` | just an arrow (what the arrow tool draws); Movement turns it into a chain or head movement |
 | `[V#v;to=t sing]` | head movement of V to the head #t (V is struck through, T shows V+T) |
 | `#v -> #t hide` / `visible` | the arrow of a movement hidden / shown against the switch for that kind of arrows |
