@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { effect } from '@preact/signals';
-import { Annotation, EditorSelection, EditorState } from '@codemirror/state';
+import { Annotation, EditorSelection, EditorState, Transaction } from '@codemirror/state';
 import { EditorView, drawSelection, highlightActiveLine, highlightSpecialChars, keymap, lineNumbers, placeholder } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo as cmRedo, undo as cmUndo } from '@codemirror/commands';
 import { HighlightStyle, StreamLanguage, bracketMatching, syntaxHighlighting } from '@codemirror/language';
@@ -298,6 +298,13 @@ export function Editor() {
           sel = EditorSelection.single(Math.min(edit.select.from, L), Math.min(edit.select.to, L));
         }
         view.dispatch(sel ? { changes, selection: sel, userEvent: 'input.canvas' } : { changes, userEvent: 'input.canvas' });
+      },
+      applySilent(changes) {
+        const len = view.state.doc.length;
+        view.dispatch({
+          changes: changes.map((c) => ({ from: Math.min(c.from, len), to: Math.min(c.to, len), insert: c.insert })),
+          annotations: Transaction.addToHistory.of(false),
+        });
       },
       undo: () => cmUndo(view),
       redo: () => cmRedo(view),

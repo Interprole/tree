@@ -23,7 +23,8 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 - **Compositional semantics.** Write meanings as `$λx. cat(x) : <e,t>$` (or `lambda x.`, `iota x.`, `exists`, `forall`; numbers and comparisons work; types can be any names). The meanings of the other nodes are computed bottom-up with Functional Application, Predicate Conjunction, Event Identification and Function Composition. Type errors are shown at the node; the rule used can be shown or hidden, and meaning colours are configurable.
 - **Several trees on one canvas.** Each tree has its own code, settings and place on the canvas (drag it by its name) and is exported on its own. A tree can be copied: an independent copy, or a linked copy that shares the code (edit one, both change) while its settings stay its own, e.g. copies in one and traces in the other.
 - **Canvas editing** in an edit panel beside the canvas, so nothing covers the tree:
-  - rename (the tree follows as you type), add daughters, sisters or a mother; copy, cut and paste a subtree as a copy of its own (Ctrl+C / X / V, Ctrl+D), also as a new tree; the code is laid out with line breaks and indentation as you go (also *Format*, Shift+Alt+F);
+  - rename (the tree follows as you type), add daughters, sisters or a mother; copy, cut and paste a subtree as a copy of its own (Ctrl+C / X / V, Ctrl+D), also as a new tree; drag a branch by its root to move it; right-click menu; Shift + drag selects a branch;
+  - linked branches (`;link=…`): copies of a branch, in one tree or in several, that change together inside while everything around them stays free (shown with a dashed frame); the code is laid out with line breaks and indentation as you go (also *Format*, Shift+Alt+F);
   - add an existing constituent again by clicking it (a new chain position);
   - triangles that keep the structure in the code;
   - features, meanings, notes next to a node (several, positioned automatically or by side, draggable);

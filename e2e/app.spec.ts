@@ -300,7 +300,9 @@ test('several trees: a copy, a linked copy, each with its own export', async ({ 
   await page.locator('.tab-menu button', { hasText: 'Linked copy' }).click();
   await expect(page.locator('.tree-tab')).toHaveCount(3);
   await expect(page.locator('.tree-tab.on .link-mark')).toHaveCount(1);
-  await setCode(page, '[S [NP Bill] [VP runs]]');
+  // an edit inside the linked tree (its root is the linked branch) reaches the original
+  await expect(page.locator('.cm-content')).toContainText(';link=');
+  await setCode(page, (await code(page)).replace('John', 'Bill'));
   await page.locator('.tree-tab .tab-name').first().click();
   await expect(page.locator('.cm-content')).toContainText('Bill');
   await page.locator('.tree-tab .tab-name').nth(1).click();
@@ -531,4 +533,62 @@ test('this copy or all copies: triangle, colour, features; shortcuts with anothe
   await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^VP$/ }) }).click();
   await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'α', code: 'KeyA', bubbles: true })));
   await expect.poll(() => code(page)).toContain('[X]');
+});
+
+test('linked branches: edits inside are repeated, around them free; undo; frames', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP [V saw] [DP Mary]]]');
+  const node = (label: string, i = 0) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label}$`) }) }).nth(i);
+  // right click: copy as a linked branch
+  await node('VP').click({ button: 'right' });
+  await page.locator('.ctx-menu button', { hasText: 'Copy as a linked branch' }).click();
+  await expect.poll(() => code(page)).toMatch(/\[VP;link=\w+/);
+  // paste it as a daughter of S
+  await node('S').click({ button: 'right' });
+  await page.locator('.ctx-menu button', { hasText: 'Paste as daughter' }).click();
+  await expect.poll(async () => ((await code(page)).match(/;link=/g) ?? []).length).toBe(2);
+  await expect(page.locator('.linked-frame')).toHaveCount(2);
+  // inside one copy: both change
+  await node('DP', 0).click();
+  await page.keyboard.press('a');
+  await page.locator('.inspector input[aria-label="Label"]').fill('AP');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => ((await code(page)).match(/\[AP\]/g) ?? []).length).toBe(2);
+  // around it: a sister of one copy only
+  await node('VP', 1).click();
+  await page.keyboard.press('s');
+  await page.locator('.inspector input[aria-label="Label"]').fill('ZP');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => ((await code(page)).match(/\[ZP\]/g) ?? []).length).toBe(1);
+  await expect.poll(async () => ((await code(page)).match(/\[AP\]/g) ?? []).length).toBe(2);
+  // undo the edit inside: both copies go back
+  await page.locator('.canvas').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(async () => ((await code(page)).match(/\[(AP|X)\]/g) ?? []).length).toBe(0);
+});
+
+test('mouse: drag a branch by its root, select a branch with a rectangle', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP [V saw] [DP Mary]]]');
+  const node = (label: string) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label}$`) }) }).first();
+  const dp = (await node('DP').boundingBox())!;
+  const np = (await node('NP').boundingBox())!;
+  await page.mouse.move(dp.x + dp.width / 2, dp.y + dp.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(np.x + np.width / 2, np.y + np.height / 2, { steps: 8 });
+  await expect(page.locator('.drop-target')).toHaveCount(1);
+  await page.mouse.up();
+  await expect.poll(() => code(page)).toMatch(/\[NP\s+John\s+\[DP Mary\]\]/);
+  // Shift + a rectangle around "saw": the smallest branch is selected
+  const v = (await node('V').boundingBox())!;
+  await page.keyboard.down('Shift');
+  await page.mouse.move(v.x - 10, v.y - 10);
+  await page.mouse.down();
+  await page.mouse.move(v.x + v.width + 10, v.y + v.height * 3, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  await expect(page.locator('.inspector input[aria-label="Label"]')).toHaveValue(/^(V|VP)$/);
 });

@@ -50,7 +50,7 @@ export function escapeText(s: string): string {
 
 type Mods = Pick<ANode, 'id' | 'color' | 'branchColor' | 'pronounce' | 'opts'>;
 
-const OPT_ORDER = ['edge', 'width', 'len', 'spread', 'sem'];
+const OPT_ORDER = ['edge', 'width', 'len', 'spread', 'sem', 'link'];
 
 export function modifiers(n: Mods): string {
   const voice = n.id && n.pronounce !== undefined ? (n.pronounce ? '!' : '?') : '';
@@ -72,7 +72,7 @@ function setModifiers(n: ANode, patch: Partial<Mods>): TextChange {
 }
 
 /** Set (or remove, with null) a node option: edge colour, edge width, length, spread, meaning colour. */
-export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem', value: string | null): Edit {
+export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'link', value: string | null): Edit {
   const opts = { ...(n.opts ?? {}) };
   if (value === null || value === '') delete opts[key];
   else opts[key] = value;
@@ -389,4 +389,10 @@ export function setPosStyle(src: string, doc: ADoc, id: string, occ: number, pat
   if (!line) return { changes: [] };
   const end = src.replace(/\s+$/, '').length;
   return { changes: [{ from: end, to: src.length, insert: '\n' + line + '\n' }] };
+}
+
+/** Move a piece of the code (a node, a word, a #ref) to another place: remove it, insert it at `at`. */
+export function moveElement(src: string, span: { from: number; to: number }, at: number): Edit {
+  const text = src.slice(span.from, span.to);
+  return { changes: [removeRange(src, span.from, span.to), { from: at, to: at, insert: ' ' + text }] };
 }
