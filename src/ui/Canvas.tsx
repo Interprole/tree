@@ -10,7 +10,7 @@ import type { DNode } from '../core/model';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, activeTree, arrowSource, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
+  activateTree, activeId, activeTree, addTree, appearanceScope, arrowSource, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
 } from '../state';
 import type { Tool } from '../state';
 import { IArrowTool, ICcommand, IDominance, IFit, ILink, IMinus, IPlus, IPointer } from './icons';
@@ -167,7 +167,7 @@ export function Canvas() {
   const labelGhost = useSignal<null | { box: Box; dx: number; dy: number }>(null);
   const nodeDrag = useSignal<null | { key: string; dx: number; dy: number; over: string | null; sister: boolean; copy: boolean }>(null);
   const marquee = useSignal<Box | null>(null);
-  const ctx = useSignal<null | { x: number; y: number; key: string | null }>(null);
+  const ctx = useSignal<null | CtxAt>(null);
   const drag = useRef<null | (Drag & { sx: number; sy: number; moved: boolean })>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<null | { d: number; zoom: number; cx: number; cy: number; vx: number; vy: number }>(null);
@@ -281,6 +281,7 @@ export function Canvas() {
     if (!d) return;
     if (d.kind === 'tree') {
       if (!d.moved) activateTree(d.id);
+      appearanceScope.value = 'tree';
       return;
     }
     if (d.kind === 'label') {
@@ -340,6 +341,8 @@ export function Canvas() {
       selection.value = null;
       relationOf.value = null;
       if (tool.value === 'arrow') arrowSource.value = null;
+      // the empty canvas: Appearance sets every tree; the sheet of a tree: that tree
+      appearanceScope.value = target.closest('.active-sheet') ? 'tree' : 'canvas';
     }
   };
 
@@ -355,6 +358,7 @@ export function Canvas() {
       key = o.scene.hits.find((h) => lx >= h.box.x1 && lx <= h.box.x2 && ly >= h.box.y1 && ly <= h.box.y2)?.key ?? null;
     }
     activateTree(id);
+    appearanceScope.value = 'tree';
     if (key) queueMicrotask(() => (selection.value = { kind: 'node', key: key! }));
   };
 
@@ -381,15 +385,20 @@ export function Canvas() {
   const onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     const r = wrap.current!.getBoundingClientRect();
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-node]');
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const el = under?.closest('[data-node]');
     const key = el?.getAttribute('data-node') ?? null;
     if (key) selection.value = { kind: 'node', key };
-    ctx.value = { x: e.clientX - r.left, y: e.clientY - r.top, key };
+    // a tree: its name, its sheet (another tree), or the sheet of the tree being edited
+    const tree = under?.closest('[data-tree-head]')?.getAttribute('data-tree-head') ?? under?.closest('[data-tree]')?.getAttribute('data-tree') ?? (under?.closest('.active-sheet') ? activeId.value : null);
+    const vv = view.value;
+    ctx.value = { x: e.clientX - r.left, y: e.clientY - r.top, key, tree: key ? null : tree, world: [(e.clientX - r.left - vv.x) / vv.zoom, (e.clientY - r.top - vv.y) / vv.zoom] };
   };
 
   const clickNode = (key: string) => {
     const n = A.nodeByKey(key);
     if (!n) return;
+    appearanceScope.value = 'tree';
     if (pick.value) {
       A.completePick(n);
       return;
@@ -657,7 +666,16 @@ function allSheets(): { x: number; y: number; w: number; h: number }[] {
 }
 
 /** The menu of a right click: copy, paste, link and move branches. */
-function ContextMenu({ at, close }: { at: { x: number; y: number; key: string | null }; close: () => void }) {
+interface CtxAt {
+  x: number;
+  y: number;
+  key: string | null;
+  tree: string | null;
+  /** canvas coordinates of the click */
+  world: [number, number];
+}
+
+function ContextMenu({ at, close }: { at: CtxAt; close: () => void }) {
   const n = at.key ? A.nodeByKey(at.key) : null;
   const linked = A.linkedBranchOf(n);
   const run = (f: () => void) => () => {
@@ -715,13 +733,74 @@ function ContextMenu({ at, close }: { at: { x: number; y: number; key: string | 
           </button>
         </>
       )}
-      {!n && c && (
-        <button role="menuitem" onClick={run(() => A.paste(c, null))}>
-          <strong>Paste as a new tree</strong>
+      {!n && at.tree && <TreeItems id={at.tree} run={run} />}
+      {!n && (
+        <>
+          {c && (
+            <button role="menuitem" onClick={run(() => A.paste(c, null, 'daughter', { x: at.world[0], y: at.world[1] }))}>
+              <strong>Paste as a new tree here</strong>
+              <small>Ctrl+V with nothing selected</small>
+            </button>
+          )}
+          <button role="menuitem" onClick={run(() => addTree(undefined, { x: at.world[0], y: at.world[1] }))}>
+            <strong>New tree here</strong>
+          </button>
+          {!at.tree && (
+            <button role="menuitem" class="danger" onClick={run(() => confirm('Clear the canvas? All its trees go (they stay in My trees if saved there).') && clearCanvas())}>
+              <strong>Clear the canvas</strong>
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** What can be done with a whole tree (right click on its sheet or its name). */
+function TreeItems({ id, run }: { id: string; run: (f: () => void) => () => void }) {
+  const e = trees.value.find((x) => x.id === id);
+  if (!e) return null;
+  return (
+    <>
+      <p class="ctx-title">{e.name}</p>
+      {id !== activeId.value && (
+        <button role="menuitem" onClick={run(() => activateTree(id))}>
+          <strong>Edit this tree</strong>
         </button>
       )}
-      {!n && !c && <p class="hint ctx-empty">Right-click a node to copy, paste or link its branch. Shift + drag selects a branch.</p>}
-    </div>
+      <button role="menuitem" onClick={run(() => duplicateTree(id, false))}>
+        <strong>Copy the tree</strong>
+        <small>An independent copy next to it</small>
+      </button>
+      <button role="menuitem" onClick={run(() => A.duplicateTreeLinked(id))}>
+        <strong>Linked copy of the tree</strong>
+        <small>The whole tree as a linked branch</small>
+      </button>
+      <button
+        role="menuitem"
+        onClick={run(() => {
+          const name = prompt('Name of the tree', e.name);
+          if (name) renameTree(id, name);
+        })}
+      >
+        <strong>Rename…</strong>
+      </button>
+      <button
+        role="menuitem"
+        onClick={run(() => {
+          activateTree(id);
+          modal.value = 'export';
+        })}
+      >
+        <strong>Export this tree…</strong>
+      </button>
+      {trees.value.length > 1 && (
+        <button role="menuitem" class="danger" onClick={run(() => confirm(`Delete “${e.name}” from the canvas?`) && removeTree(id))}>
+          <strong>Delete from the canvas</strong>
+        </button>
+      )}
+      <hr class="ctx-sep" />
+    </>
   );
 }
 

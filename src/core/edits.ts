@@ -361,6 +361,7 @@ export function posStyleLine(id: string, occ: number, m: PosMods): string | null
   const parts: string[] = [];
   if (m.pronounce !== undefined) parts.push(m.pronounce ? '!' : '?');
   if (m.triangle) parts.push('^');
+  else if (m.triangle === false) parts.push('open');
   if (m.color) parts.push('@' + m.color);
   if (m.edge) parts.push('edge=' + m.edge);
   if (m.width) parts.push('width=' + m.width);

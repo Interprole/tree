@@ -5,6 +5,7 @@ import { parse, walkAst } from './core/parser';
 import * as E from './core/edits';
 import type { Edit } from './core/edits';
 import { formatDoc, tidyEdit } from './core/format';
+import { askOverride } from './ask';
 import { cubicAt, insertVia } from './core/arrows';
 import type { ArrowGeom } from './core/arrows';
 import type { DArrow, DNode } from './core/model';
@@ -110,6 +111,24 @@ export function addChild(n: DNode | null = selectedNode()) {
   if (!guard(n)) return;
   const e = E.addChild(n.src!);
   selectNewNode(applyTidy(e, e.select!.from, 1).select?.from);
+}
+
+/**
+ * The expression (words, a morpheme) of a node: [NP student]. Changes its word, adds one, or
+ * removes it (empty).
+ */
+export function setExpression(n: DNode | null, text: string) {
+  if (!guard(n) || n.src!.kind !== 'node') return;
+  const s = n.src as ANode;
+  const leaf = s.children.find((c): c is ALeaf => c.kind === 'leaf');
+  const t = text.trim();
+  if (leaf) {
+    applyEdit(t ? E.renameLeaf(leaf, t) : E.deleteElement(source.value, doc.value!, leaf));
+    return;
+  }
+  if (!t) return;
+  const at = s.featureSpan && s.featureSpan.from >= s.headerSpan.to ? s.featureSpan.to : s.headerSpan.to;
+  applyEdit({ changes: [{ from: at, to: at, insert: ' ' + E.escapeText(t) }] });
 }
 
 export function addSister(n: DNode | null = selectedNode()) {
@@ -269,7 +288,7 @@ export function clipFromText(text: string): TreeClip | null {
  * on the canvas. Ids defined in the piece get new names where they are taken, so the copy is a
  * constituent of its own, not one more position of the original.
  */
-export function paste(c: TreeClip | null = clip.value, target: DNode | null = selectedNode(), mode: 'daughter' | 'sister' = 'daughter') {
+export function paste(c: TreeClip | null = clip.value, target: DNode | null = selectedNode(), mode: 'daughter' | 'sister' = 'daughter', at?: { x: number; y: number }) {
   if (!c) {
     showToast('Nothing copied yet: select a node and press Ctrl+C.');
     return;
@@ -311,7 +330,7 @@ export function paste(c: TreeClip | null = clip.value, target: DNode | null = se
       showToast('Select a node to paste words into it.');
       return;
     }
-    addTree([text, ...arrows].join('\n'));
+    addTree([text, ...arrows].join('\n'), at);
     return;
   }
   if (!guard(target)) return;
@@ -486,8 +505,10 @@ function thisCopy(n: DNode | null, whole: boolean): DNode | null {
 export function toggleTriangle(n: DNode | null = selectedNode()) {
   const inst = thisCopy(n, true);
   if (inst) {
-    const on = posStyle(inst.chainRef!)?.mods.triangle ?? chainRef(inst)?.triangle ?? false;
-    setPos(inst, { triangle: on ? undefined : true });
+    // this copy the other way round; the same as all copies: nothing of its own
+    const shared = !!doc.value?.ids.get(inst.chainRef!.id)?.triangle;
+    const next = !inst.triangle;
+    setPos(inst, { triangle: next === shared ? undefined : next });
     return;
   }
   if (!guard(n)) return;
@@ -498,6 +519,47 @@ export function toggleTriangle(n: DNode | null = selectedNode()) {
     s = p;
   }
   applyEdit(E.toggleTriangle(source.value, s));
+  void allCopies(n, 'triangle');
+}
+
+/**
+ * A setting for all copies changed: copies with their own value of it are asked about (replace
+ * them, or keep them).
+ */
+async function allCopies(n: DNode | null, key: keyof PosMods) {
+  const inst = instanceOf(n);
+  const id = inst?.chainRef?.id ?? n?.id;
+  const d = doc.value;
+  if (!id || !d) return;
+  const own = d.posStyles.filter((p) => p.id === id && p.mods[key] !== undefined);
+  const inline = (key === 'triangle' || key === 'color') && d.root ? refsOf(id).filter((r) => r[key] !== undefined) : [];
+  const count = own.length + inline.length;
+  if (!count) return;
+  const what = { triangle: 'triangle', color: 'colour', features: 'features', sem: 'meaning', notes: 'notes', edge: 'edge colour', width: 'edge width', len: 'edge length' }[key as string] ?? String(key);
+  const yes = await askOverride(`copies:${id}:${key}`, `${count} cop${count === 1 ? 'y' : 'ies'} of #${id} ha${count === 1 ? 's' : 've'} ${count === 1 ? 'its' : 'their'} own ${what}. Replace with the setting for all copies?`);
+  if (!yes) return;
+  const d2 = doc.value!;
+  const src = source.value;
+  let next = src;
+  for (const p of [...d2.posStyles].filter((x) => x.id === id && x.mods[key] !== undefined).reverse()) {
+    next = E.applyChanges(next, E.setPosStyle(next, parse(next).ok ? (parse(next) as { ok: true; doc: typeof d2 }).doc : d2, id, p.occ, { [key]: undefined }).changes);
+  }
+  const r = parse(next);
+  if (r.ok && (key === 'triangle' || key === 'color') && r.doc.root) {
+    const changes: E.TextChange[] = [];
+    walkAst(r.doc.root, (x) => {
+      for (const c of x.children) if (c.kind === 'ref' && c.id === id && c[key] !== undefined) changes.push(...E.setRefStyle(c, key === 'triangle' ? { triangle: false } : { color: null }).changes);
+    });
+    next = E.applyChanges(next, changes);
+  }
+  if (next !== src) applyEdit({ changes: [{ from: 0, to: src.length, insert: next }] });
+}
+
+function refsOf(id: string): ARef[] {
+  const out: ARef[] = [];
+  const root = doc.value?.root;
+  if (root) walkAst(root, (x) => x.children.forEach((c) => c.kind === 'ref' && c.id === id && out.push(c)));
+  return out;
 }
 
 /** the source node a canvas node stands for (terminals and synthetic nodes: their mother) */
@@ -508,6 +570,7 @@ function nodeSrc(n: DNode): ANode | null {
 export function setFeatures(n: DNode | null, text: string) {
   const inst = thisCopy(n, false);
   if (inst) return setPos(inst, { features: text.split(',').map((x) => x.trim()).filter(Boolean) });
+  void allCopies(n, 'features');
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setFeatures(s, text));
@@ -516,6 +579,7 @@ export function setFeatures(n: DNode | null, text: string) {
 export function setMeaning(n: DNode | null, text: string) {
   const inst = thisCopy(n, false);
   if (inst) return setPos(inst, { sem: text.trim() || undefined });
+  void allCopies(n, 'sem');
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setMeaning(s, text));
@@ -611,6 +675,7 @@ export function restructure(n: DNode | null, shape: 'right' | 'left') {
 export function setOption(n: DNode | null, key: 'edge' | 'width' | 'len' | 'spread' | 'sem', value: string | null) {
   const inst = (key === 'edge' || key === 'width' || key === 'len') && thisCopy(n, false);
   if (inst) return setPos(inst, { [key]: value ?? undefined });
+  if (key === 'edge' || key === 'width' || key === 'len') void allCopies(n, key);
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setOption(s, key, value));
@@ -619,6 +684,7 @@ export function setOption(n: DNode | null, key: 'edge' | 'width' | 'len' | 'spre
 export function setNotes(n: DNode | null, notes: E.LabelSpec[]) {
   const inst = thisCopy(n, false);
   if (inst) return setPos(inst, { notes: notes.filter((x) => x.text.trim()).map((x) => ({ ...x, span: { from: 0, to: 0 } })) });
+  void allCopies(n, 'notes');
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setNotes(source.value, s, notes));
@@ -700,7 +766,12 @@ export function reverseArrow(a: DArrow | null = selectedArrow()) {
 export function setColor(n: DNode | null, color: string | null, branch: boolean) {
   // this copy only: the whole copy (or trace) gets the colour
   const inst = thisCopy(n, true);
-  if (inst) return setPos(inst, { color: color ?? undefined });
+  if (inst) {
+    // the default colour on this copy, although the constituent has one: @none
+    const def = doc.value?.ids.get(inst.chainRef!.id);
+    return setPos(inst, { color: color ?? (def?.color || def?.branchColor ? 'none' : undefined) });
+  }
+  void allCopies(n, 'color');
   if (!guard(n)) return;
   const s = n.src!.kind === 'node' ? (n.src as ANode) : parentSrc(n);
   if (!s) return;

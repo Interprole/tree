@@ -386,6 +386,10 @@ class Parser {
       if (c === '^') {
         mods.triangle = true;
         k++;
+      } else if (rest.startsWith('open') && !/[\w]/.test(rest[4] ?? '')) {
+        // no triangle on this copy, although the constituent has one
+        mods.triangle = false;
+        k += 4;
       } else if (c === '!' || c === '?') {
         mods.pronounce = c === '!';
         k++;
@@ -418,7 +422,7 @@ class Parser {
       } else {
         let e = k;
         while (e < end && !/\s/.test(this.src[e])) e++;
-        this.fail(`Unknown position option "${this.src.slice(k, e)}". Use ^, @colour, edge=, width=, len=, {features}, &"note", $meaning$, "words", ! or ?`, k, e);
+        this.fail(`Unknown position option "${this.src.slice(k, e)}". Use ^, open, @colour (@none), edge=, width=, len=, {features}, &"note", $meaning$, "words", ! or ?`, k, e);
       }
     }
     style.span.to = Math.min(end, k);

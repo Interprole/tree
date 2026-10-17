@@ -179,6 +179,7 @@ const GUIDE: GuideSection[] = [
           ['#wh!', 'Pronounce this position too (multiple spell-out).'],
           ['[DP#wh? what]', 'Do not pronounce this position.'],
           ['#wh"whom"', 'Pronounce this copy differently (e.g. a resumptive, a pronoun copy or a partial copy): the position shows the given words.'],
+          ['#wh/2: open   #wh/2: @none', 'This copy without the triangle or the colour that all copies have.'],
           ['#wh/2: ^ @gray', 'One position on its own, as a line after the tree: ^ triangle, @colour, edge= width= len=, {features}, &"note", $meaning$, "words", ! or ?. Written on the constituent itself ([DP#wh@red …]) it goes to all copies. On the canvas: select a copy → Apply to: This copy / All copies.'],
           ['#subj"zij | she"', 'Other words with a gloss line, e.g. pronoun copying in Wambeek Dutch: [DP#subj dei vrou] … #subj"zij | she" (see Examples). On the canvas: select the lower position → Pronounced as.'],
           ['#wh$x : e$', 'Give a lower position its own meaning (a trace as a variable). Its sister is then abstracted over it (Predicate Abstraction, shown as PA+…).'],
@@ -193,7 +194,9 @@ const GUIDE: GuideSection[] = [
         </p>
         <h4>Head movement</h4>
         <p>An arrow from one head to another (e.g. V to v) is head movement: the source is struck through and the target shows the complex head as text, with the words joined by + too. Several steps add up: V+v, then V+v+T (sing+∅+-s). ∅ is left out of the words.</p>
-        <p>Head movement can also be shown without its arrow: select the arrow → <em>Movement without the arrow</em> (writes <code>hide</code>; the panel of either head shows it again), or switch off <em>Arrows for head movement</em> in Appearance → Movement. <em>Just an arrow</em> (<code>plain</code>) is the opposite: an arrow that is not movement.</p>
+<p>
+          Head movement is written on the moved head: <code>[V#v;to=t sing]</code>. On the canvas: draw an arrow (it is just an arrow), then choose <em>Movement</em> in its panel. Two heads of different categories become head movement; two constituents of the same category become copies of one chain (silent if they are the same, pronounced with their own words otherwise); different categories cannot move into each other. A movement arrow can be deleted keeping the movement (written <code>hide</code>, or nothing when such arrows are switched off) or with it. The switches <em>Arrows for phrasal movement</em> and <em>Arrows for head movement</em> hide only movement arrows, never just-arrows.
+        </p>
         <Pre>{'[TP [T#t -s] [vP [v#v ∅] [VP [V#root sing] [DP songs]]]]\n#root -> #v\n#v -> #t'}</Pre>
         <h4>Arrow lines</h4>
         <Table rows={[
@@ -263,6 +266,7 @@ const GUIDE: GuideSection[] = [
           ['Spacing', 'Width and extra length of the edge above, spread of the daughters. The ▲▼ buttons, the arrow keys and the mouse wheel change the tree at once.'],
           ['Copy and paste', 'Ctrl+C copies the node with everything below it (the root: the whole tree), Ctrl+X cuts it. Ctrl+V pastes it as the last daughter of the selected node, Ctrl+Shift+V as its sister, and with nothing selected as a new tree on the canvas; Ctrl+D duplicates the node. A pasted copy is a constituent of its own: its #ids are renamed, arrows inside it come along.'],
           ['Linked branches', 'Right-click a node → Copy as a linked branch, then paste it (in this tree or another one). The copies are one branch: whatever changes inside one of them changes in all (in the code: ;link=…). Around a linked branch everything is free: add sisters or a mother, move it, re-merge it. A dashed frame shows linked branches on the canvas; Unlink makes one a branch of its own.'],
+          ['Appearance', 'Click a tree, then Appearance sets that tree; click the empty canvas, and it sets all trees. When a setting for many meets values of their own (a tree, a node, an arrow, a copy), you are asked whether to replace them; Appearance → Values of their own changes that.'],
           ['Mouse', 'Drag a node to move its branch: drop it on a node to make it its last daughter (Shift: its sister, Alt: a copy). Shift + drag draws a rectangle that selects the smallest branch with everything in it. Right-click a node for copy, paste, link and delete.'],
           ['Branching', <>Swap the two daughters: <em>left</em> turns [XP X [Z]] into [XP [Z] X], <em>right</em> turns [XP [Z] X] into [XP X [Z]].</>],
         ]} />

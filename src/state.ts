@@ -132,6 +132,13 @@ export function mergeBuild(base: BuildOptions, p: DeepPartial<BuildOptions> | un
   };
 }
 
+/** what the Appearance panel sets: the tree being edited, or every tree of the canvas */
+export const appearanceScope = signal<'tree' | 'canvas'>('tree');
+/** the settings of the canvas: what every tree has unless it has its own */
+export const canvasSettings = signal<{ build: BuildOptions; style: TreeStyle }>({ build: defaultBuildOptions, style: defaultStyle });
+export const shownStyle = computed(() => (appearanceScope.value === 'canvas' ? canvasSettings.value.style : style.value));
+export const shownBuild = computed(() => (appearanceScope.value === 'canvas' ? canvasSettings.value.build : build.value));
+
 export function setBuild(p: DeepPartial<BuildOptions>) {
   build.value = mergeBuild(build.value, p);
 }
@@ -291,14 +298,29 @@ function nextName(base: string): string {
   for (let k = 2; ; k++) if (!names.has(`${base} ${k}`)) return `${base} ${k}`;
 }
 
-export function addTree(text = '[S [NP] [VP]]') {
+export function addTree(text = '[S [NP] [VP]]', at?: { x: number; y: number }) {
   const srcId = newId();
-  const e: TreeEntry = { id: newId(), name: nextName(`Tree ${trees.value.length + 1}`), srcId, build: build.value, style: style.value, ...freeSpot() };
+  const e: TreeEntry = { id: newId(), name: nextName(`Tree ${trees.value.length + 1}`), srcId, build: canvasSettings.value.build, style: canvasSettings.value.style, ...(at ? { x: Math.round(at.x), y: Math.round(at.y) } : freeSpot()) };
   batch(() => {
     sources.value = { ...sources.value, [srcId]: text };
     trees.value = [...trees.value, e];
   });
   activateTree(e.id);
+}
+
+/** An empty canvas: one tree without code (settings of the active tree stay). */
+export function clearCanvas() {
+  batch(() => {
+    const b = build.value;
+    const st = style.value;
+    trees.value = [{ id: 't' + newId(), name: 'Tree 1', srcId: 's' + newId(), build: b, style: st, x: 0, y: 0 }];
+    sources.value = { [trees.value[0].srcId]: '' };
+    activeId.value = trees.value[0].id;
+    source.value = '';
+    selection.value = null;
+    relationOf.value = null;
+    currentName.value = null;
+  });
 }
 
 /** A copy of a tree next to it: independent (its own code) or linked (the same code). */
@@ -395,7 +417,7 @@ export interface Snapshot {
   b?: DeepPartial<BuildOptions>;
   st?: Partial<TreeStyle>;
   /** all trees of the canvas, when there are several */
-  w?: { trees: TreeSnap[]; sources: Record<string, string>; active: string };
+  w?: { trees: TreeSnap[]; sources: Record<string, string>; active: string; canvas?: { b?: DeepPartial<BuildOptions>; st?: Partial<TreeStyle> } };
 }
 
 function diffs(b: BuildOptions, st: TreeStyle): { b?: DeepPartial<BuildOptions>; st?: Partial<TreeStyle> } {
@@ -410,11 +432,13 @@ function diffs(b: BuildOptions, st: TreeStyle): { b?: DeepPartial<BuildOptions>;
 /** The state of the canvas; full = with tree names and places even for a single tree (files). */
 export function snapshot(full = false): Snapshot {
   const snap: Snapshot = { s: source.value, ...diffs(build.value, style.value) };
-  if (full || trees.value.length > 1) {
+  const canvasOwn = diffs(canvasSettings.value.build, canvasSettings.value.style);
+  if (full || trees.value.length > 1 || canvasOwn.b || canvasOwn.st) {
     snap.w = {
       trees: trees.value.map((e) => ({ id: e.id, name: e.name, src: e.srcId, x: e.x, y: e.y, ...(e.id === activeId.value ? diffs(build.value, style.value) : diffs(e.build, e.style)) })),
       sources: { ...sources.value, [activeTree.value.srcId]: source.value },
       active: activeId.value,
+      canvas: diffs(canvasSettings.value.build, canvasSettings.value.style),
     };
   }
   return snap;
@@ -423,6 +447,7 @@ export function snapshot(full = false): Snapshot {
 export function restore(snap: Snapshot) {
   batch(() => {
     const w = snap.w;
+    canvasSettings.value = { build: mergeBuild(defaultBuildOptions, w?.canvas?.b), style: { ...defaultStyle, ...(w?.canvas?.st ?? {}) } };
     if (w && w.trees?.length) {
       trees.value = w.trees.map((e) => ({
         id: e.id,
@@ -527,7 +552,7 @@ function lsSet(k: string, v: unknown) {
 }
 
 /** widths of the code pane and the settings pane (px; null = default), changed by dragging their borders */
-export const paneWidths = signal<{ code: number | null; inspector: number }>({ code: null, inspector: 320, ...(lsGet<object>('nanotrees:panes') ?? {}) });
+export const paneWidths = signal<{ code: number | null; inspector: number; codeHidden?: boolean }>({ code: null, inspector: 320, ...(lsGet<object>('nanotrees:panes') ?? {}) });
 effect(() => lsSet('nanotrees:panes', paneWidths.value));
 
 export const savedTrees = signal<SavedTree[]>(lsGet<SavedTree[]>(TREES) ?? []);

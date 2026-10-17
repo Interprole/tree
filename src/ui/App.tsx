@@ -2,12 +2,14 @@ import { useSignal, useSignalEffect } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import * as A from '../actions';
 import * as M from '../movement';
+import { applyBuild } from '../overrides';
+import { question } from '../ask';
 import { lineCol } from '../core/parser';
 import { examples } from '../examples';
 import { copyText } from '../export';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, setBuild, shareUrl, showToast, sideTab, source, theme, toast, tool, tree, trees, unlinkTree,
+  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, shareUrl, showToast, sideTab, clearCanvas, source, theme, toast, tool, tree, trees, unlinkTree,
 } from '../state';
 import { Canvas, canvasApi } from './Canvas';
 import { Seg } from './controls';
@@ -281,6 +283,36 @@ function StatusBar() {
   );
 }
 
+/** Replace the values of their own, or keep them? With "don't ask again". */
+function OverrideQuestion() {
+  const q = question.value!;
+  const remember = useSignal(false);
+  return (
+    <div class="modal-backdrop">
+      <div class="modal ask" role="alertdialog" aria-label="Values of their own">
+        <div class="modal-body">
+          <p>{q.message}</p>
+          <label class="toggle">
+            <input type="checkbox" checked={remember.value} onChange={(e) => (remember.value = (e.target as HTMLInputElement).checked)} />
+            <span class="track" aria-hidden="true">
+              <span class="thumb" />
+            </span>
+            <span>Don't ask again (change it in Appearance → Values of their own)</span>
+          </label>
+          <div class="row">
+            <button class="btn primary" onClick={() => q.answer(true, remember.value)} data-testid="override-yes">
+              Yes, replace
+            </button>
+            <button class="btn" onClick={() => q.answer(false, remember.value)} data-testid="override-no">
+              No, keep them
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Saving to and opening from disk, and the trees kept in this browser. */
 function FileMenu() {
   const open = useSignal(false);
@@ -326,16 +358,14 @@ function FileMenu() {
               </span>
             </label>
           )}
+          <button role="menuitem" class="danger" onClick={run(() => confirm('Clear the canvas? All its trees go (save them to disk or in My trees first if you need them).') && clearCanvas())}>
+            <strong>Clear the canvas</strong>
+            <small>Start again with one empty tree.</small>
+          </button>
           <button role="menuitem" onClick={run(() => (modal.value = 'trees'))}>
             <strong>{t('myTrees')}…</strong>
             <small>Trees kept in this browser.</small>
           </button>
-          {location.protocol !== 'file:' && (
-            <a role="menuitem" class="menu-link" href="nanotrees.html" download="nanotrees.html" onClick={() => (open.value = false)}>
-              <strong>NanoTrees for offline use</strong>
-              <small>The whole app in one file (≈ 11 MB): open it by double-click, without the internet.</small>
-            </a>
-          )}
         </div>
       )}
     </div>
@@ -430,6 +460,9 @@ function TreeTabs() {
       <button class="icon-btn small add-tree" title="New tree on the canvas" aria-label="New tree" onClick={() => addTree()}>
         <IPlus size={15} />
       </button>
+      <button class="icon-btn small code-hide" title="Hide the code (more room for the canvas)" aria-label="Hide the code" onClick={() => (paneWidths.value = { ...paneWidths.value, codeHidden: true })}>
+        <IChevron size={14} />
+      </button>
     </div>
   );
 }
@@ -497,9 +530,9 @@ export function App() {
         e.preventDefault();
         void loadFile(f);
       }}
-      class={`app side-${sideTab.value} ${selection.value ? 'has-selection' : ''} ${sideOpen ? 'side-open' : ''} tab-${mobileTab.value}`}
+      class={`app ${paneWidths.value.codeHidden ? 'code-hidden' : ''} side-${sideTab.value} ${selection.value ? 'has-selection' : ''} ${sideOpen ? 'side-open' : ''} tab-${mobileTab.value}`}
       style={{
-        '--code-w': paneWidths.value.code ? `${paneWidths.value.code}px` : 'minmax(300px, 30%)',
+        '--code-w': paneWidths.value.codeHidden ? '0px' : paneWidths.value.code ? `${paneWidths.value.code}px` : 'minmax(300px, 30%)',
         '--side-w': `${paneWidths.value.inspector}px`,
       }}
     >
@@ -518,13 +551,13 @@ export function App() {
         </div>
         <ExamplesMenu />
         <div class="mode-switch hide-xs" title="Labelling">
-          <Seg value={b.mode} onChange={(v) => setBuild({ mode: v })} options={[
+          <Seg value={b.mode} onChange={(v) => applyBuild({ mode: v })} options={[
             { v: 'manual', label: t('modeManual'), title: t('modeManualHint') },
             { v: 'xbar', label: t('modeXbar'), title: t('modeXbarHint') },
           ]} />
         </div>
         <div class="mode-switch chain-switch hide-md" title="Movement chains">
-          <Seg value={b.chains} onChange={(v) => setBuild({ chains: v })} options={[
+          <Seg value={b.chains} onChange={(v) => applyBuild({ chains: v })} options={[
             { v: 'copies', label: 'Copies', title: 'Chains drawn with copies' },
             { v: 'traces', label: 'Traces', title: 'Chains drawn with traces' },
             { v: 'multidominance', label: 'MD', title: 'Chains drawn as multidominance' },
@@ -587,6 +620,11 @@ export function App() {
         </section>
         <section class="pane canvas-pane" aria-label={t('tree')}>
           <Canvas />
+          {paneWidths.value.codeHidden && (
+            <button class="code-show" title="Show the code" aria-label="Show the code" onClick={() => (paneWidths.value = { ...paneWidths.value, codeHidden: false })}>
+              <IChevron size={14} /> Code
+            </button>
+          )}
         </section>
         <aside class="pane side-pane" aria-label="Edit and appearance">
           <Splitter side="left" label="Width of the right panel" onReset={() => (paneWidths.value = { ...paneWidths.value, inspector: 320 })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, inspector: clampW(w0 - dx, 240) })} />
@@ -632,6 +670,7 @@ export function App() {
         ))}
       </nav>
 
+      {question.value && <OverrideQuestion />}
       {modal.value === 'export' && <ExportDialog />}
       {modal.value === 'trees' && <MyTrees />}
       {modal.value === 'help' && <Help />}

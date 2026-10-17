@@ -39,6 +39,8 @@ export interface DNode {
   chainRef?: { id: string; occ: number };
   /** source of a head-movement arrow: drawn struck through */
   struck?: boolean;
+  /** a triangle over a structure: the structure (one copy can be shown open) */
+  untriangled?: DNode[];
   /** head movement written on this head: the id of the head it moves to */
   headTo?: string;
   /** colour of one position of a chain (#wh@gray): its labels and the edges inside it */

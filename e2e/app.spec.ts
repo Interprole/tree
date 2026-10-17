@@ -569,6 +569,14 @@ test('this copy or all copies: triangle, colour, features; shortcuts with anothe
   await insp.locator('.scope button', { hasText: 'All copies' }).click();
   await insp.locator('.swatch[title="#1d4ed8"]').click();
   await expect.poll(() => code(page)).toContain('[DP#wh@#1d4ed8');
+  // the silent copy has its own colour: keep it
+  await page.getByTestId('override-no').click();
+  await expect.poll(() => code(page)).toContain('#wh/2: ^ @#15803d');
+  // or replace it
+  await page.waitForTimeout(1500);
+  await insp.locator('.swatch[title="#be185d"]').click();
+  await page.getByTestId('override-yes').click();
+  await expect.poll(() => code(page)).not.toContain('@#15803d');
   // the A key with another layout adds a daughter
   await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^VP$/ }) }).click();
   await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'α', code: 'KeyA', bubbles: true })));
@@ -631,4 +639,64 @@ test('mouse: drag a branch by its root, select a branch with a rectangle', async
   await page.mouse.up();
   await page.keyboard.up('Shift');
   await expect(page.locator('.inspector input[aria-label="Label"]')).toHaveValue(/^(V|VP)$/);
+});
+
+test('one copy open although all copies are triangles; expression; code panel; canvas menu', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP#wh ^ [D which] [NP book]] [VP [V buy] #wh]]');
+  await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
+  const dp = (i: number) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^DP$/ }) }).nth(i);
+  await dp(1).click();
+  await page.keyboard.press('t');
+  await expect.poll(() => code(page)).toContain('#wh/2: open');
+  await expect(page.locator('.prims text', { hasText: /^which$/ })).toHaveCount(1);
+  // an expression for a node
+  await setCode(page, '[S [NP] [VP runs]]');
+  await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^NP$/ }) }).click();
+  await page.locator('.inspector input[aria-label^="Expression"]').fill('student');
+  await expect.poll(() => code(page)).toContain('[NP student]');
+  // the code panel folds away and comes back
+  await page.locator('.code-hide').click();
+  await expect.poll(async () => (await page.locator('.code-pane').boundingBox())?.width ?? 0).toBeLessThan(5);
+  await page.locator('.code-show').click();
+  await expect.poll(async () => (await page.locator('.code-pane').boundingBox())?.width ?? 0).toBeGreaterThan(100);
+  // right click on the empty canvas: a new tree where the mouse is, clear the canvas
+  await page.locator('.canvas').click({ button: 'right', position: { x: 30, y: 300 } });
+  await page.locator('.ctx-menu button', { hasText: 'New tree here' }).click();
+  await expect(page.locator('.tree-tab')).toHaveCount(2);
+  // right click on a tree
+  await page.locator('.sheet-head').first().click({ button: 'right' });
+  await expect(page.locator('.ctx-menu .ctx-title')).toBeVisible();
+  await page.keyboard.press('Escape');
+  page.once('dialog', (d) => d.accept());
+  await page.locator('.canvas').click({ button: 'right', position: { x: 20, y: 20 } });
+  await page.locator('.ctx-menu button', { hasText: 'Clear the canvas' }).click();
+  await expect(page.locator('.tree-tab')).toHaveCount(1);
+  await expect(page.locator('.cm-placeholder')).toBeVisible();
+});
+
+test('appearance for all trees: trees with their own value are asked about', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  await page.locator('.tree-tab').first().locator('.tab-more').click();
+  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  // tree 2 has its own setting
+  await page.getByTestId('side-appearance').click();
+  await page.locator('.settings .seg button', { hasText: 'Struck through' }).click();
+  // the empty canvas: settings of all trees
+  await page.locator('.canvas').click({ position: { x: 10, y: 10 } });
+  await page.getByTestId('side-appearance').click();
+  await expect(page.locator('.appearance-scope button.on')).toHaveText('All trees');
+  await page.locator('.settings .seg button', { hasText: '⟨Angle brackets⟩' }).click();
+  await expect(page.getByTestId('override-no')).toBeVisible();
+  await page.getByTestId('override-no').click();
+  // tree 1 followed, tree 2 kept its own
+  await page.locator('.tree-tab .tab-name').first().click();
+  await page.getByTestId('side-appearance').click();
+  await page.locator('.appearance-scope button').first().click();
+  await expect(page.locator('.settings .seg button.on', { hasText: '⟨Angle brackets⟩' })).toHaveCount(1);
+  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await page.getByTestId('side-appearance').click();
+  await page.locator('.appearance-scope button').first().click();
+  await expect(page.locator('.settings .seg button.on', { hasText: 'Struck through' })).toHaveCount(1);
 });
