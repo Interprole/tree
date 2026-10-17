@@ -317,7 +317,6 @@ function nearestSrc(n: DNode): ANode | undefined {
   return undefined;
 }
 
-let cloneCounter = 0;
 function cloneSubtree(n: DNode, suffix: string): DNode {
   return {
     ...n,
@@ -425,7 +424,8 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
     const clones = slots.map((_, i) => {
       if (i === 0) return s;
       // everything written on the constituent is shared by all its positions
-      return cloneSubtree(s, `~c${++cloneCounter}`);
+      // keys stay the same from one drawing to the next: a selected copy stays selected after an edit
+      return cloneSubtree(s, `~c${i + 1}`);
     });
     slots.forEach((sl, i) => {
       const info = own[i];
@@ -436,8 +436,8 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
         if (chain.index) inst.label = [...inst.label, ...indexRun];
       } else {
         // trace: the category with a "t"
-        const t: DNode = { key: `${s.key}~t${++cloneCounter}`, kind: 'leaf', label: [{ text: 't' }, ...indexRun], children: [], parents: [], indices: [], trace: true, synthetic: true };
-        inst = { key: `${s.key}~tp${cloneCounter}`, kind: 'phrase', label: cloneRuns(s.label), children: [t], parents: [], indices: [], src: s.src, trace: true, copyOf: s.key, color: s.color, branchColor: s.branchColor, notes: s.notes, edgeColor: s.edgeColor, edgeWidth: s.edgeWidth, edgeLen: s.edgeLen };
+        const t: DNode = { key: `${s.key}~t${i + 1}`, kind: 'leaf', label: [{ text: 't' }, ...indexRun], children: [], parents: [], indices: [], trace: true, synthetic: true };
+        inst = { key: `${s.key}~tp${i + 1}`, kind: 'phrase', label: cloneRuns(s.label), children: [t], parents: [], indices: [], src: s.src, trace: true, copyOf: s.key, color: s.color, branchColor: s.branchColor, notes: s.notes, edgeColor: s.edgeColor, edgeWidth: s.edgeWidth, edgeLen: s.edgeLen };
       }
       // pronounced with other words: #wh!"whom"
       if (info.text !== undefined && overt[i]) {

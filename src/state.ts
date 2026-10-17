@@ -260,6 +260,7 @@ export const otherScenes = computed(() => {
       let sc: Scene | null = c?.scene ?? null;
       const r = parse(text);
       if (r.ok) {
+        sc = null;
         try {
           const t = buildTree(r.doc, e.build);
           sc = t ? buildScene(t, e.style, currentMeasure()) : null;
@@ -275,10 +276,13 @@ export const otherScenes = computed(() => {
   return out;
 });
 
+/** the sheet of a tree without nodes */
+export const EMPTY_SHEET = { w: 240, h: 130 };
+
 /** Size of a tree's sheet. */
 export function sheetSize(id: string): { w: number; h: number } {
   const sc = id === activeId.value ? scene.value : otherScenes.value.find((o) => o.entry.id === id)?.scene;
-  return { w: sc?.width ?? 200, h: sc?.height ?? 120 };
+  return { w: sc?.width ?? EMPTY_SHEET.w, h: sc?.height ?? EMPTY_SHEET.h };
 }
 
 /** a free place to the right of all trees */
@@ -298,7 +302,7 @@ function nextName(base: string): string {
   for (let k = 2; ; k++) if (!names.has(`${base} ${k}`)) return `${base} ${k}`;
 }
 
-export function addTree(text = '[S [NP] [VP]]', at?: { x: number; y: number }) {
+export function addTree(text = '', at?: { x: number; y: number }) {
   const srcId = newId();
   const e: TreeEntry = { id: newId(), name: nextName(`Tree ${trees.value.length + 1}`), srcId, build: canvasSettings.value.build, style: canvasSettings.value.style, ...(at ? { x: Math.round(at.x), y: Math.round(at.y) } : freeSpot()) };
   batch(() => {

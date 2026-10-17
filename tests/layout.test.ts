@@ -197,12 +197,13 @@ describe('movement arrows', () => {
     const e2 = g2.segs[g2.segs.length - 1][3];
     expect(e2[1]).toBeLessThan(tn.y + tn.block.labelH);
   });
-  test('bend points: the curve passes through them', () => {
+  test('bend points: the corners of the route', () => {
     const t = mkTree('[S [A#a x] [B [C y] [D#d z]]]\n#d -> #a via=0,60;-20,80');
     const L = layoutTree(t, ds, am);
     const g = layoutArrows(L, t.arrows).geoms[0];
-    expect(g.segs).toHaveLength(3);
+    // the bend points are the corners of the route, rounded like any other arrow
     expect(g.knots[1]).toEqual([g.mid[0], g.mid[1] + 60]);
-    expect(g.segs[1][0]).toEqual(g.knots[1]);
+    expect(g.knots[2]).toEqual([g.mid[0] - 20, g.mid[1] + 80]);
+    expect(g.segs.length).toBeGreaterThanOrEqual(3);
   });
 });

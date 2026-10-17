@@ -10,7 +10,7 @@ import type { DNode } from '../core/model';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, activeTree, addTree, appearanceScope, arrowSource, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
+  activateTree, activeId, activeTree, addTree, appearanceScope, arrowSource, EMPTY_SHEET, sideTab, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
 } from '../state';
 import type { Tool } from '../state';
 import { IArrowTool, ICcommand, IDominance, IFit, ILink, IMinus, IPlus, IPointer } from './icons';
@@ -165,7 +165,7 @@ export function Canvas() {
 
   // ---------- pointer handling (pan, pinch, drags)
   const labelGhost = useSignal<null | { box: Box; dx: number; dy: number }>(null);
-  const nodeDrag = useSignal<null | { key: string; dx: number; dy: number; over: string | null; sister: boolean; copy: boolean }>(null);
+  const nodeDrag = useSignal<null | { key: string; dx: number; dy: number; over: string | null; sister: boolean; copy: boolean; tree?: string | null; treeKey?: string | null }>(null);
   const marquee = useSignal<Box | null>(null);
   const ctx = useSignal<null | CtxAt>(null);
   const drag = useRef<null | (Drag & { sx: number; sy: number; moved: boolean })>(null);
@@ -197,8 +197,8 @@ export function Canvas() {
     const via = target.closest('[data-via]');
     if (via) {
       const [index, point] = via.getAttribute('data-via')!.split('|').map(Number);
-      const a = tree.value?.arrows[index];
-      if (a?.via) drag.current = { ...base, kind: 'via', index, point, via: a.via.map((p) => [...p] as [number, number]) };
+      const pts = bendsOf(index);
+      if (pts) drag.current = { ...base, kind: 'via', index, point, via: pts };
       return;
     }
     const handle = target.closest('[data-handle]');
@@ -261,10 +261,24 @@ export function Canvas() {
     else if (d.kind === 'node') {
       // where it would land: a node under the pointer, not inside the dragged branch
       const dragged = A.nodeByKey(d.key);
-      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-node]');
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const el = under?.closest('[data-node]');
       const over = el ? A.nodeByKey(el.getAttribute('data-node')) : null;
       const inside = !!(over && dragged && collectNodes(dragged).includes(over));
-      nodeDrag.value = { key: d.key, dx: dx / z, dy: dy / z, over: over && !inside ? over.key : null, sister: e.shiftKey, copy: e.altKey };
+      // another tree: one of its nodes, or its empty sheet
+      const otherId = !el ? under?.closest('[data-tree]')?.getAttribute('data-tree') ?? null : null;
+      let otherKey: string | null = null;
+      if (otherId) {
+        const o = otherScenes.value.find((x) => x.entry.id === otherId);
+        if (o?.scene) {
+          const r = wrap.current!.getBoundingClientRect();
+          const vv = view.value;
+          const lx = (e.clientX - r.left - vv.x) / vv.zoom - o.entry.x;
+          const ly = (e.clientY - r.top - vv.y) / vv.zoom - o.entry.y;
+          otherKey = o.scene.hits.find((h) => lx >= h.box.x1 && lx <= h.box.x2 && ly >= h.box.y1 && ly <= h.box.y2)?.key ?? null;
+        }
+      }
+      nodeDrag.value = { key: d.key, dx: dx / z, dy: dy / z, over: over && !inside ? over.key : null, sister: e.shiftKey, copy: e.altKey, tree: otherId, treeKey: otherKey };
     } else if (d.kind === 'marquee') {
       const [x, y] = toLocal(e.clientX, e.clientY);
       marquee.value = { x1: Math.min(d.x0, x), y1: Math.min(d.y0, y), x2: Math.max(d.x0, x), y2: Math.max(d.y0, y) };
@@ -302,7 +316,8 @@ export function Canvas() {
       }
       const n = A.nodeByKey(d.key);
       const over = A.nodeByKey(nd?.over);
-      if (n && over && nd) A.moveNode(n, over, nd.sister ? 'sister' : 'daughter', nd.copy);
+      if (n && nd?.tree) A.moveToTree(n, nd.tree, nd.treeKey ?? null, nd.sister ? 'sister' : 'daughter', nd.copy);
+      else if (n && over && nd) A.moveNode(n, over, nd.sister ? 'sister' : 'daughter', nd.copy);
       return;
     }
     if (d.kind === 'marquee') {
@@ -343,6 +358,7 @@ export function Canvas() {
       if (tool.value === 'arrow') arrowSource.value = null;
       // the empty canvas: Appearance sets every tree; the sheet of a tree: that tree
       appearanceScope.value = target.closest('.active-sheet') ? 'tree' : 'canvas';
+      sideTab.value = 'appearance';
     }
   };
 
@@ -360,6 +376,15 @@ export function Canvas() {
     activateTree(id);
     appearanceScope.value = 'tree';
     if (key) queueMicrotask(() => (selection.value = { kind: 'node', key: key! }));
+  };
+
+  /** the bends of an arrow as offsets from the middle of its ends: its own points, or the ones it found itself */
+  const bendsOf = (index: number): [number, number][] | null => {
+    const a = tree.value?.arrows[index];
+    const g = scene.value?.arrows[index]?.geom;
+    if (!a || !g) return null;
+    if (a.via?.length) return a.via.map((p) => [...p] as [number, number]);
+    return g.knots.slice(1, -1).map(([x, y]) => [x - g.mid[0], y - g.mid[1]] as [number, number]);
   };
 
   /** the smallest branch that has every node touched by the rectangle */
@@ -428,7 +453,8 @@ export function Canvas() {
     if (via) {
       const [index, point] = via.getAttribute('data-via')!.split('|').map(Number);
       const a = tree.value?.arrows[index];
-      if (a?.via) A.setVia(a, a.via.filter((_, i) => i !== point));
+      const pts = bendsOf(index);
+      if (a && pts) A.setVia(a, pts.filter((_, i) => i !== point));
       return;
     }
     // the selected arrow: add a bend point where it was clicked
@@ -492,14 +518,6 @@ export function Canvas() {
 
   const box = (h: NodeHit, pad = 3) => ({ x: h.box.x1 - pad, y: h.box.y1 - pad, width: h.box.x2 - h.box.x1 + pad * 2, height: h.box.y2 - h.box.y1 + pad * 2 });
 
-  const hint = nodeDrag.value
-    ? nodeDrag.value.over
-      ? `Drop: ${nodeDrag.value.copy ? 'a copy' : 'the branch'} goes ${nodeDrag.value.sister ? 'right after this node (its sister)' : 'below this node (its last daughter)'}. Shift: as a sister · Alt: a copy`
-      : 'Drag onto a node: the branch becomes its last daughter (Shift: its sister, Alt: a copy)'
-    : pick.value
-    ? `Click the constituent to add again as a ${pick.value.kind} (a new position of the same element). Esc to cancel.`
-    : tool.value === 'arrow' ? (srcKey ? t('arrowPickTarget') : t('arrowPickSource')) : tool.value === 'ccommand' ? t('ccHint') : tool.value === 'dominance' ? t('domHint') : null;
-
   const handleR = 6 / Math.sqrt(v.zoom);
   // the selected branch (what Ctrl+C copies), the branch being dragged and where it would land
   const selNode = sel?.kind === 'node' ? A.nodeByKey(sel.key) : null;
@@ -509,6 +527,26 @@ export function Canvas() {
   const dragBase = dragNode ? branchBox(dragNode, hitByKey) : null;
   const dragBox = dragBase && nd ? { x1: dragBase.x1 + nd.dx, y1: dragBase.y1 + nd.dy, x2: dragBase.x2 + nd.dx, y2: dragBase.y2 + nd.dy } : null;
   const dropHit = nd?.over ? hitByKey.get(nd.over) : undefined;
+  // where it would land in another tree: a node there, or its whole sheet when it is empty
+  const otherDrop = (() => {
+    if (!nd?.tree) return null;
+    const o = others.find((x) => x.entry.id === nd.tree);
+    if (!o) return null;
+    if (!o.scene) return { x1: o.entry.x - 3, y1: o.entry.y - 3, x2: o.entry.x + EMPTY_SHEET.w + 3, y2: o.entry.y + EMPTY_SHEET.h + 3 };
+    const h = nd.treeKey ? o.scene.hits.find((x) => x.key === nd.treeKey) : null;
+    return h ? { x1: o.entry.x + h.box.x1 - 4, y1: o.entry.y + h.box.y1 - 4, x2: o.entry.x + h.box.x2 + 4, y2: o.entry.y + h.box.y2 + 4 } : null;
+  })();
+  const hint = nodeDrag.value
+    ? nodeDrag.value.tree
+      ? otherDrop
+        ? `Drop: ${nodeDrag.value.copy ? 'a copy' : 'the branch'} goes into the other tree${nodeDrag.value.treeKey ? (nodeDrag.value.sister ? ', as this node’s sister' : ', below this node') : ''}. Shift: as a sister · Alt: a copy`
+        : 'Drop it on a node of that tree (or on an empty tree)'
+      : nodeDrag.value.over
+      ? `Drop: ${nodeDrag.value.copy ? 'a copy' : 'the branch'} goes ${nodeDrag.value.sister ? 'right after this node (its sister)' : 'below this node (its last daughter)'}. Shift: as a sister · Alt: a copy`
+      : 'Drag onto a node: the branch becomes its last daughter (Shift: its sister, Alt: a copy)'
+    : pick.value
+    ? `Click the constituent to add again as a ${pick.value.kind} (a new position of the same element). Esc to cancel.`
+    : tool.value === 'arrow' ? (srcKey ? t('arrowPickTarget') : t('arrowPickSource')) : tool.value === 'ccommand' ? t('ccHint') : tool.value === 'dominance' ? t('domHint') : null;
   const linked = linkedIds.value;
 
   return (
@@ -533,8 +571,10 @@ export function Canvas() {
         </defs>
         <g transform={`translate(${v.x} ${v.y}) scale(${v.zoom})`}>
           {others.map(({ entry, scene: osc }) =>
-            osc ? <OtherSheet key={entry.id} id={entry.id} x={entry.x} y={entry.y} scene={osc} /> : null,
+            osc ? <OtherSheet key={entry.id} id={entry.id} x={entry.x} y={entry.y} scene={osc} /> : <EmptySheet key={entry.id} id={entry.id} x={entry.x} y={entry.y} />,
           )}
+          {!sc && <EmptySheet id={active.id} x={active.x} y={active.y} active />}
+          {otherDrop && <rect class="drop-target" x={otherDrop.x1} y={otherDrop.y1} width={otherDrop.x2 - otherDrop.x1} height={otherDrop.y2 - otherDrop.y1} rx="5" />}
           {sc && (
             <g transform={`translate(${active.x} ${active.y})`} class="sheet active-sheet">
               <rect class={`paper ${many ? 'paper-active' : ''}`} width={sc.width} height={sc.height} fill={sc.background === 'transparent' ? '#ffffff' : sc.background} filter="url(#paper-shadow)" rx="2" />
@@ -587,16 +627,11 @@ export function Canvas() {
               {labelGhost.value && (
                 <rect x={labelGhost.value.box.x1 + labelGhost.value.dx} y={labelGhost.value.box.y1 + labelGhost.value.dy} width={labelGhost.value.box.x2 - labelGhost.value.box.x1} height={labelGhost.value.box.y2 - labelGhost.value.box.y1} rx="3" class="label-ghost" />
               )}
-              {selArrow && selArrowData && !selArrowData.via?.length && (
-                <circle cx={selArrow.geom.handle[0]} cy={selArrow.geom.handle[1]} r={handleR} class="bend-handle" data-handle={selArrow.index}>
-                  <title>Drag to bend · double-click the arrow to add bend points</title>
-                </circle>
-              )}
               {selArrow &&
-                selArrowData?.via?.length &&
-                viaPoints(selArrow.geom).map(([x, y], i) => (
-                  <circle key={'via' + i} cx={x} cy={y} r={handleR} class="bend-handle via" data-via={`${selArrow.index}|${i}`}>
-                    <title>Drag to move · double-click to remove</title>
+                selArrowData &&
+                (selArrowData.via?.length ? viaPoints(selArrow.geom) : selArrow.geom.knots.slice(1, -1)).map(([x, y], i) => (
+                  <circle key={'via' + i} cx={x} cy={y} r={handleR} class={`bend-handle ${selArrowData.via?.length ? 'via' : ''}`} data-via={`${selArrow.index}|${i}`}>
+                    <title>A bend: drag to move it, double-click to remove it · double-click the arrow to add one</title>
                   </circle>
                 ))}
             </g>
@@ -655,13 +690,28 @@ function OtherSheet({ id, x, y, scene: sc }: { id: string; x: number; y: number;
   );
 }
 
+/** a tree without nodes: its sheet stays, ready for a node or a branch dropped on it */
+function EmptySheet({ id, x, y, active }: { id: string; x: number; y: number; active?: boolean }) {
+  return (
+    <g transform={`translate(${x} ${y})`} class={`sheet empty-sheet ${active ? 'active-sheet' : 'other-sheet'}`} data-tree={active ? undefined : id} data-empty-tree={id}>
+      <rect class={`paper ${active && trees.value.length > 1 ? 'paper-active' : ''}`} width={EMPTY_SHEET.w} height={EMPTY_SHEET.h} fill="#ffffff" filter="url(#paper-shadow)" rx="2" />
+      <text x={EMPTY_SHEET.w / 2} y={EMPTY_SHEET.h / 2 - 6} class="empty-hint">
+        An empty tree
+      </text>
+      <text x={EMPTY_SHEET.w / 2} y={EMPTY_SHEET.h / 2 + 12} class="empty-hint small">
+        right-click: add a node · or drop a branch here
+      </text>
+    </g>
+  );
+}
+
 /** union of the sheets of all trees, in canvas coordinates */
 function allSheets(): { x: number; y: number; w: number; h: number }[] {
   const out: { x: number; y: number; w: number; h: number }[] = [];
   const at = activeTree.value;
   const sc = scene.value;
-  if (sc) out.push({ x: at.x, y: at.y, w: sc.width, h: sc.height });
-  for (const o of otherScenes.value) if (o.scene) out.push({ x: o.entry.x, y: o.entry.y, w: o.scene.width, h: o.scene.height });
+  out.push({ x: at.x, y: at.y, w: sc?.width ?? EMPTY_SHEET.w, h: sc?.height ?? EMPTY_SHEET.h });
+  for (const o of otherScenes.value) out.push({ x: o.entry.x, y: o.entry.y, w: o.scene?.width ?? EMPTY_SHEET.w, h: o.scene?.height ?? EMPTY_SHEET.h });
   return out;
 }
 
@@ -756,6 +806,11 @@ function ContextMenu({ at, close }: { at: CtxAt; close: () => void }) {
   );
 }
 
+/** a tree without any node */
+function isEmptyTree(id: string): boolean {
+  return id === activeId.value ? !scene.value : !otherScenes.value.find((o) => o.entry.id === id)?.scene;
+}
+
 /** What can be done with a whole tree (right click on its sheet or its name). */
 function TreeItems({ id, run }: { id: string; run: (f: () => void) => () => void }) {
   const e = trees.value.find((x) => x.id === id);
@@ -763,6 +818,12 @@ function TreeItems({ id, run }: { id: string; run: (f: () => void) => () => void
   return (
     <>
       <p class="ctx-title">{e.name}</p>
+      {isEmptyTree(id) && (
+        <button role="menuitem" onClick={run(() => A.addRootNode(id))}>
+          <strong>Add a node</strong>
+          <small>The first node of this tree</small>
+        </button>
+      )}
       {id !== activeId.value && (
         <button role="menuitem" onClick={run(() => activateTree(id))}>
           <strong>Edit this tree</strong>

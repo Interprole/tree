@@ -69,14 +69,14 @@ test('arrow tool adds an arrow line; selecting and restyling it', async ({ page 
   await expect(page.locator('.inspector h2', { hasText: 'Arrow' })).toBeVisible();
   await page.locator('.inspector button', { hasText: 'Dashed' }).click();
   await expect.poll(() => code(page)).toContain('dashed');
-  // drag the bend handle down by 40px
-  const h = await page.locator('.bend-handle').boundingBox();
+  // drag a bend of the arrow down: the arrow takes over its bends as its own points
+  const h = await page.locator('.bend-handle').first().boundingBox();
   expect(h).toBeTruthy();
   await page.mouse.move(h!.x + h!.width / 2, h!.y + h!.height / 2);
   await page.mouse.down();
   await page.mouse.move(h!.x + h!.width / 2, h!.y + 60, { steps: 6 });
   await page.mouse.up();
-  await expect.poll(() => code(page)).toMatch(/bend=0,\d+/);
+  await expect.poll(() => code(page)).toMatch(/via=-?\d+,-?\d+/);
   // delete the selected arrow with the keyboard
   await page.locator('.canvas').focus();
   await page.keyboard.press('Delete');
@@ -372,15 +372,16 @@ test('bend points: double-click the arrow to add one, drag it, double-click it t
       const m = p.getScreenCTM()!;
       return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
     }, f);
-  // one handle becomes two bend points: +1
+  // every bend of the arrow is marked; a double-click adds one more
+  await page.locator('.arrow-hit').first().click({ force: true, position: { x: 1, y: 1 } }).catch(() => undefined);
+  const p0 = await at(0.5);
+  await page.mouse.click(p0.x, p0.y);
+  const bends = await page.locator('.bend-handle').count();
+  expect(bends).toBeGreaterThan(1);
   const p1 = await at(0.3);
   await page.mouse.dblclick(p1.x, p1.y);
-  await expect.poll(() => code(page)).toMatch(/via=-?\d+,-?\d+;-?\d+,-?\d+$/m);
-  await expect(page.locator('.bend-handle.via')).toHaveCount(2);
-  // and one more
-  const p2 = await at(0.75);
-  await page.mouse.dblclick(p2.x, p2.y);
-  await expect(page.locator('.bend-handle.via')).toHaveCount(3);
+  await expect.poll(() => code(page)).toContain('via=');
+  await expect(page.locator('.bend-handle.via')).toHaveCount(bends + 1);
   const h = (await page.locator('.bend-handle.via').nth(1).boundingBox())!;
   await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
   await page.mouse.down();
@@ -389,7 +390,7 @@ test('bend points: double-click the arrow to add one, drag it, double-click it t
   const before = await code(page);
   await page.mouse.dblclick(h.x + h.width / 2, h.y + 50);
   await expect.poll(() => code(page)).not.toBe(before);
-  await expect(page.locator('.bend-handle.via')).toHaveCount(2);
+  await expect(page.locator('.bend-handle.via')).toHaveCount(bends);
   await page.locator('.inspector button', { hasText: 'Automatic shape' }).click();
   await expect.poll(() => code(page)).not.toContain('via=');
 });
@@ -699,4 +700,49 @@ test('appearance for all trees: trees with their own value are asked about', asy
   await page.getByTestId('side-appearance').click();
   await page.locator('.appearance-scope button').first().click();
   await expect(page.locator('.settings .seg button.on', { hasText: 'Struck through' })).toHaveCount(1);
+});
+
+test('empty trees: the sheet stays, a first node by right click, a branch dragged in from another tree', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  // a new tree starts empty
+  await page.locator('.add-tree').click();
+  await expect(page.locator('.empty-sheet')).toHaveCount(1);
+  // drag NP from tree 1 onto the empty tree
+  await page.locator('.tree-tab .tab-name').first().click();
+  await page.locator('button[aria-label="Fit to window"]').click();
+  const np = (await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^NP$/ }) }).boundingBox())!;
+  const empty = (await page.locator('.empty-sheet .paper').boundingBox())!;
+  await page.mouse.move(np.x + np.width / 2, np.y + np.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(empty.x + empty.width / 2, empty.y + empty.height / 2, { steps: 10 });
+  await expect(page.locator('.drop-target')).toHaveCount(1);
+  await page.mouse.up();
+  await expect.poll(() => code(page)).not.toContain('John');
+  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await expect.poll(() => code(page)).toContain('[NP John]');
+  // deleting the whole tree leaves its sheet; right click: add a node
+  await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^NP$/ }) }).click();
+  await page.keyboard.press('Delete');
+  await expect(page.locator('.empty-sheet.active-sheet')).toHaveCount(1);
+  await page.locator('.empty-sheet.active-sheet .paper').click({ button: 'right' });
+  await page.locator('.ctx-menu button', { hasText: 'Add a node' }).click();
+  await expect.poll(() => code(page)).toBe('[X]');
+  await expect(page.locator('.inspector input[aria-label="Label"]')).toBeFocused();
+});
+
+test('a selected copy stays selected while it is edited; a click on the canvas opens Appearance', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP#wh what] [VP [V buy] #wh]]');
+  const copy = page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^DP$/ }) }).nth(1);
+  await copy.click();
+  await page.locator('.inspector .swatch[title="#15803d"]').click();
+  await expect.poll(() => code(page)).toContain('#wh/2: @#15803d');
+  await expect(page.locator('.inspector h2')).toHaveText('Silent copy');
+  await page.locator('.inspector input[aria-label^="Features"]').fill('uφ');
+  await page.locator('.inspector input[aria-label^="Features"]').press('Enter');
+  await expect(page.locator('.inspector h2')).toHaveText('Silent copy');
+  await page.locator('.canvas').click({ position: { x: 8, y: 8 } });
+  await expect(page.getByTestId('side-appearance')).toHaveClass(/on/);
+  await expect(page.locator('.appearance-scope button.on')).toHaveText('All trees');
 });
