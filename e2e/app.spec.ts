@@ -746,3 +746,23 @@ test('a selected copy stays selected while it is edited; a click on the canvas o
   await expect(page.getByTestId('side-appearance')).toHaveClass(/on/);
   await expect(page.locator('.appearance-scope button.on')).toHaveText('All trees');
 });
+
+test('the sheet of a tree can be made larger by its corner, and back', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP runs]]');
+  const paper = page.locator('.active-sheet .paper');
+  const w0 = (await paper.boundingBox())!.width;
+  const c = (await page.locator('.sheet-resize').boundingBox())!;
+  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 120, c.y + 80, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await paper.boundingBox())!.width).toBeGreaterThan(w0 + 60);
+  // the export has the same size
+  await page.getByTestId('export').click();
+  await expect(page.locator('.modal')).toContainText('×');
+  await page.keyboard.press('Escape');
+  const c2 = (await page.locator('.sheet-resize').boundingBox())!;
+  await page.mouse.dblclick(c2.x + c2.width / 2, c2.y + c2.height / 2);
+  await expect.poll(async () => Math.round((await paper.boundingBox())!.width)).toBe(Math.round(w0));
+});
