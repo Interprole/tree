@@ -87,7 +87,9 @@ test('c-command highlighting', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[S [NP John] [VP [V saw] [NP Mary]]]');
   await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
-  await page.locator('button[aria-label="Show c-command domain"]').click();
+  // the C key (no button on the toolbar)
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('c');
   await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^V$/ }) }).click();
   await expect(page.locator('.rel-ccommand')).toHaveCount(2);
 });
@@ -809,4 +811,21 @@ test('a branch with a copy moves into another tree in full; the copy left behind
   await page.locator('.empty-sheet.active-sheet .paper').click({ button: 'right' });
   await page.locator('.ctx-menu button', { hasText: 'Paste here' }).click();
   await expect.poll(() => code(page)).toBe('[VP [V buy] [DP#wh what]]');
+});
+
+test('ids renamed in another tree: head movement follows', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [C#c ∅] [TP [T#t;to=c did] [VP buy]]]');
+  await page.locator('.tree-tab').first().locator('.tab-more').click();
+  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  // copy the whole tree 2 and paste it into tree 2 again: the ids are taken there
+  await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^CP$/ }) }).click();
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('ControlOrMeta+c');
+  await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^VP$/ }) }).click();
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('ControlOrMeta+v');
+  await expect.poll(() => code(page)).toContain('[C#c2 ∅]');
+  await expect.poll(() => code(page)).toContain('[T#t2;to=c2 did]');
+  await expect(page.locator('.status.ok')).toBeVisible();
 });

@@ -398,3 +398,12 @@ export function moveElement(src: string, span: { from: number; to: number }, at:
   const text = src.slice(span.from, span.to);
   return { changes: [removeRange(src, span.from, span.to), { from: at, to: at, insert: ' ' + text }] };
 }
+
+/**
+ * New names for ids in a piece of code: every #id (definitions, references, arrow ends) and every
+ * head movement written as ;to=id.
+ */
+export function renameIds(text: string, map: Map<string, string>): string {
+  if (!map.size) return text;
+  return text.replace(/(?<!\\)(#|;to=)([\p{L}\p{N}_\-.:]+)/gu, (m, pre: string, id: string) => (map.has(id) ? pre + map.get(id) : m));
+}

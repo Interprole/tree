@@ -336,7 +336,7 @@ export function paste(c: TreeClip | null = clip.value, target: DNode | null = se
     ren.set(id, id + k);
     used.add(id + k);
   }
-  const rename = (x: string) => (ren.size ? x.replace(/(?<!\\)#([\p{L}\p{N}_\-.:]+)/gu, (m, id: string) => (ren.has(id) ? '#' + ren.get(id) : m)) : x);
+  const rename = (x: string) => E.renameIds(x, ren);
   const text = rename(c.text);
   const arrows = c.arrows.map(rename);
   const s = target?.src;
@@ -473,7 +473,7 @@ export function moveToTree(n: DNode, treeId: string, targetKey: string | null, m
     ren.set(id, id + k);
     used.add(id + k);
   }
-  const rename = (x: string) => (ren.size ? x.replace(/(?<!\\)#([\p{L}\p{N}_\-.:]+)/gu, (m, id: string) => (ren.has(id) ? '#' + ren.get(id) : m)) : x);
+  const rename = (x: string) => E.renameIds(x, ren);
   const piece = rename(c.text);
   const lines = c.arrows.map(rename);
   let next: string;
