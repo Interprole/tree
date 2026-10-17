@@ -120,16 +120,4 @@ export const examples: Example[] = [
        [VP [V likes $lambda y. lambda x. like(x, y)$] #q$x : e$]]]`,
     build: { chains: 'traces', semantics: { show: true, compute: true, types: false, rules: true } },
   },
-  {
-    id: 'decor',
-    title: 'Notes, colours, labels, markdown',
-    note: '&"…" adds notes next to a node; ;edge= ;width= ;len= ;spread= style one node; arrows take several labels at chosen sides; **bold**, *italic*, ~~struck~~ work everywhere. Drag notes and labels to move them.',
-    src: `[CP;spread=12 [DP#wh which **book** &left"*focus*"]
-    [C' [C;edge=#1d4ed8;width=2 ∅ &"[+wh]"]
-        [TP [DP Mary]
-            [T';len=14 [T will]
-                [VP [V read] #wh"which one"]]]]]
-#wh/2 -> #wh/1 @#1d4ed8 "wh-movement" "*A′*"`,
-    build: { chains: 'copies' },
-  },
 ];
