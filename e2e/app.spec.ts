@@ -387,7 +387,18 @@ test('bend points: double-click the arrow to add one, drag it, double-click it t
   const h = (await page.locator('.bend-handle.via').nth(1).boundingBox())!;
   await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
   await page.mouse.down();
-  await page.mouse.move(h.x + h.width / 2, h.y + 50, { steps: 5 });
+  // while the bend is dragged the tree stays where it is (it does not shift or rescale), the handle under the pointer
+  const cp = async () => (await page.locator('.canvas-svg text', { hasText: 'CP' }).first().boundingBox())!;
+  const still = await cp();
+  for (const dy of [60, 140, 220, 50]) {
+    await page.mouse.move(h.x + h.width / 2 - dy / 2, h.y + dy, { steps: 3 });
+    const now = await cp();
+    expect(Math.abs(now.x - still.x) + Math.abs(now.y - still.y)).toBeLessThan(0.5);
+    expect(Math.abs(now.width - still.width)).toBeLessThan(0.5);
+    const g = (await page.locator('.bend-handle.via').nth(1).boundingBox())!;
+    expect(Math.abs(g.y + g.height / 2 - (h.y + dy))).toBeLessThan(2);
+  }
+  await page.mouse.move(h.x + h.width / 2, h.y + 50, { steps: 3 });
   await page.mouse.up();
   const before = await code(page);
   await page.mouse.dblclick(h.x + h.width / 2, h.y + 50);
