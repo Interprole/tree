@@ -535,7 +535,7 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
 
   // the nodes the arrow ends touch (a word instead of its head, by default)
   const endsOf = new Map<DArrow, [{ node: DNode; mode: 'bottom' | 'side' }, { node: DNode; mode: 'bottom' | 'side' }]>();
-  for (const a of arrows) endsOf.set(a, a.route === 'under' ? [arrowEnd(a, 'from'), arrowEnd(a, 'to')] : [{ node: a.from, mode: 'side' }, { node: a.to, mode: 'side' }]);
+  for (const a of arrows) endsOf.set(a, [arrowEnd(a, 'from'), arrowEnd(a, 'to')]);
 
   // endpoints per node, to fan out several arrows touching the same node
   const endpointCount = new Map<DNode, number>();
@@ -553,7 +553,7 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
   // levels for under-arrows: narrow spans first, a level is taken if spans overlap there
   const under = arrows
     .map((a, i) => ({ a, i }))
-    .filter(({ a }) => a.route === 'under' && layout.nodes.has(endsOf.get(a)![0].node) && layout.nodes.has(endsOf.get(a)![1].node));
+    .filter(({ a }) => layout.nodes.has(endsOf.get(a)![0].node) && layout.nodes.has(endsOf.get(a)![1].node));
   const spanOf = (a: DArrow): [number, number] => {
     const x1 = layout.nodes.get(endsOf.get(a)![0].node)!.x;
     const x2 = layout.nodes.get(endsOf.get(a)![1].node)!.x;
@@ -623,7 +623,7 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
   };
 
   // route narrow arrows first: they take the closest channels
-  const ordered = [...under.map((u) => u.a), ...arrows.filter((a) => a.route !== 'under')];
+  const ordered = under.map((u) => u.a);
   /** under-arrows laid out so far: an arrow over others runs below them */
   const placed: { x1: number; x2: number; bottom: number }[] = [];
   /** the lowest label or branch between x1 and x2 (at least y) */
@@ -640,96 +640,148 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
     return Math.min(b, treeBottom);
   };
   const geomOf = new Map<DArrow, ArrowGeom>();
+  /**
+   * A route between labels and branches, out of one node, below what lies between, into the other:
+   * where the bend points of an arrow that cannot go in one curve are taken from.
+   */
+  const freeRoute = (a: DArrow, ef: { node: DNode; mode: 'bottom' | 'side' }, et: { node: DNode; mode: 'bottom' | 'side' }, lf: LNode, lt: LNode): P[] => {
+    const [ff, ft] = fanOf.get(a)!;
+    const startsF = exits(lf, ef.mode, ff.x, ff.yOff, gap);
+    const startsT = exits(lt, et.mode, ft.x, ft.yOff, gap);
+    const local = localBottom(Math.min(lf.x, lt.x) - R, Math.max(lf.x, lt.x) + R, Math.max(startsF[0].p[1], startsT[0].p[1]));
+    const chA = getChannel(a, 'from', lf, startsF, local + 6);
+    const chB = getChannel(a, 'to', lt, startsT, local + 6);
+    const ca = chA.pts;
+    const cb = chB.pts;
+    const x1 = Math.min(lf.x, lt.x);
+    const x2 = Math.max(lf.x, lt.x);
+    let bottom = local + Math.max(spacing * 0.9, R + 6);
+    for (const p of placed) if (p.x1 <= x2 + 12 && x1 <= p.x2 + 12) bottom = Math.max(bottom, p.bottom + spacing);
+    placed.push({ x1, x2, bottom });
+    const xa = ca[ca.length - 1][0];
+    const xb = cb[cb.length - 1][0];
+    const side = (e: Exit): P[] => (e.lead ? [e.attach, [e.p[0], e.attach[1]]] : []);
+    const inner = (c: P[], e: Exit) => c.slice(e.lead ? 1 : 0, -1);
+    return [...side(chA.exit), ...inner(ca, chA.exit), [xa, bottom], [xb, bottom], ...inner(cb, chB.exit).reverse(), ...side(chB.exit).reverse()];
+  };
   /** radius of the turns of an arrow (at least: how deep it dips below what it passes) */
   const R = Math.max(14, m.fs * 1.8);
   /** a bend may take up to half of each stretch next to it: wide, smooth turns */
   const BEND = R * 8;
+  /** paths of the arrows laid out so far: later arrows avoid crossing them */
+  const placedPaths: P[][] = [];
+  const own = (a: DArrow, ef: DNode, et: DNode) => [a.from, a.to, ef, et];
+  /** how badly a curve goes: labels it touches, branches and arrows it crosses */
+  const cost = (segs: Cubic[], mine: DNode[]): { hits: number; cross: number; arrows: number } => {
+    const f = field();
+    const pts = geomSample({ segs }, 16);
+    let hits = 0;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [x, y] = pts[i];
+      // a little room around every label
+      if (f.boxes.some(({ box, node }) => !mine.includes(node) && x > box.x1 - 5 && x < box.x2 + 5 && y > box.y1 - 4 && y < box.y2 + 4)) hits++;
+    }
+    const ends = [pts[0], pts[pts.length - 1]];
+    let crossN = 0;
+    let arrowsN = 0;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const sg: Seg = { x1: pts[i][0], y1: pts[i][1], x2: pts[i + 1][0], y2: pts[i + 1][1] };
+      for (const e of f.segs) {
+        // the branches of the nodes it touches count too: never in between a node's daughters
+        void ends;
+        if (cross(sg, e)) crossN++;
+      }
+      for (const path of placedPaths)
+        for (let j = 0; j + 1 < path.length; j++) if (cross(sg, { x1: path[j][0], y1: path[j][1], x2: path[j + 1][0], y2: path[j + 1][1] })) arrowsN++;
+    }
+    return { hits, cross: crossN, arrows: arrowsN };
+  };
   for (const a of ordered) {
     const [ef, et] = endsOf.get(a)!;
     const lf = layout.nodes.get(ef.node);
     const lt = layout.nodes.get(et.node);
     if (!lf || !lt) continue;
-    const [ff, ft] = fanOf.get(a)!;
+    const mine = own(a, ef.node, et.node);
+    const bf = nodeBox(lf, gap);
+    const bt = nodeBox(lt, gap);
+    const cf = boxCentre(bf);
+    const ct = boxCentre(bt);
+    // bend points are kept relative to the middle of the two nodes
+    const mid: P = [(cf[0] + ct[0]) / 2, (cf[1] + ct[1]) / 2];
+    const fixedOut = a.outSide ? SIDE_ANGLE[a.outSide] : undefined;
+    const fixedIn = a.inSide ? SIDE_ANGLE[a.inSide] : undefined;
+    // a node with daughters is never left or entered from below (through its daughters)
+    const sideF = ef.mode === 'side' && !lf.block.point;
+    const sideT = et.mode === 'side' && !lt.block.point;
+    const notBelow = (deg: number, side: boolean, toward: P, from: P) => (side && deg > 20 && deg < 160 ? (toward[0] < from[0] ? 180 : 0) : deg);
+    /** a smooth curve through bend points: leaving one node and entering the other along the line to its centre */
+    const through = (wps: P[]): { segs: Cubic[]; p0: P; p3: P } => {
+      const t0 = fixedOut ?? notBelow(angleTo(cf, wps[0]), sideF, wps[0], cf);
+      const t1 = fixedIn ?? notBelow(angleTo(ct, wps[wps.length - 1]), sideT, wps[wps.length - 1], ct);
+      const p0 = anchor(bf, t0);
+      const p3 = anchor(bt, t1);
+      const d1 = dir(t1);
+      return { segs: splinePath([p0, ...wps, p3], { start: dir(t0), end: [-d1[0], -d1[1]] }), p0, p3 };
+    };
     let g: ArrowGeom;
-    if (a.route === 'under') {
-      const level = levelOf.get(a) ?? 0;
-      // bend points are kept relative to the middle of the two ends (independent of the side taken)
-      const ref = (ln: LNode, e: { mode: string }, f: { x: number }): P => (e.mode === 'side' && !ln.block.point ? [ln.x, ln.y + ln.block.labelH * 0.55] : [f.x, ln.y + ln.block.fullH + gap]);
-      const r0 = ref(lf, ef, ff);
-      const r1 = ref(lt, et, ft);
-      const mid: P = [(r0[0] + r1[0]) / 2, (r0[1] + r1[1]) / 2];
-      const startsF = exits(lf, ef.mode, ff.x, ff.yOff, gap);
-      const startsT = exits(lt, et.mode, ft.x, ft.yOff, gap);
-      if (a.via?.length) {
-        const vias = a.via.map(([x, y]) => [mid[0] + x, mid[1] + y] as P);
-        // the side nearest to the neighbouring bend point
-        const pick = (st: Exit[], toward: P) => st.reduce((b, e) => (Math.abs(e.attach[0] - toward[0]) < Math.abs(b.attach[0] - toward[0]) ? e : b));
-        const A = pick(startsF, vias[0]);
-        const B = pick(startsT, vias[vias.length - 1]);
-        // the same round corners as an arrow that found its own way: taking it over changes nothing
-        const route: P[] = [A.attach, ...vias, B.attach];
-        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), BEND);
-        g = { arrow: a, segs, knots: route, mid, handle: vias[0], labels: [], level };
-      } else {
-        // the arrow turns below what stands between its two ends, not below the whole tree
-        const local = localBottom(Math.min(lf.x, lt.x) - R, Math.max(lf.x, lt.x) + R, Math.max(startsF[0].p[1], startsT[0].p[1]));
-        const chA = getChannel(a, 'from', lf, startsF, local + 6);
-        const chB = getChannel(a, 'to', lt, startsT, local + 6);
-        const ca = chA.pts;
-        const cb = chB.pts;
-        // deep enough for a whole round turn at the ends; below the arrows it spans
-        const x1 = Math.min(lf.x, lt.x);
-        const x2 = Math.max(lf.x, lt.x);
-        let bottom = local + Math.max(spacing * 0.9, R + 6);
-        for (const p of placed) if (p.x1 <= x2 + 12 && x1 <= p.x2 + 12) bottom = Math.max(bottom, p.bottom + spacing);
-        placed.push({ x1, x2, bottom });
-        bottom += a.bend[1];
-        const dx = a.bend[0];
-        const xa = ca[ca.length - 1][0];
-        const xb = cb[cb.length - 1][0];
-        // the route: out of the node (sideways from a label), down its channel, below the tree,
-        // up the other channel and into the other node; then every bend is rounded
-        const side = (e: Exit): P[] => (e.lead ? [e.attach, [e.p[0], e.attach[1]]] : []);
-        // (from a label's side the channel's own start, just under the turn, is left out: it would make the turn tight)
-        const inner = (c: P[], e: Exit) => c.slice(e.lead ? 1 : 0, -1);
-        const route: P[] = [...side(chA.exit), ...inner(ca, chA.exit), [xa + dx, bottom], [xb + dx, bottom], ...inner(cb, chB.exit).reverse(), ...side(chB.exit).reverse()];
-        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), BEND);
-        const handle: P = [(xa + xb) / 2 + dx, bottom];
-        // every bend of the route is a point that can be dragged or removed
-        g = { arrow: a, segs, knots: route, mid, handle, labels: [], level };
-      }
+    if (a.via?.length) {
+      const vias = a.via.map(([x, y]) => [mid[0] + x, mid[1] + y] as P);
+      const c = through(vias);
+      g = { arrow: a, segs: c.segs, knots: [c.p0, ...vias, c.p3], mid, handle: vias[0], labels: [], level: 0 };
     } else {
-      // direct curve from the source label to the target label, bulging outwards
-      const sx = lf.x;
-      const sy = lf.y + m.topInset - style.edgeGap;
-      const ex = lt.x;
-      const ey = lt.y + lt.block.h + style.edgeGap;
-      const mid: P = [(sx + ex) / 2, (sy + ey) / 2];
-      const len = Math.hypot(ex - sx, ey - sy) || 1;
-      // perpendicular, pointing left of the direction source → target
-      let nx = (ey - sy) / len;
-      let ny = -(ex - sx) / len;
-      if (nx > 0) {
-        nx = -nx;
-        ny = -ny;
+      // one curve, as TikZ draws "to[out=…, in=…, looseness=…]": the sides and the looseness that touch nothing
+      const outs = fixedOut !== undefined ? [fixedOut] : sideF ? SIDE_ANGLES : AUTO_ANGLES;
+      const ins = fixedIn !== undefined ? [fixedIn] : sideT ? SIDE_ANGLES : AUTO_ANGLES;
+      let best: { segs: Cubic[]; score: number; hits: number } | null = null;
+      for (const t0 of outs) {
+        for (const t1 of ins) {
+          const p0 = anchor(bf, t0);
+          const p3 = anchor(bt, t1);
+          const dist = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]);
+          for (const k of LOOSENESS) {
+            const L = k * Math.max(0.3915 * dist, R);
+            const d0 = dir(t0);
+            const d1 = dir(t1);
+            const c: Cubic = [p0, [p0[0] + d0[0] * L, p0[1] + d0[1] * L], [p3[0] + d1[0] * L, p3[1] + d1[1] * L], p3];
+            const q = cost([c], mine);
+            const score = q.hits * 1000 + q.cross * 300 + q.arrows * 120 + sidePenalty(t0, sideF) + sidePenalty(t1, sideT) + curveLength([c]) * 0.08;
+            if (!best || score < best.score) best = { segs: [c], score, hits: q.hits + q.cross };
+          }
+        }
       }
-      if (a.via?.length) {
-        const knots: P[] = [[sx, sy], ...a.via.map(([x, y]) => [mid[0] + x, mid[1] + y] as P), [ex, ey]];
-        g = { arrow: a, segs: splinePath(knots), knots, mid, handle: knots[1], labels: [], level: 0, outward: [nx, ny] };
-      } else {
-        const bulge = Math.min(140, len * 0.35);
-        const cx = mid[0] + nx * bulge + a.bend[0];
-        const cy = mid[1] + ny * bulge + a.bend[1];
-        // quadratic → cubic
-        const c: Cubic = [
-          [sx, sy],
-          [sx + (2 / 3) * (cx - sx), sy + (2 / 3) * (cy - sy)],
-          [ex + (2 / 3) * (cx - ex), ey + (2 / 3) * (cy - ey)],
-          [ex, ey],
-        ];
-        g = { arrow: a, segs: [c], knots: [c[0], bez(c, 0.5), c[3]], mid, handle: bez(c, 0.5), labels: [], level: 0, outward: [nx, ny] };
+      let segs = best!.segs;
+      let knots: P[] = [segs[0][0], bez(segs[0], 0.5), segs[0][3]];
+      if (best!.hits > 0) {
+        // something is in the way: as few bend points as it takes, found along a free route
+        const route = freeRoute(a, ef, et, lf, lt);
+        const inner = route.slice(1, -1);
+        const sets: P[][] = [];
+        for (let i = 0; i < inner.length; i++) sets.push([inner[i]]);
+        for (let i = 0; i < inner.length; i++) for (let j = i + 1; j < inner.length; j++) sets.push([inner[i], inner[j]]);
+        for (let i = 0; i < inner.length; i++) for (let j = i + 1; j < inner.length; j++) for (let l = j + 1; l < inner.length; l++) sets.push([inner[i], inner[j], inner[l]]);
+        // the fewest bend points that cross nothing; otherwise the least bad, if better than one curve
+        let found: { segs: Cubic[]; knots: P[]; score: number; clean: boolean } | null = null;
+        for (const set of sets) {
+          if (found?.clean && set.length > found.knots.length - 2) break;
+          const c = through(set);
+          const q = cost(c.segs, mine);
+          if (q.hits) continue;
+          const score = q.cross * 300 + q.arrows * 120 + curveLength(c.segs) * 0.08 + set.length * 80;
+          const clean = q.cross === 0;
+          if (!found || (clean && !found.clean) || (clean === found.clean && score < found.score)) found = { segs: c.segs, knots: [c.p0, ...set, c.p3], score, clean };
+        }
+        if (found && (found.clean || found.score < best!.score)) {
+          segs = found.segs;
+          knots = found.knots;
+        } else if (inner.length && fixedOut === undefined && fixedIn === undefined) {
+          // the free route itself, its corners rounded
+          segs = smoothRoute(route, arcOk(mine), BEND);
+          knots = route;
+        }
       }
+      g = { arrow: a, segs, knots, mid, handle: cubicAt({ segs }, 0.5), labels: [], level: 0 };
     }
+    placedPaths.push(geomSample(g, 10));
     geomOf.set(a, g);
   }
   for (const a of arrows) {
@@ -749,11 +801,14 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
     let stackAbove = 0;
     for (const l of g.arrow.labels) {
       const w = labelWidth ? labelWidth(l.runs) : l.runs.reduce((s, r) => s + r.text.length, 0) * m.fs * 0.45;
-      const [hx, hy] = g.arrow.via?.length ? cubicAt(g, 0.5) : g.handle;
+      const [hx, hy] = cubicAt(g, 0.5);
       let x = hx;
       let y = hy;
       let side = l.side;
-      if (side === 'auto') side = g.arrow.route === 'under' ? 'below' : g.outward && g.outward[0] < 0 ? 'left' : 'right';
+      if (side === 'auto') {
+        const ys = [g.segs[0][0][1], g.segs[g.segs.length - 1][3][1]];
+        side = hy >= Math.max(...ys) - 2 ? 'below' : hy <= Math.min(...ys) + 2 ? 'above' : 'right';
+      }
       if (side === 'below') {
         y = hy + lh * (1 + stackBelow);
         stackBelow++;
@@ -776,6 +831,48 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
     }
   }
   return { geoms, box };
+}
+
+/** sides an arrow end can take, as angles on the screen (degrees, 0 = right, 90 = down) */
+export const SIDE_ANGLE: Record<string, number> = { below: 90, above: -90, right: 0, left: 180 };
+/** what is tried for an end left to choose: below first (the usual movement arrow), then around */
+const AUTO_ANGLES = [90, 60, 120, 30, 150, 0, 180, -30, -150, -90];
+/** how far the curve swings out (TikZ looseness) */
+const LOOSENESS = [0.8, 1, 1.4, 2, 2.8, 4];
+/** for a node with daughters: sideways first, then up (never from below, through its daughters) */
+const SIDE_ANGLES = [180, 0, 150, 30, -150, -30, -90];
+function sidePenalty(deg: number, side = false): number {
+  const d = Math.round(deg);
+  // a node with daughters: sideways is best
+  if (side) return d === 0 || d === 180 ? 0 : d === 30 || d === 150 ? 4 : d === -30 || d === -150 ? 8 : 16;
+  // a word: below is the usual way an arrow leaves and enters; sideways costs a little, upwards more
+  return d === 90 ? 0 : d === 60 || d === 120 ? 4 : d === 30 || d === 150 ? 8 : d === 0 || d === 180 ? 12 : d === -90 ? 24 : 18;
+}
+const dir = (deg: number): P => [Math.cos((deg * Math.PI) / 180), Math.sin((deg * Math.PI) / 180)];
+const angleTo = (from: P, to: P) => (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
+/** the box of a node an arrow touches (its label, features, meaning and words), with a gap */
+function nodeBox(ln: LNode, gap: number): Box {
+  const b = ln.block;
+  if (b.point) return { x1: ln.x - 2, y1: ln.y - 2, x2: ln.x + 2, y2: ln.y + 2 };
+  return { x1: ln.x - b.w / 2 - gap, y1: ln.y - gap, x2: ln.x + b.w / 2 + gap, y2: ln.y + b.fullH + gap };
+}
+const boxCentre = (b: Box): P => [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+function curveLength(segs: Cubic[]): number {
+  const pts = geomSample({ segs }, 8);
+  let l = 0;
+  for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  return l;
+}
+/** where the line from the centre of a box at an angle leaves the box (as TikZ anchors a node at an angle) */
+function anchor(b: Box, deg: number): P {
+  const [cx, cy] = boxCentre(b);
+  const [dx, dy] = dir(deg);
+  let t = Infinity;
+  if (dx > 1e-9) t = Math.min(t, (b.x2 - cx) / dx);
+  if (dx < -1e-9) t = Math.min(t, (b.x1 - cx) / dx);
+  if (dy > 1e-9) t = Math.min(t, (b.y2 - cy) / dy);
+  if (dy < -1e-9) t = Math.min(t, (b.y1 - cy) / dy);
+  return [cx + dx * t, cy + dy * t];
 }
 
 /** Where a new bend point goes in the list of an arrow's bend points (by the nearest part of the curve). */

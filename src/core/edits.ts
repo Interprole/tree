@@ -308,6 +308,8 @@ export function arrowLine(a: Omit<AArrow, 'span'>): string {
   if (a.hidden) parts.push('hide');
   if (a.visible) parts.push('visible');
   if (a.plain) parts.push('plain');
+  if (a.outSide) parts.push('out=' + a.outSide);
+  if (a.inSide) parts.push('in=' + a.inSide);
   if (a.fromAt === 'node') parts.push('from=node');
   if (a.toAt === 'node') parts.push('to=node');
   if (a.line !== 'solid') parts.push(a.line);

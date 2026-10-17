@@ -158,13 +158,19 @@ function labelTex(n: DNode, style: TreeStyle): string {
 }
 
 /** The node and anchor an arrow end is drawn at: the same choice as on the canvas. */
+/**
+ * The node and anchor an arrow end is drawn at: the node it touches on the canvas, at the angle
+ * from its centre where the arrow leaves (as TikZ anchors a node at an angle: (n1.-90)).
+ */
 function endAnchor(a: DArrow, which: 'from' | 'to', layout: Layout | undefined, geom: ArrowGeom | undefined): { node: DNode; anchor: string } {
-  if (a.route === 'curve') return which === 'from' ? { node: a.from, anchor: 'north' } : { node: a.to, anchor: 'south' };
   const e = arrowEnd(a, which);
-  if (e.mode === 'bottom') return { node: e.node, anchor: 'south' };
   const ln = layout?.nodes.get(e.node);
   const p = geom && (which === 'from' ? geom.segs[0][0] : geom.segs[geom.segs.length - 1][3]);
-  return { node: e.node, anchor: ln && p && p[0] > ln.x ? 'east' : 'west' };
+  if (!ln || !p) return { node: e.node, anchor: 'south' };
+  const cx = ln.x;
+  const cy = ln.y + (ln.block.point ? 0 : ln.block.fullH / 2);
+  const deg = Math.round((Math.atan2(-(p[1] - cy), p[0] - cx) * 180) / Math.PI);
+  return { node: e.node, anchor: String(deg) };
 }
 
 function arrowTikz(a: DArrow, names: Map<DNode, string>, level: number, colors: Colors, geom: ArrowGeom | undefined, layout: Layout | undefined): string {
@@ -185,8 +191,8 @@ function arrowTikz(a: DArrow, names: Map<DNode, string>, level: number, colors: 
   const et = endAnchor(a, 'to', layout, geom);
   const sa = `${names.get(es.node)!}.${es.anchor}`;
   const ta = `${names.get(et.node)!}.${et.anchor}`;
-  if (a.via?.length && geom) {
-    // the same smooth curve through the bend points, placed relative to the middle of the two ends
+  if (geom) {
+    // the same curve as on the canvas, placed relative to the middle of the two ends
     const rel = ([x, y]: [number, number]) => `($(${sa})!0.5!(${ta})+(${px2pt(x - geom.mid[0])}pt,${px2pt(geom.mid[1] - y)}pt)$)`;
     const parts = geom.segs.map((c, i) => `.. controls ${rel(c[1])} and ${rel(c[2])} .. ${i === geom.segs.length - 1 ? `(${ta})` : rel(c[3])}`);
     // labels sit at the middle of the path: on the middle segment

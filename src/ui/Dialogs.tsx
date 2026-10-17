@@ -203,7 +203,7 @@ const GUIDE: GuideSection[] = [
           ['#a -> #b', 'Arrow from the node #a to the node #b (one arrow per line, after the tree).'],
           ['<->   <-   --', 'Two heads, reversed, no head.'],
           ['dashed  dotted', 'Line style.'],
-          ['curve', 'A direct curve instead of the route under the tree.'],
+          ['out=below  in=left', 'Where the arrow leaves and enters (below, above, left, right); by default the sides that touch nothing, as one smooth curve like TikZ’s to[out=…, in=…].'],
           ['"label"   @red', 'A label, a colour. Several labels are allowed.'],
           ['above"x"  below"y"  left"z"', 'Label position (default: auto = under an arrow below the tree, outside a curve). Drag a label to move it: writes "x"@dx,dy.'],
           ['bend=0,20', 'Offset of the bend (set by dragging the handle).'],

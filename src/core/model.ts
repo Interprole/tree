@@ -96,6 +96,9 @@ export interface DArrow {
   via?: [number, number][];
   /** just an arrow, not head movement */
   plain?: boolean;
+  /** where it leaves / enters (default: chosen) */
+  outSide?: 'below' | 'above' | 'left' | 'right';
+  inSide?: 'below' | 'above' | 'left' | 'right';
   /** ends at a node with only a word: the word (default) or the node */
   fromAt?: 'node' | 'word';
   toAt?: 'node' | 'word';

@@ -486,7 +486,24 @@ function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
           </p>
         )}
       </Group>
-      {a.route === 'under' && (hasOnlyExponent(a.from) || hasOnlyExponent(a.to)) && (
+      <Group title="Leaves and enters" hint="By default the arrow takes the sides that touch nothing; below first">
+        {(['out', 'in'] as const).map((k) => (
+          <div class="row tight" key={k}>
+            <span class="end-lbl">{k === 'out' ? 'Leaves' : 'Enters'}</span>
+            <div class="seg small grow">
+              {(['auto', 'below', 'above', 'left', 'right'] as const).map((side) => {
+                const cur = (k === 'out' ? a.outSide : a.inSide) ?? 'auto';
+                return (
+                  <button key={side} class={cur === side ? 'on' : ''} onClick={() => up(k === 'out' ? { outSide: side === 'auto' ? undefined : side, via: undefined } : { inSide: side === 'auto' ? undefined : side, via: undefined })}>
+                    {side === 'auto' ? 'best' : side}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </Group>
+      {(hasOnlyExponent(a.from) || hasOnlyExponent(a.to)) && (
         <Group title="Ends" hint="Where the arrow leaves and enters a node that has only a word or a morpheme">
           {hasOnlyExponent(a.from) && (
             <div class="row tight">
@@ -521,10 +538,6 @@ function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
           <button class={a.line === 'solid' ? 'on' : ''} onClick={() => up({ line: 'solid' })}>{t('arrowSolid')}</button>
           <button class={a.line === 'dashed' ? 'on' : ''} onClick={() => up({ line: 'dashed' })}>{t('arrowDashed')}</button>
           <button class={a.line === 'dotted' ? 'on' : ''} onClick={() => up({ line: 'dotted' })}>{t('arrowDotted')}</button>
-        </div>
-        <div class="seg small">
-          <button class={a.route === 'under' ? 'on' : ''} onClick={() => up({ route: 'under', bend: [0, 0], via: undefined })}>{t('arrowUnder')}</button>
-          <button class={a.route === 'curve' ? 'on' : ''} onClick={() => up({ route: 'curve', bend: [0, 0], via: undefined })}>{t('arrowCurve')}</button>
         </div>
         <div class="row tight">
           <div class="seg small">

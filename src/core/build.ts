@@ -222,7 +222,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
   const legacy = new Set<DArrow>();
   doc.arrows.forEach((a, index) => {
     const labels = a.labels.map((l, i) => ({ runs: parseRich(l.text), side: l.side, off: l.off, index: i }));
-    const styled = (from: DNode, to: DNode, extra: Partial<DArrow> = {}): DArrow => ({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], via: a.via, plain: a.plain, fromAt: a.fromAt, toAt: a.toAt, src: a, index, ...extra });
+    const styled = (from: DNode, to: DNode, extra: Partial<DArrow> = {}): DArrow => ({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], via: a.via, plain: a.plain, fromAt: a.fromAt, toAt: a.toAt, outSide: a.outSide, inSide: a.inSide, src: a, index, ...extra });
     // a link of a chain
     if (a.from === a.to && a.fromOcc && a.toOcc && !a.plain) {
       if (opts.chains === 'multidominance') return;
