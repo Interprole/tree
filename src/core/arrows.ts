@@ -642,9 +642,6 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
   const geomOf = new Map<DArrow, ArrowGeom>();
   /** radius of the turns of an arrow */
   const R = Math.max(14, m.fs * 1.8);
-  const DOWN: P = [0, 1];
-  const UP: P = [0, -1];
-  const reverse = (segs: Cubic[]): Cubic[] => segs.map((q) => [q[3], q[2], q[1], q[0]] as Cubic).reverse();
   for (const a of ordered) {
     const [ef, et] = endsOf.get(a)!;
     const lf = layout.nodes.get(ef.node);
@@ -667,8 +664,10 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
         const pick = (st: Exit[], toward: P) => st.reduce((b, e) => (Math.abs(e.attach[0] - toward[0]) < Math.abs(b.attach[0] - toward[0]) ? e : b));
         const A = pick(startsF, vias[0]);
         const B = pick(startsT, vias[vias.length - 1]);
-        const segs = [...(A.lead ? [A.lead] : []), ...splinePath([A.p, ...vias, B.p], { start: DOWN, end: UP }), ...(B.lead ? reverse([B.lead]) : [])];
-        g = { arrow: a, segs, knots: [A.attach, ...vias, B.attach], mid, handle: vias[0], labels: [], level };
+        // the same round corners as an arrow that found its own way: taking it over changes nothing
+        const route: P[] = [A.attach, ...vias, B.attach];
+        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), R);
+        g = { arrow: a, segs, knots: route, mid, handle: vias[0], labels: [], level };
       } else {
         // the arrow turns below what stands between its two ends, not below the whole tree
         const local = localBottom(Math.min(lf.x, lt.x) - R, Math.max(lf.x, lt.x) + R, Math.max(startsF[0].p[1], startsT[0].p[1]));
@@ -694,7 +693,8 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
         const route: P[] = [...side(chA.exit), ...inner(ca, chA.exit), [xa + dx, bottom], [xb + dx, bottom], ...inner(cb, chB.exit).reverse(), ...side(chB.exit).reverse()];
         const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), R);
         const handle: P = [(xa + xb) / 2 + dx, bottom];
-        g = { arrow: a, segs, knots: [route[0], handle, route[route.length - 1]], mid, handle, labels: [], level };
+        // every bend of the route is a point that can be dragged or removed
+        g = { arrow: a, segs, knots: route, mid, handle, labels: [], level };
       }
     } else {
       // direct curve from the source label to the target label, bulging outwards

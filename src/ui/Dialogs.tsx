@@ -267,7 +267,7 @@ const GUIDE: GuideSection[] = [
           ['Copy and paste', 'Ctrl+C copies the node with everything below it (the root: the whole tree), Ctrl+X cuts it. Ctrl+V pastes it as the last daughter of the selected node, Ctrl+Shift+V as its sister, and with nothing selected as a new tree on the canvas; Ctrl+D duplicates the node. A pasted copy is a constituent of its own: its #ids are renamed, arrows inside it come along.'],
           ['Linked branches', 'Right-click a node → Copy as a linked branch, then paste it (in this tree or another one). The copies are one branch: whatever changes inside one of them changes in all (in the code: ;link=…). Around a linked branch everything is free: add sisters or a mother, move it, re-merge it. A dashed frame shows linked branches on the canvas; Unlink makes one a branch of its own.'],
           ['Appearance', 'Click a tree, then Appearance sets that tree; click the empty canvas, and it sets all trees. When a setting for many meets values of their own (a tree, a node, an arrow, a copy), you are asked whether to replace them; Appearance → Values of their own changes that.'],
-          ['Mouse', 'Drag a node to move its branch: drop it on a node to make it its last daughter (Shift: its sister, Alt: a copy). Shift + drag draws a rectangle that selects the smallest branch with everything in it. Right-click a node for copy, paste, link and delete.'],
+          ['Mouse', 'Drag a node to move its branch: drop it on a node to make it its last daughter (Shift: its sister, Alt: a copy) — also onto a node of another tree, or onto an empty tree. A tree without nodes keeps its sheet: right-click it to add a node. Shift + drag draws a rectangle that selects the smallest branch with everything in it. Right-click a node for copy, paste, link and delete.'],
           ['Branching', <>Swap the two daughters: <em>left</em> turns [XP X [Z]] into [XP [Z] X], <em>right</em> turns [XP [Z] X] into [XP X [Z]].</>],
         ]} />
         <p>Drag the borders between the code, the canvas, the edit panel and the settings to make them wider or narrower (double-click a border: default). The ≡ button in the code (Shift+Alt+F) lays out the whole code.</p>
@@ -282,7 +282,7 @@ const GUIDE: GuideSection[] = [
           ['C-command', 'Click a node: green shows what it c-commands.'],
           ['Dominance', 'Click a node: blue shows what it dominates.'],
         ]} />
-        <p>Click a note or an arrow label to edit or delete it; drag it to move it. Click an arrow to change its line, head direction (→ ← ↔ —), colour, route, labels and bend points, to reverse it, or to make it <em>just an arrow</em> (not head movement). Deleting an arrow between two positions of a chain hides it (it does not come back with default settings). Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the trees.</p>
+        <p>Click a note or an arrow label to edit or delete it; drag it to move it. Every bend of a selected arrow is marked with a round handle: drag it, double-click it to remove it, double-click the arrow to add one. Click an arrow to change its line, head direction (→ ← ↔ —), colour, route, labels and bend points, to reverse it, or to make it <em>just an arrow</em> (not head movement). Deleting an arrow between two positions of a chain hides it (it does not come back with default settings). Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the trees.</p>
       </>
     ),
   },

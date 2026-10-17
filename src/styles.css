@@ -2247,3 +2247,15 @@ body.resizing .splitter::after {
   margin: 0;
   line-height: 1.45;
 }
+
+.empty-hint {
+  font: 600 13px var(--ui);
+  fill: #8a857b;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.empty-hint.small {
+  font-weight: 400;
+  font-size: 10.5px;
+}

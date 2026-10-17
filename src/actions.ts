@@ -10,7 +10,7 @@ import { cubicAt, insertVia } from './core/arrows';
 import type { ArrowGeom } from './core/arrows';
 import type { DArrow, DNode } from './core/model';
 import { t } from './i18n';
-import { activeTree, addTree, arrowSource, build, doc, duplicateTree, editable, pick, requestLabelFocus, scene, selection, showToast, source, sources, tool, tree, trees } from './state';
+import { activateTree, activeTree, addTree, arrowSource, otherScenes, build, doc, duplicateTree, editable, pick, requestLabelFocus, scene, selection, showToast, source, sources, tool, tree, trees } from './state';
 import { stripLinks } from './core/links';
 
 /** Bridge to the code editor, so that canvas edits go through its undo history. */
@@ -195,7 +195,7 @@ function freshLink(): string {
  * Copy a node with everything below it (the root: the whole tree with its arrows). linked: the
  * copy will be a linked branch (the original becomes one too); otherwise a branch of its own.
  */
-export function copyNode(n: DNode | null = selectedNode(), linked = false): TreeClip | null {
+export function copyNode(n: DNode | null = selectedNode(), linked = false, keepLinks = false): TreeClip | null {
   if (!n?.src) {
     if (n) showToast(t('syntheticNode'));
     return null;
@@ -222,7 +222,7 @@ export function copyNode(n: DNode | null = selectedNode(), linked = false): Tree
     ...(doc.value?.posStyles ?? []).filter((p) => ids.includes(p.id)).map((p) => src.slice(p.span.from, p.span.to)),
   ];
   const text = src.slice(span.from, span.to);
-  clip.value = { text: linked ? text : stripLinks(text), ids, arrows };
+  clip.value = { text: linked || keepLinks ? text : stripLinks(text), ids, arrows };
   return clip.value;
 }
 
@@ -416,6 +416,88 @@ export function moveNode(n: DNode, target: DNode, mode: 'daughter' | 'sister', c
   if (isNode) edit.select = { from: anchor + 1, to: anchor + 1 };
   const out = applyTidy(edit, anchor, isNode ? 1 : 0);
   selectNewNode(out.select?.from, false);
+}
+
+/**
+ * Move (or copy) a branch into another tree of the canvas: into an empty tree as its tree, or as
+ * the last daughter / the next sister of one of its nodes (targetKey, a node of that tree).
+ */
+export function moveToTree(n: DNode, treeId: string, targetKey: string | null, mode: 'daughter' | 'sister', copy = false) {
+  if (!editable.value) {
+    showToast(t('editDisabled'));
+    return;
+  }
+  const entry = trees.value.find((e) => e.id === treeId);
+  if (!entry || entry.id === activeTree.value.id) return;
+  const prevClip = clip.value;
+  const c = copyNode(n, false, !copy);
+  clip.value = prevClip;
+  if (!c) return;
+  const text = sources.value[entry.srcId] ?? '';
+  const r = parse(text);
+  if (!r.ok) {
+    showToast(`Fix the code of ${entry.name} first.`);
+    return;
+  }
+  // ids taken in the other tree get new names
+  const used = new Set(r.doc.ids.keys());
+  const ren = new Map<string, string>();
+  for (const id of c.ids) {
+    if (!used.has(id)) continue;
+    let k = 2;
+    while (used.has(id + k)) k++;
+    ren.set(id, id + k);
+    used.add(id + k);
+  }
+  const rename = (x: string) => (ren.size ? x.replace(/(?<!\\)#([\p{L}\p{N}_\-.:]+)/gu, (m, id: string) => (ren.has(id) ? '#' + ren.get(id) : m)) : x);
+  const piece = rename(c.text);
+  const lines = c.arrows.map(rename);
+  let next: string;
+  const target = targetKey ? otherTargetSrc(treeId, targetKey) : null;
+  if (!r.doc.root || !target) {
+    if (r.doc.root) {
+      showToast(`Drop it on a node of ${entry.name}: as its daughter, or with Shift as its sister.`);
+      return;
+    }
+    next = [piece, ...lines, text.trim()].filter(Boolean).join('\n');
+  } else {
+    const ts = mode === 'sister' || target.kind === 'leaf' ? target : target;
+    if (mode === 'sister' && ts.kind === 'node' && ts === r.doc.root) {
+      showToast('The root cannot have sisters.');
+      return;
+    }
+    const tSpan = ts.kind === 'leaf' ? ts.fullSpan : ts.span;
+    const at = mode === 'daughter' && ts.kind === 'node' ? tSpan.to - 1 : tSpan.to;
+    const changes: E.TextChange[] = [{ from: at, to: at, insert: ' ' + piece }];
+    if (lines.length) {
+      const end = text.replace(/\s+$/, '').length;
+      changes.push({ from: end, to: text.length, insert: '\n' + lines.join('\n') + '\n' });
+    }
+    const out = tidyEdit(text, { changes }, at + 1, piece.startsWith('[') ? 1 : 0);
+    next = E.applyChanges(text, out.changes);
+  }
+  sources.value = { ...sources.value, [entry.srcId]: next };
+  if (!copy) deleteNode(n);
+}
+
+/** the source element of a node of another tree (positions in that tree's code) */
+function otherTargetSrc(treeId: string, key: string): ANode | ALeaf | null {
+  const o = otherScenes.value.find((x) => x.entry.id === treeId);
+  const h = o?.scene?.hits.find((x) => x.key === key);
+  return h?.node.src ?? null;
+}
+
+/** A tree without nodes gets its first node, X, ready to be named. */
+export function addRootNode(treeId: string) {
+  if (treeId !== activeTree.value.id) activateTree(treeId);
+  queueMicrotask(() => {
+    const src = source.value;
+    const r = parse(src);
+    if (r.ok && r.doc.root) return;
+    const ins = src.trim() ? '[X]\n' : '[X]';
+    applyEdit({ changes: [{ from: 0, to: src.trim() ? 0 : src.length, insert: ins }], select: { from: 1, to: 2 } });
+    selectNewNode(1);
+  });
 }
 
 /** Copy and delete. */
@@ -887,8 +969,7 @@ export function arrowGeom(index: number): ArrowGeom | null {
 
 /** One more bend point: the handle of an arrow without any, or a point in the middle of the arrow. */
 export function addViaAtMiddle(g: ArrowGeom): [number, number][] {
-  if (!g.arrow.via?.length) return [[Math.round(g.handle[0] - g.mid[0]), Math.round(g.handle[1] - g.mid[1])]];
-  return insertVia(g, cubicAt(g, 0.5));
+  return insertVia(g, g.arrow.via?.length ? cubicAt(g, 0.5) : g.handle);
 }
 
 /** Explicit arrow lines that start or end at a node (by its #id): e.g. its head movement, drawn or not. */
