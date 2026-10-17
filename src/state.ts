@@ -8,7 +8,7 @@ import type { Measure } from './core/measure';
 import type { DTree } from './core/model';
 import { parse } from './core/parser';
 import { formatDoc } from './core/format';
-import { buildScene } from './core/scene';
+import { buildSheetScene } from './core/scene';
 import type { Scene } from './core/scene';
 import { defaultStyle, fontCss } from './core/style';
 import type { TreeStyle } from './core/style';
@@ -109,7 +109,7 @@ export const scene = computed<Scene | null>(() => {
   const o = bendOverride.value;
   if (o) t = { ...t, arrows: t.arrows.map((a, i) => (i === o.index ? { ...a, ...(o.bend ? { bend: o.bend } : {}), ...(o.via ? { via: o.via } : {}) } : a)) };
   try {
-    return buildScene(t, style.value, currentMeasure());
+    return buildSheetScene(t, style.value, currentMeasure());
   } catch (e) {
     console.error(e);
     return null;
@@ -263,7 +263,7 @@ export const otherScenes = computed(() => {
         sc = null;
         try {
           const t = buildTree(r.doc, e.build);
-          sc = t ? buildScene(t, e.style, currentMeasure()) : null;
+          sc = t ? buildSheetScene(t, e.style, currentMeasure()) : null;
         } catch (err) {
           console.error(err);
         }

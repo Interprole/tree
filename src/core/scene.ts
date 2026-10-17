@@ -149,6 +149,33 @@ export function runsPieces(runs: Runs, x: number, y: number, size: number, baseI
   return { pieces, overlines, strikes, width: cx - x };
 }
 
+/** The same look at another size: type, spacing and lines scaled together. */
+export function scaleStyle(style: TreeStyle, k: number): TreeStyle {
+  return {
+    ...style,
+    fontSize: style.fontSize * k,
+    levelGap: style.levelGap * k,
+    siblingGap: style.siblingGap * k,
+    padding: style.padding * k,
+    lineWidth: style.lineWidth * k,
+    edgeGap: style.edgeGap * k,
+  };
+}
+
+/**
+ * The picture on a sheet of a chosen size (sheetWidth / sheetHeight): the tree grows or shrinks
+ * to fill it (keeping its proportions) and stands in its middle.
+ */
+export function buildSheetScene(tree: DTree, style: TreeStyle, measure: Measure): Scene {
+  const W = style.sheetWidth || 0;
+  const H = style.sheetHeight || 0;
+  if (!W && !H) return buildScene(tree, style, measure);
+  const base = buildScene(tree, { ...style, sheetWidth: 0, sheetHeight: 0 }, measure);
+  const k = Math.min(W ? W / base.width : Infinity, H ? H / base.height : Infinity);
+  if (!Number.isFinite(k) || Math.abs(k - 1) < 0.003) return buildScene(tree, style, measure);
+  return buildScene(tree, { ...scaleStyle(style, k), sheetWidth: W, sheetHeight: H }, measure);
+}
+
 export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layoutIn?: Layout): Scene {
   const layout = layoutIn ?? layoutTree(tree, style, measure);
   const m = metricsFor(style);

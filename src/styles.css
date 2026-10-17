@@ -2138,6 +2138,7 @@ body.resizing .splitter::after {
 .ctx-menu {
   width: 270px;
   z-index: 40;
+  max-height: calc(100% - 16px);
 }
 
 .ctx-menu .danger strong {

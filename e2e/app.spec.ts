@@ -758,6 +758,9 @@ test('the sheet of a tree can be made larger by its corner, and back', async ({ 
   await page.mouse.move(c.x + 120, c.y + 80, { steps: 6 });
   await page.mouse.up();
   await expect.poll(async () => (await paper.boundingBox())!.width).toBeGreaterThan(w0 + 60);
+  // the tree grows with it
+  const fs = await page.locator('.prims text').first().getAttribute('font-size');
+  expect(Number(fs)).toBeGreaterThan(17);
   // the export has the same size
   await page.getByTestId('export').click();
   await expect(page.locator('.modal')).toContainText('×');
@@ -765,4 +768,46 @@ test('the sheet of a tree can be made larger by its corner, and back', async ({ 
   const c2 = (await page.locator('.sheet-resize').boundingBox())!;
   await page.mouse.dblclick(c2.x + c2.width / 2, c2.y + c2.height / 2);
   await expect.poll(async () => Math.round((await paper.boundingBox())!.width)).toBe(Math.round(w0));
+});
+
+test('a branch with a copy moves into another tree in full; the copy left behind is pronounced; paste into an empty tree', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP#wh what] [C\' [C did] [VP [V buy] #wh]]]');
+  await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
+  await page.locator('.add-tree').click();
+  await page.locator('.tree-tab .tab-name').first().click();
+  await page.locator('button[aria-label="Fit to window"]').click();
+  // VP holds the silent copy of what: in the other tree it is written out
+  const vp = (await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^VP$/ }) }).boundingBox())!;
+  const empty = (await page.locator('.empty-sheet .paper').boundingBox())!;
+  await page.mouse.move(vp.x + vp.width / 2, vp.y + vp.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(empty.x + empty.width / 2, empty.y + empty.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(() => code(page)).not.toContain('VP');
+  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await expect.poll(() => code(page)).toBe('[VP [V buy] [DP what]]');
+  // the DP leaves tree 1 the other way: tree 1 keeps a pronounced what
+  await page.locator('.tree-tab .tab-name').first().click();
+  await setCode(page, '[CP [DP#wh what] [C\' [C did] [VP [V buy] #wh]]]');
+  await page.locator('.tree-tab').first().locator('.tab-more').click();
+  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  await setCode(page, '');
+  await page.locator('.tree-tab .tab-name').first().click();
+  await page.locator('button[aria-label="Fit to window"]').click();
+  const dp = (await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^DP$/ }) }).first().boundingBox())!;
+  const empty2 = (await page.locator('.empty-sheet .paper').first().boundingBox())!;
+  await page.mouse.move(dp.x + dp.width / 2, dp.y + dp.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(empty2.x + empty2.width / 2, empty2.y + empty2.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(() => code(page)).toBe("[CP [C' [C did] [VP [V buy] [DP#wh what]]]]");
+  // copy a branch, paste it into an empty tree
+  await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^VP$/ }) }).click();
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('ControlOrMeta+c');
+  await page.locator('.add-tree').click();
+  await page.locator('.empty-sheet.active-sheet .paper').click({ button: 'right' });
+  await page.locator('.ctx-menu button', { hasText: 'Paste here' }).click();
+  await expect.poll(() => code(page)).toBe('[VP [V buy] [DP#wh what]]');
 });

@@ -223,7 +223,7 @@ export function SettingsPanel() {
           <NumField label="Sheet width (px)" value={s.sheetWidth || undefined} placeholder="fit" min={0} step={10} onCommit={(v) => setStyle({ sheetWidth: v ? Number(v) : 0 })} />
           <NumField label="Sheet height (px)" value={s.sheetHeight || undefined} placeholder="fit" min={0} step={10} onCommit={(v) => setStyle({ sheetHeight: v ? Number(v) : 0 })} />
         </div>
-        <p class="hint">Empty: as large as the tree needs. Or drag the corner of the sheet on the canvas.</p>
+        <p class="hint">Empty: as large as the tree needs. A larger or smaller sheet makes the tree grow or shrink with it (in proportion). Or drag the corner of the sheet on the canvas.</p>
         <Toggle label={t('leavesAtBottom')} checked={s.leavesAtBottom} reset={rs('leavesAtBottom')} onChange={(v) => setStyle({ leavesAtBottom: v })} />
       </Section>
 
