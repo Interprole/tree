@@ -16,7 +16,7 @@ class Fail extends Error {
 
 const isWs = (c: string | undefined) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === ' ';
 const ID_RE = /[\p{L}\p{N}_\-.:]/u;
-const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch', 'link']);
+const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch', 'link', 'to']);
 const LABEL_RE = /^(left|right|above|below)?"((?:[^"\\]|\\.)*)"(?:@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?))?/;
 
 /** side"text"@dx,dy at the start of s */
@@ -480,6 +480,7 @@ class Parser {
       else if (tok === 'dashed' || tok === 'dotted' || tok === 'solid') arrow.line = tok;
       else if (tok === 'under' || tok === 'curve') arrow.route = tok;
       else if (tok === 'hide') arrow.hidden = true;
+      else if (tok === 'visible') arrow.visible = true;
       else if (tok === 'plain') arrow.plain = true;
       else if (/^(from|to)=(node|word)$/.test(tok)) {
         const [k, v] = tok.split('=') as ['from' | 'to', 'node' | 'word'];
@@ -500,7 +501,7 @@ class Parser {
         const nums = tok.slice(5).split(',').map(Number);
         if (nums.some((n) => !Number.isFinite(n))) this.fail('bend= expects numbers, e.g. bend=0,20', tokFrom, tokFrom + tok.length);
         arrow.bend = [nums.length > 1 ? nums[0] : 0, nums.length > 1 ? nums[1] : nums[0]];
-      } else this.fail(`Unknown arrow option "${tok}". Use dashed, dotted, curve, plain, hide, from=node, to=node, "label", @colour, bend=x,y or via=x,y;x,y`, tokFrom, tokFrom + tok.length);
+      } else this.fail(`Unknown arrow option "${tok}". Use dashed, dotted, curve, plain, hide, visible, from=node, to=node, "label", @colour, bend=x,y or via=x,y;x,y`, tokFrom, tokFrom + tok.length);
     }
     this.i = lineEnd;
     return arrow;
@@ -543,6 +544,16 @@ class Parser {
           this.fail(`Arrow refers to unknown id "#${id}"`, k, k + id.length + 1);
         }
       }
+    }
+    // head movement written on the moved head: [V#v;to=t …]
+    if (root) {
+      walkAst(root, (n) => {
+        const to = n.opts?.to;
+        if (to && !this.ids.has(to)) {
+          const k = this.src.indexOf(';to=' + to, n.headerSpan.from);
+          this.fail(`Head movement to unknown id "#${to}"`, k, k + 4 + to.length);
+        }
+      });
     }
     for (const p of posStyles) {
       if (!this.ids.has(p.id)) this.fail(`No node with id "#${p.id}"`, p.span.from, p.span.from + p.id.length + 1);

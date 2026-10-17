@@ -746,7 +746,8 @@ export function arrowClick(n: DNode) {
   arrowSource.value = null;
   tool.value = 'select';
   if (!from || !to) return;
-  applyEdit(E.addArrow(source.value, doc.value!, from, to));
+  // a new arrow is just an arrow; making it movement is a choice of its own
+  applyEdit(E.addArrow(source.value, doc.value!, from, to, { plain: true }));
   queueMicrotask(() => {
     const arrows = tree.value?.arrows ?? [];
     const i = arrows.findIndex((a) => a.src && a.index === (doc.value?.arrows.length ?? 0) - 1);

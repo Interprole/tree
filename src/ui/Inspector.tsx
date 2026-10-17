@@ -2,6 +2,7 @@ import { signal, useSignal, useSignalEffect } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import * as A from '../actions';
+import * as M from '../movement';
 import type * as E from '../core/edits';
 import type { DArrow, DNode } from '../core/model';
 import { hasOnlyExponent } from '../core/arrows';
@@ -262,7 +263,6 @@ function NodePanel({ n }: { n: DNode }) {
   const inChain = !!(n.chainRef || n.id);
   const overt = !n.copy && !n.trace;
   const ref = A.chainRef(n);
-  const lines = A.arrowLinesOf(n);
   /** inside a lower position of a chain: triangle and colour apply to this position only */
   const linked = A.linkedBranchOf(n);
   // a position of a chain (or inside one): edits go to this copy only, or to all copies
@@ -339,36 +339,6 @@ function NodePanel({ n }: { n: DNode }) {
         <Tool title={t('delete')} icon={<ITrash />} text="Delete" danger disabled={disabled} onClick={() => A.deleteNode(n)} />
       </ToolRow>
 
-      <Group title="Copy and paste" hint="A pasted copy is a constituent of its own (its #ids are renamed), not one more position of the original">
-        <div class="row wrap">
-          <button class="btn small" disabled={!n.src} onClick={() => A.copyNode(n) && showToast('Copied.')} title="Ctrl+C">
-            Copy
-          </button>
-          <button class="btn small" disabled={disabled || n.kind === 'leaf'} onClick={() => A.copyNode(n, true) && showToast('Copied as a linked branch: paste it anywhere, the copies stay in sync.')} title="Pasted, it stays linked: what changes inside one copy changes in all">
-            Copy linked
-          </button>
-          <button class="btn small" disabled={disabled} onClick={() => A.cutNode(n)} title="Ctrl+X">
-            Cut
-          </button>
-          <button class="btn small" disabled={disabled} onClick={() => A.duplicateNode(n)} title="Ctrl+D: a copy right after it">
-            Duplicate
-          </button>
-        </div>
-        {A.clip.value && (
-          <div class="row wrap">
-            <button class="btn small" disabled={disabled} onClick={() => A.paste(A.clip.value, n, 'daughter')} title="Ctrl+V">
-              Paste as daughter
-            </button>
-            <button class="btn small" disabled={disabled || !n.parents.length} onClick={() => A.paste(A.clip.value, n, 'sister')} title="Ctrl+Shift+V">
-              as sister
-            </button>
-            <button class="btn small" onClick={() => A.paste(A.clip.value, null)} title="Ctrl+V with nothing selected">
-              as a new tree
-            </button>
-          </div>
-        )}
-      </Group>
-
       <Group title="Movement">
         <div class="row wrap">
           <button class="btn small" disabled={disabled} onClick={() => A.startPick('daughter', n)} title="Then click a constituent: it becomes one more position of the same element (#id)">
@@ -393,28 +363,6 @@ function NodePanel({ n }: { n: DNode }) {
           />
         )}
       </Group>
-
-      {lines.length > 0 && (
-        <Group title="Arrows and head movement" hint="Arrow lines from or to this node; a hidden arrow between heads keeps its head movement">
-          {lines.map((l, i) => (
-            <div class="row tight arrow-line" key={i}>
-              <span class="grow mono-small" title={l.hidden ? 'Not drawn' : 'Drawn'}>
-                #{l.from}
-                {l.fromOcc ? `/${l.fromOcc}` : ''} → #{l.to}
-                {l.toOcc ? `/${l.toOcc}` : ''}
-                {l.plain ? ' · just an arrow' : ''}
-                {l.hidden ? ' · hidden' : ''}
-              </span>
-              <button class="btn small" onClick={() => A.setArrowLineHidden(l, !l.hidden)}>
-                {l.hidden ? 'Show arrow' : 'Hide arrow'}
-              </button>
-              <button class="icon-btn small danger" title="Remove (the movement too)" aria-label="Remove the arrow" onClick={() => A.deleteArrowLine(l)}>
-                ✕
-              </button>
-            </div>
-          ))}
-        </Group>
-      )}
 
       <Group title="Features and meaning">
         <TextField key={'f' + n.key + scopeThis} label="Features, separated by commas" value={pick(own?.features?.join(', '), srcNode?.features?.join(', ') ?? '')} placeholder="uφ, iT, EPP" onCommit={(v) => A.setFeatures(n, v)} />
@@ -465,6 +413,36 @@ function NodePanel({ n }: { n: DNode }) {
           </div>
         </Group>
       )}
+      <Group title="Copy and paste" hint="A pasted copy is a constituent of its own (its #ids are renamed), not one more position of the original">
+        <div class="row wrap">
+          <button class="btn small" disabled={!n.src} onClick={() => A.copyNode(n) && showToast('Copied.')} title="Ctrl+C">
+            Copy
+          </button>
+          <button class="btn small" disabled={disabled || n.kind === 'leaf'} onClick={() => A.copyNode(n, true) && showToast('Copied as a linked branch: paste it anywhere, the copies stay in sync.')} title="Pasted, it stays linked: what changes inside one copy changes in all">
+            Copy linked
+          </button>
+          <button class="btn small" disabled={disabled} onClick={() => A.cutNode(n)} title="Ctrl+X">
+            Cut
+          </button>
+          <button class="btn small" disabled={disabled} onClick={() => A.duplicateNode(n)} title="Ctrl+D: a copy right after it">
+            Duplicate
+          </button>
+        </div>
+        {A.clip.value && (
+          <div class="row wrap">
+            <button class="btn small" disabled={disabled} onClick={() => A.paste(A.clip.value, n, 'daughter')} title="Ctrl+V">
+              Paste as daughter
+            </button>
+            <button class="btn small" disabled={disabled || !n.parents.length} onClick={() => A.paste(A.clip.value, n, 'sister')} title="Ctrl+Shift+V">
+              as sister
+            </button>
+            <button class="btn small" onClick={() => A.paste(A.clip.value, null)} title="Ctrl+V with nothing selected">
+              as a new tree
+            </button>
+          </div>
+        )}
+      </Group>
+
     </div>
   );
 }
@@ -473,6 +451,7 @@ function NodePanel({ n }: { n: DNode }) {
 
 function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
   const up = (p: Parameters<typeof A.updateArrow>[1]) => A.updateArrow(a, p);
+  const movement = M.isMovement(a);
   const initial = (a.src?.labels ?? []).map((l) => ({ text: l.text, side: l.side, off: l.off }));
   const nVia = a.via?.length ?? 0;
   return (
@@ -482,32 +461,21 @@ function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
         {a.auto && <span class="chip">automatic</span>}
         {a.plain && <span class="chip">plain</span>}
       </header>
-      {a.auto && <p class="hint">Drawn automatically between two positions of a chain. Changing it writes an arrow line into the code.</p>}
-      {!a.auto && (
-        <Group title="Meaning" hint="An arrow between two heads is head movement: the source is struck through and the target becomes a complex head.">
-          <div class="seg small">
-            <button class={!a.plain ? 'on' : ''} onClick={() => up({ plain: undefined })} title="Between heads: strikes the source, the target shows V+v">
-              Movement
-            </button>
-            <button class={a.plain ? 'on' : ''} onClick={() => up({ plain: true })} title="Just an arrow from node to node: nothing is struck through or joined">
-              Just an arrow
-            </button>
-          </div>
-          {!a.plain && (
-            <button
-              class="btn small"
-              title="Head movement stays (the struck source, V+v); only the arrow is not drawn"
-              onClick={() => {
-                up({ hidden: true });
-                selection.value = null;
-                showToast('The arrow is hidden; the movement stays. Show it again from the panel of either node.');
-              }}
-            >
-              Movement without the arrow
-            </button>
-          )}
-        </Group>
-      )}
+      <Group title="Meaning" hint="Movement is written in the tree: two constituents of one category become copies (a chain), two heads of different categories head movement">
+        <div class="seg small">
+          <button class={!movement ? 'on' : ''} onClick={() => M.setArrowKind(a, false)} title="Just an arrow from node to node: nothing moves">
+            Just an arrow
+          </button>
+          <button class={movement ? 'on' : ''} onClick={() => M.setArrowKind(a, true)} title="Phrases (or heads) of one category become copies; heads of different categories: head movement">
+            Movement
+          </button>
+        </div>
+        {movement && (
+          <p class="hint">
+            {a.chain ? `Phrasal movement: positions ${a.chain.from} → ${a.chain.to} of #${a.chain.id}.` : 'Head movement: the source is struck through, the target shows the complex head.'}
+          </p>
+        )}
+      </Group>
       {a.route === 'under' && (hasOnlyExponent(a.from) || hasOnlyExponent(a.to)) && (
         <Group title="Ends" hint="Where the arrow leaves and enters a node that has only a word or a morpheme">
           {hasOnlyExponent(a.from) && (
@@ -583,10 +551,21 @@ function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
       <Group title="Labels">
         <LabelList key={index + ':' + initial.length} initial={initial} placeholder={t('arrowLabel')} onApply={(l) => up({ labels: l.filter((x) => x.text.trim()).map((x) => ({ ...x, span: { from: 0, to: 0 } })) })} />
       </Group>
-      <div class="row">
-        <button class="btn small danger-btn" onClick={() => A.deleteArrow(a)}>
-          <ITrash size={15} /> Delete arrow
-        </button>
+      <div class="row wrap">
+        {movement ? (
+          <>
+            <button class="btn small danger-btn" onClick={() => M.deleteArrow(a, false)} title="Only the arrow goes; the movement stays (Delete)">
+              <ITrash size={15} /> Delete arrow, keep movement
+            </button>
+            <button class="btn small danger-btn" onClick={() => M.deleteArrow(a, true)} title="The movement is undone: the lower copy becomes a constituent of its own, the head stays in place">
+              <ITrash size={15} /> Delete with movement
+            </button>
+          </>
+        ) : (
+          <button class="btn small danger-btn" onClick={() => M.deleteArrow(a)}>
+            <ITrash size={15} /> Delete arrow
+          </button>
+        )}
       </div>
     </div>
   );

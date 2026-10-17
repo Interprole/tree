@@ -50,7 +50,7 @@ export function escapeText(s: string): string {
 
 type Mods = Pick<ANode, 'id' | 'color' | 'branchColor' | 'pronounce' | 'opts'>;
 
-const OPT_ORDER = ['edge', 'width', 'len', 'spread', 'sem', 'link'];
+const OPT_ORDER = ['to', 'edge', 'width', 'len', 'spread', 'sem', 'link'];
 
 export function modifiers(n: Mods): string {
   const voice = n.id && n.pronounce !== undefined ? (n.pronounce ? '!' : '?') : '';
@@ -72,7 +72,7 @@ function setModifiers(n: ANode, patch: Partial<Mods>): TextChange {
 }
 
 /** Set (or remove, with null) a node option: edge colour, edge width, length, spread, meaning colour. */
-export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'link', value: string | null): Edit {
+export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'link' | 'to', value: string | null): Edit {
   const opts = { ...(n.opts ?? {}) };
   if (value === null || value === '') delete opts[key];
   else opts[key] = value;
@@ -306,6 +306,7 @@ export function arrowLine(a: Omit<AArrow, 'span'>): string {
   const end = (id: string, occ?: number) => `#${id}${occ ? '/' + occ : ''}`;
   const parts = [`${end(a.from, a.fromOcc)} ${op} ${end(a.to, a.toOcc)}`];
   if (a.hidden) parts.push('hide');
+  if (a.visible) parts.push('visible');
   if (a.plain) parts.push('plain');
   if (a.fromAt === 'node') parts.push('from=node');
   if (a.toAt === 'node') parts.push('to=node');

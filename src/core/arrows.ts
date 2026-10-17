@@ -594,11 +594,11 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
   if (routeCache?.key !== key) routeCache = { key, channels: new Map(), field: null };
   const cache = routeCache;
   const field = () => (cache.field ??= makeField(layout, channelBottom + 8));
-  const getChannel = (a: DArrow, which: 'from' | 'to', ln: LNode, starts: Exit[]) => {
-    const k = `${arrows.indexOf(a)}:${which}`;
+  const getChannel = (a: DArrow, which: 'from' | 'to', ln: LNode, starts: Exit[], down = channelBottom) => {
+    const k = `${arrows.indexOf(a)}:${which}:${Math.round(down)}`;
     let c = cache.channels.get(k);
     if (!c) {
-      c = channel(field(), ln, starts, channelBottom);
+      c = channel(field(), ln, starts, down);
       markTaken(field(), [c.exit.attach, ...c.pts]);
       cache.channels.set(k, c);
     }
@@ -624,6 +624,21 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
 
   // route narrow arrows first: they take the closest channels
   const ordered = [...under.map((u) => u.a), ...arrows.filter((a) => a.route !== 'under')];
+  /** under-arrows laid out so far: an arrow over others runs below them */
+  const placed: { x1: number; x2: number; bottom: number }[] = [];
+  /** the lowest label or branch between x1 and x2 (at least y) */
+  const localBottom = (x1: number, x2: number, y: number): number => {
+    let b = y;
+    for (const ln of layout.list) {
+      const bl = ln.block;
+      if (ln.x + bl.w / 2 + bl.extraR >= x1 && ln.x - bl.w / 2 - bl.extraL <= x2) b = Math.max(b, ln.y + bl.fullH);
+    }
+    for (const e of layout.edges) {
+      const xs = [e.x1, e.x2, e.bx1 ?? e.x2, e.bx2 ?? e.x2];
+      if (Math.max(...xs) >= x1 && Math.min(...xs) <= x2) b = Math.max(b, e.y2);
+    }
+    return Math.min(b, treeBottom);
+  };
   const geomOf = new Map<DArrow, ArrowGeom>();
   /** radius of the turns of an arrow */
   const R = Math.max(14, m.fs * 1.8);
@@ -655,12 +670,19 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
         const segs = [...(A.lead ? [A.lead] : []), ...splinePath([A.p, ...vias, B.p], { start: DOWN, end: UP }), ...(B.lead ? reverse([B.lead]) : [])];
         g = { arrow: a, segs, knots: [A.attach, ...vias, B.attach], mid, handle: vias[0], labels: [], level };
       } else {
-        const chA = getChannel(a, 'from', lf, startsF);
-        const chB = getChannel(a, 'to', lt, startsT);
+        // the arrow turns below what stands between its two ends, not below the whole tree
+        const local = localBottom(Math.min(lf.x, lt.x) - R, Math.max(lf.x, lt.x) + R, Math.max(startsF[0].p[1], startsT[0].p[1]));
+        const chA = getChannel(a, 'from', lf, startsF, local + 6);
+        const chB = getChannel(a, 'to', lt, startsT, local + 6);
         const ca = chA.pts;
         const cb = chB.pts;
-        // deep enough below the tree for a whole round turn at the ends
-        const bottom = treeBottom + Math.max(spacing * 0.9, R + 6) + spacing * level + a.bend[1];
+        // deep enough for a whole round turn at the ends; below the arrows it spans
+        const x1 = Math.min(lf.x, lt.x);
+        const x2 = Math.max(lf.x, lt.x);
+        let bottom = local + Math.max(spacing * 0.9, R + 6);
+        for (const p of placed) if (p.x1 <= x2 + 12 && x1 <= p.x2 + 12) bottom = Math.max(bottom, p.bottom + spacing);
+        placed.push({ x1, x2, bottom });
+        bottom += a.bend[1];
         const dx = a.bend[0];
         const xa = ca[ca.length - 1][0];
         const xb = cb[cb.length - 1][0];

@@ -394,10 +394,27 @@ test('bend points: double-click the arrow to add one, drag it, double-click it t
   await expect.poll(() => code(page)).not.toContain('via=');
 });
 
-test('head movement without the arrow', async ({ page }) => {
+test('arrows are just arrows; movement: head movement written on the head, phrasal movement as copies', async ({ page }) => {
   await page.goto('./');
-  await setCode(page, '[TP [T#t -s] [VP [V#v sing] [DP it]]]\n#v -> #t');
+  await setCode(page, '[TP [T#t -s] [VP [V#v sing] [DP it]]]');
+  const node = (label: string, i = 0) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label.replace(/[+]/g, '\\+')}$`) }) }).nth(i);
+  const insp = page.locator('.inspector');
+  const draw = async (from: string, to: string) => {
+    await page.locator('button[aria-label="Draw movement arrow"]').click();
+    await node(from).click();
+    await node(to).click();
+  };
+  await draw('V', 'T');
+  await expect.poll(() => code(page)).toContain('#v -> #t plain');
+  await expect(page.locator('.prims')).not.toContainText('sing+-s');
+  // movement between heads of two categories: head movement, written on the head
+  await insp.locator('.seg button', { hasText: 'Movement' }).click();
+  await expect.poll(() => code(page)).toContain('[V#v;to=t sing]');
+  await expect.poll(() => code(page)).not.toContain('plain');
   await expect(page.locator('.prims')).toContainText('sing+-s');
+  await expect(page.locator('.arrow-hit')).toHaveCount(1);
+  // delete the arrow, keep the movement
+  await page.locator('.arrow-hit').first().evaluate((el) => el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })));
   const mid = await page.locator('.arrow-hit').first().evaluate((el) => {
     const p = el as SVGPathElement;
     const pt = p.getPointAtLength(p.getTotalLength() / 2);
@@ -405,21 +422,44 @@ test('head movement without the arrow', async ({ page }) => {
     return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
   });
   await page.mouse.click(mid.x, mid.y);
-  await page.locator('.inspector button', { hasText: 'Movement without the arrow' }).click();
+  await insp.locator('button', { hasText: 'Delete arrow, keep movement' }).click();
   await expect.poll(() => code(page)).toContain('#v -> #t hide');
   await expect(page.locator('.arrow-hit')).toHaveCount(0);
-  // the movement stays
   await expect(page.locator('.prims')).toContainText('sing+-s');
-  // the arrow comes back from the panel of the node
-  await page.locator('[data-node] title', { hasText: /^V\+T$/ }).locator('..').click();
-  await page.locator('.inspector button', { hasText: 'Show arrow' }).click();
+  // the same movement again: one visible arrow, no hidden one left
+  await draw('V', 'V+T');
+  await insp.locator('.seg button', { hasText: 'Movement' }).click();
   await expect.poll(() => code(page)).not.toContain('hide');
   await expect(page.locator('.arrow-hit')).toHaveCount(1);
-  // all head-movement arrows off, the movement still on
+  // the switch hides movement arrows only
   await page.getByTestId('settings-toggle').click();
   await page.locator('.settings .toggle', { hasText: 'Arrows for head movement' }).click();
   await expect(page.locator('.arrow-hit')).toHaveCount(0);
   await expect(page.locator('.prims')).toContainText('sing+-s');
+});
+
+test('phrasal movement: copies; categories must match', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[CP [DP what] [C\' [C did] [VP [V see] [DP what] [NP it]]]]');
+  await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
+  const node = (label: string, i = 0) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label}$`) }) }).nth(i);
+  const insp = page.locator('.inspector');
+  await page.locator('button[aria-label="Draw movement arrow"]').click();
+  await node('NP').click();
+  await node('DP', 0).click();
+  await insp.locator('.seg button', { hasText: 'Movement' }).click();
+  await expect(page.locator('.toast')).toContainText('one category');
+  await expect.poll(() => code(page)).toContain('plain');
+  await insp.locator('button', { hasText: 'Delete arrow' }).click();
+  await expect.poll(() => code(page)).not.toContain('->');
+  await page.locator('button[aria-label="Draw movement arrow"]').click();
+  await node('DP', 1).click();
+  await node('DP', 0).click();
+  await insp.locator('.seg button', { hasText: 'Movement' }).click();
+  // the same words: the lower one is a silent copy of the higher one
+  await expect.poll(() => code(page)).toMatch(/\[DP#dp what\][^]*\[V see\]\s+#dp\s+\[NP(#np)? it\]/);
+  await expect.poll(() => code(page)).not.toContain('->');
+  await expect(page.locator('.arrow-hit')).toHaveCount(1);
 });
 
 test('save the canvas to disk and open it again (download where files cannot be written)', async ({ page }) => {
