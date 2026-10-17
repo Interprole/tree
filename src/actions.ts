@@ -4,7 +4,8 @@ import { POS_NOTE } from './core/build';
 import { parse, walkAst } from './core/parser';
 import * as E from './core/edits';
 import type { Edit } from './core/edits';
-import { formatDoc, tidyEdit } from './core/format';
+import { diffChange, formatDoc, tidyEdit } from './core/format';
+import { standalonePiece, withoutBranch } from './core/standalone';
 import { askOverride } from './ask';
 import { cubicAt, insertVia } from './core/arrows';
 import type { ArrowGeom } from './core/arrows';
@@ -174,6 +175,8 @@ export interface TreeClip {
   text: string;
   ids: string[];
   arrows: string[];
+  /** the same branch standing on its own (for another tree): copies of what is outside written out */
+  standalone?: { text: string; ids: string[]; arrows: string[] };
 }
 
 export const clip = signal<TreeClip | null>(null);
@@ -222,7 +225,14 @@ export function copyNode(n: DNode | null = selectedNode(), linked = false, keepL
     ...(doc.value?.posStyles ?? []).filter((p) => ids.includes(p.id)).map((p) => src.slice(p.span.from, p.span.to)),
   ];
   const text = src.slice(span.from, span.to);
-  clip.value = { text: linked || keepLinks ? text : stripLinks(text), ids, arrows };
+  const keep = linked || keepLinks;
+  const alone = doc.value && s.kind === 'node' ? standalonePiece(src, doc.value, span) : null;
+  clip.value = {
+    text: keep ? text : stripLinks(text),
+    ids,
+    arrows,
+    standalone: alone ? { text: keep ? alone.text : stripLinks(alone.text), ids: alone.ids, arrows: alone.lines } : undefined,
+  };
   return clip.value;
 }
 
@@ -311,6 +321,12 @@ export function paste(c: TreeClip | null = clip.value, target: DNode | null = se
       if (now) c = { ...c, text: now };
     }
   }
+  // copies of constituents this tree does not have: the branch as it stands on its own
+  if (c.standalone) {
+    const known = new Set([...c.ids, ...(d ? [...d.ids.keys()] : [])]);
+    const pointed = [...c.text.matchAll(/(?<!\\)#([\p{L}\p{N}_\-.:]+)/gu)].map((m) => m[1]).filter((id) => !/^[0-9a-f]{3,6}$/i.test(id) || known.has(id));
+    if (pointed.some((id) => !known.has(id))) c = { ...c, text: c.standalone.text, ids: c.standalone.ids, arrows: c.standalone.arrows };
+  }
   const used = new Set<string>(d ? [...d.ids.keys()] : []);
   const ren = new Map<string, string>();
   for (const id of c.ids) {
@@ -328,6 +344,12 @@ export function paste(c: TreeClip | null = clip.value, target: DNode | null = se
     // a new tree on the canvas
     if (!text.startsWith('[')) {
       showToast('Select a node to paste words into it.');
+      return;
+    }
+    // the tree being edited has no nodes: the branch becomes this tree
+    if (!d?.root && !at && editable.value) {
+      const src = source.value;
+      applyEdit({ changes: [{ from: 0, to: src.length, insert: [text, ...arrows, src.trim()].filter(Boolean).join('\n') }] });
       return;
     }
     addTree([text, ...arrows].join('\n'), at);
@@ -430,9 +452,11 @@ export function moveToTree(n: DNode, treeId: string, targetKey: string | null, m
   const entry = trees.value.find((e) => e.id === treeId);
   if (!entry || entry.id === activeTree.value.id) return;
   const prevClip = clip.value;
-  const c = copyNode(n, false, !copy);
+  const c0 = copyNode(n, false, !copy);
   clip.value = prevClip;
-  if (!c) return;
+  if (!c0) return;
+  // in another tree the branch stands on its own
+  const c = c0.standalone ? { ...c0, text: c0.standalone.text, ids: c0.standalone.ids, arrows: c0.standalone.arrows } : c0;
   const text = sources.value[entry.srcId] ?? '';
   const r = parse(text);
   if (!r.ok) {
@@ -477,7 +501,16 @@ export function moveToTree(n: DNode, treeId: string, targetKey: string | null, m
     next = E.applyChanges(text, out.changes);
   }
   sources.value = { ...sources.value, [entry.srcId]: next };
-  if (!copy) deleteNode(n);
+  if (copy) return;
+  // what stays behind: a silent copy of what left becomes it; arrows to what left go
+  const ref = positionRef(n);
+  const d = doc.value!;
+  const src = source.value;
+  const s = n.src!;
+  const after = ref ? E.applyChanges(src, [{ from: ref.span.from, to: ref.span.to, insert: '' }]) : withoutBranch(src, d, s.kind === 'leaf' ? s.fullSpan : s.span);
+  const ch = diffChange(src, after);
+  if (ch) applyEdit({ changes: [ch] });
+  selection.value = null;
 }
 
 /** the source element of a node of another tree (positions in that tree's code) */
@@ -485,6 +518,12 @@ function otherTargetSrc(treeId: string, key: string): ANode | ALeaf | null {
   const o = otherScenes.value.find((x) => x.entry.id === treeId);
   const h = o?.scene?.hits.find((x) => x.key === key);
   return h?.node.src ?? null;
+}
+
+/** Paste the copied branch into an empty tree of the canvas: it becomes that tree. */
+export function pasteIntoTree(treeId: string) {
+  if (treeId !== activeTree.value.id) activateTree(treeId);
+  queueMicrotask(() => paste(clip.value, null));
 }
 
 /** A tree without nodes gets its first node, X, ready to be named. */

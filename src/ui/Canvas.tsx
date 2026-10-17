@@ -1,5 +1,5 @@
 import { useComputed, useSignal, useSignalEffect } from '@preact/signals';
-import { useEffect, useMemo, useRef } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import * as A from '../actions';
 import { cCommandDomain, dominated } from '../core/analysis';
 import { plain } from '../core/richtext';
@@ -743,6 +743,21 @@ interface CtxAt {
 
 function ContextMenu({ at, close }: { at: CtxAt; close: () => void }) {
   const n = at.key ? A.nodeByKey(at.key) : null;
+  // the whole menu stays inside the canvas: moved left / up where it would run out
+  const box = useRef<HTMLDivElement>(null);
+  const pos = useSignal({ x: at.x, y: at.y });
+  useLayoutEffect(() => {
+    const el = box.current;
+    const host = el?.parentElement;
+    if (!el || !host) return;
+    const W = host.clientWidth;
+    const H = host.clientHeight;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const x = at.x + w + 8 > W ? Math.max(8, Math.min(at.x - w, W - w - 8)) : at.x;
+    const y = at.y + h + 8 > H ? Math.max(8, Math.min(at.y - h, H - h - 8)) : at.y;
+    if (x !== pos.value.x || y !== pos.value.y) pos.value = { x, y };
+  }, [at.x, at.y]);
   const linked = A.linkedBranchOf(n);
   const run = (f: () => void) => () => {
     close();
@@ -755,7 +770,7 @@ function ContextMenu({ at, close }: { at: CtxAt; close: () => void }) {
   }, []);
   const c = A.clip.value;
   return (
-    <div class="ctx-menu menu-pop" role="menu" style={{ left: `${at.x}px`, top: `${at.y}px` }} onContextMenu={(e) => e.preventDefault()}>
+    <div ref={box} class="ctx-menu menu-pop" role="menu" style={{ left: `${pos.value.x}px`, top: `${pos.value.y}px` }} onContextMenu={(e) => e.preventDefault()}>
       {n && (
         <>
           <button role="menuitem" onClick={run(() => A.copyNode(n))}>
@@ -838,6 +853,12 @@ function TreeItems({ id, run }: { id: string; run: (f: () => void) => () => void
         <button role="menuitem" onClick={run(() => A.addRootNode(id))}>
           <strong>Add a node</strong>
           <small>The first node of this tree</small>
+        </button>
+      )}
+      {isEmptyTree(id) && A.clip.value && (
+        <button role="menuitem" onClick={run(() => A.pasteIntoTree(id))}>
+          <strong>Paste here</strong>
+          <small>The copied branch becomes this tree</small>
         </button>
       )}
       {id !== activeId.value && (
