@@ -19,11 +19,11 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
   - **multidominance**: one node, several mothers.
 
   Several copies can be pronounced (`#wh!`), a copy can be pronounced with different words, with a gloss if you like (`#wh"whom"`, `#subj"zij | she"` for pronoun copying as in Wambeek Dutch), and a lower position can get its own meaning (`#wh$x : e$`, triggering Predicate Abstraction). Arrows between positions are drawn automatically and each can be edited; deleting one hides it. Movement indices are separate from the indices you type for binding.
-- **Head movement.** An arrow between two heads strikes out the source and turns the target into a complex head written as text: the labels (V+v, V+v+T, T+C) and the words (sing+-s) are joined with +. No extra edges are drawn.
+- **Head movement.** An arrow between two heads strikes out the source and turns the target into a complex head written as text: the labels (V+v, V+v+T, T+C) and the words (sing+-s) are joined with +. No extra edges are drawn. The arrow itself can be hidden (one by one, or all head-movement arrows) while the movement stays.
 - **Compositional semantics.** Write meanings as `$λx. cat(x) : <e,t>$` (or `lambda x.`, `iota x.`, `exists`, `forall`; numbers and comparisons work; types can be any names). The meanings of the other nodes are computed bottom-up with Functional Application, Predicate Conjunction, Event Identification and Function Composition. Type errors are shown at the node; the rule used can be shown or hidden, and meaning colours are configurable.
 - **Several trees on one canvas.** Each tree has its own code, settings and place on the canvas (drag it by its name) and is exported on its own. A tree can be copied: an independent copy, or a linked copy that shares the code (edit one, both change) while its settings stay its own, e.g. copies in one and traces in the other.
 - **Canvas editing** in an edit panel beside the canvas, so nothing covers the tree:
-  - rename (the tree follows as you type), add daughters, sisters or a mother; the code is laid out with line breaks and indentation as you go (also *Format*, Shift+Alt+F);
+  - rename (the tree follows as you type), add daughters, sisters or a mother; copy, cut and paste a subtree as a copy of its own (Ctrl+C / X / V, Ctrl+D), also as a new tree; the code is laid out with line breaks and indentation as you go (also *Format*, Shift+Alt+F);
   - add an existing constituent again by clicking it (a new chain position);
   - triangles that keep the structure in the code;
   - features, meanings, notes next to a node (several, positioned automatically or by side, draggable);
@@ -66,6 +66,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | `#a -> #b dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; between heads it is head movement |
 | `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
 | `#a -> #b plain` | just an arrow: between heads it is not head movement |
+| `#v -> #t hide` | head movement without its arrow (for a chain link: hide that arrow) |
 | `#a -> #b via=0,40;-20,60` | bend points (px from the middle of the two ends) |
 | `#a -> #b from=node to=node` | ends at the node instead of its word |
 | `% comment` | comment to the end of the line |

@@ -192,6 +192,7 @@ const GUIDE: GuideSection[] = [
         </p>
         <h4>Head movement</h4>
         <p>An arrow from one head to another (e.g. V to v) is head movement: the source is struck through and the target shows the complex head as text, with the words joined by + too. Several steps add up: V+v, then V+v+T (sing+∅+-s). ∅ is left out of the words.</p>
+        <p>Head movement can also be shown without its arrow: select the arrow → <em>Movement without the arrow</em> (writes <code>hide</code>; the panel of either head shows it again), or switch off <em>Arrows for head movement</em> in Appearance → Movement. <em>Just an arrow</em> (<code>plain</code>) is the opposite: an arrow that is not movement.</p>
         <Pre>{'[TP [T#t -s] [vP [v#v ∅] [VP [V#root sing] [DP songs]]]]\n#root -> #v\n#v -> #t'}</Pre>
         <h4>Arrow lines</h4>
         <Table rows={[
@@ -248,10 +249,10 @@ const GUIDE: GuideSection[] = [
     title: 'Editing on the canvas',
     body: () => (
       <>
-        <p>Click a node to select it (it is also selected in the code). Everything about it is in the <em>Edit</em> panel to the right of the canvas, so nothing covers the tree.</p>
+        <p>Click a node to select it (it is also selected in the code). Everything about it is in the panel to the right of the canvas, tab <em>Edit</em>, so nothing covers the tree; the tab <em>Appearance</em> next to it (or the sliders button at the top) holds the settings of the whole tree.</p>
         <Table rows={[
           ['Label', 'Rename: type in the panel, the tree follows as you type (double-click or Enter jumps there). You can type markup: DP_i, T\'.'],
-          ['Daughter / Sister / Mother', 'Add a new node X (a mother goes above the node: X → [Y X]) and type its label. The code gets line breaks and indentation by itself.'],
+          ['Daughter / Sister / Mother', 'Add a new node X (a mother goes above the node: X → [Y X]) and type its label. The code gets line breaks by itself: every daughter of a bigger node on its own line, indented under its mother.'],
           ['Triangle', 'Triangle on/off. The structure stays in the code.'],
           ['Arrow', 'Draw an arrow from this node: then click the target.'],
           ['Movement', 'Re-merge: add an existing constituent again (a new chain position #id). Pronounce or silence a position; pronounce a lower position with other words (a pronoun copy).'],
@@ -259,6 +260,7 @@ const GUIDE: GuideSection[] = [
           ['Notes', 'Notes next to the node: several, each with a position (auto, left, right, above, below). Drag them on the canvas; click one to edit or delete it.'],
           ['Colour', 'Colour the label, the edge above, the whole branch or the meaning: a palette colour or any colour (the rainbow swatch).'],
           ['Spacing', 'Width and extra length of the edge above, spread of the daughters. The ▲▼ buttons, the arrow keys and the mouse wheel change the tree at once.'],
+          ['Copy and paste', 'Ctrl+C copies the node with everything below it (the root: the whole tree), Ctrl+X cuts it. Ctrl+V pastes it as the last daughter of the selected node, Ctrl+Shift+V as its sister, and with nothing selected as a new tree on the canvas; Ctrl+D duplicates the node. A pasted copy is a constituent of its own: its #ids are renamed, arrows inside it come along.'],
           ['Branching', <>Swap the two daughters: <em>left</em> turns [XP X [Z]] into [XP [Z] X], <em>right</em> turns [XP [Z] X] into [XP X [Z]].</>],
         ]} />
         <p>Drag the borders between the code, the canvas, the edit panel and the settings to make them wider or narrower (double-click a border: default). The ≡ button in the code (Shift+Alt+F) lays out the whole code.</p>
@@ -338,6 +340,9 @@ const KEYS: [string, string][] = [
   ['A', 'Add a daughter'],
   ['S', 'Add a sister'],
   ['P', 'Add a mother'],
+  ['Ctrl/⌘ C · X · V', 'Copy, cut, paste a node (V: as a daughter; with nothing selected: a new tree)'],
+  ['Ctrl/⌘ Shift V', 'Paste as a sister'],
+  ['Ctrl/⌘ D', 'Duplicate the node'],
   ['Delete, Backspace', 'Delete the node or arrow'],
   ['T', 'Triangle on/off'],
   ['M', 'Arrow from the selected node'],

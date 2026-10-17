@@ -161,7 +161,7 @@ test('add an existing constituent again by clicking it (a chain)', async ({ page
   await page.locator('[data-node] title', { hasText: /^VP$/ }).locator('..').click();
   await page.locator('.inspector button', { hasText: 'Re-merge as daughter' }).click();
   await page.locator('[data-node] title', { hasText: /^DP$/ }).first().locator('..').click();
-  await expect.poll(() => code(page)).toBe('[CP [DP#dp what]\n    [VP [V see] #dp]]');
+  await expect.poll(() => code(page)).toBe('[CP\n    [DP#dp what]\n    [VP [V see] #dp]]');
   // copies view: a gray copy and an arrow
   await expect(page.locator('.prims text', { hasText: 'what' })).toHaveCount(2);
   await expect(page.locator('.arrow-hit')).toHaveCount(1);
@@ -253,7 +253,7 @@ test('node: notes, edge style, spacing at once, restructure', async ({ page }) =
   await page.keyboard.press('Escape');
   await node('S').click();
   await insp.locator('button', { hasText: '← left' }).click();
-  await expect.poll(() => code(page)).toMatch(/^\[S \[VP[^]*\]\s+\[DP she\]\]$/);
+  await expect.poll(() => code(page)).toMatch(/^\[S\s+\[VP[^]*\]\s+\[DP she\]\]$/);
   // already left-branching: a message, no change
   await insp.locator('button', { hasText: '← left' }).click();
   await expect(page.locator('.toast')).toContainText('Already left-branching');
@@ -277,7 +277,7 @@ test('custom colour, mother, layout of the code', async ({ page }) => {
   await expect(insp.locator('input[aria-label="Label"]')).toBeFocused();
   await insp.locator('input[aria-label="Label"]').fill('TP');
   await page.keyboard.press('Enter');
-  await expect.poll(() => code(page)).toBe('[S [NP John]\n   [TP [VP@#123456 runs]]]');
+  await expect.poll(() => code(page)).toBe('[S\n    [NP John]\n    [TP [VP@#123456 runs]]]');
 });
 
 test('several trees: a copy, a linked copy, each with its own export', async ({ page }) => {
@@ -285,7 +285,11 @@ test('several trees: a copy, a linked copy, each with its own export', async ({ 
   await setCode(page, '[S [NP John] [VP runs]]');
   // an independent copy
   await page.locator('.tree-tab').first().locator('.tab-more').click();
-  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  // the menu is really on top (not cut off by the strip of tabs)
+  const item = page.locator('.tab-menu button', { hasText: 'Copy' }).first();
+  const box = (await item.boundingBox())!;
+  expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.tab-menu'), { x: box.x + box.width / 2, y: box.y + box.height / 2 })).toBe(true);
+  await item.click();
   await expect(page.locator('.tree-tab')).toHaveCount(2);
   await expect(page.locator('.sheet-head')).toHaveCount(2);
   await setCode(page, '[S [NP Mary] [VP sleeps]]');
@@ -353,21 +357,27 @@ test('selecting another node does not take the keyboard away from the shortcuts'
   await node('NP').click();
   await expect(page.locator('.inspector input[aria-label="Label"]')).not.toBeFocused();
   await page.keyboard.press('s');
-  await expect.poll(() => code(page)).toContain('[NP John] [X]');
+  await expect.poll(() => code(page)).toMatch(/\[NP John\]\s+\[X\]/);
 });
 
 test('bend points: double-click the arrow to add one, drag it, double-click it to remove it', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[CP [DP#a what] [C′ did [VP see [DP#b t]]]]\n#b -> #a');
-  const mid = await page.locator('.arrow-hit').first().evaluate((el) => {
-    const p = el as SVGPathElement;
-    const pt = p.getPointAtLength(p.getTotalLength() / 2);
-    const m = p.getScreenCTM()!;
-    return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
-  });
-  await page.mouse.dblclick(mid.x, mid.y);
-  await expect.poll(() => code(page)).toMatch(/via=(-?\d+,-?\d+;){2}-?\d+,-?\d+/);
-  // few round handles
+  const at = (f: number) =>
+    page.locator('.arrow-hit').first().evaluate((el, f) => {
+      const p = el as SVGPathElement;
+      const pt = p.getPointAtLength(p.getTotalLength() * f);
+      const m = p.getScreenCTM()!;
+      return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
+    }, f);
+  // one handle becomes two bend points: +1
+  const p1 = await at(0.3);
+  await page.mouse.dblclick(p1.x, p1.y);
+  await expect.poll(() => code(page)).toMatch(/via=-?\d+,-?\d+;-?\d+,-?\d+$/m);
+  await expect(page.locator('.bend-handle.via')).toHaveCount(2);
+  // and one more
+  const p2 = await at(0.75);
+  await page.mouse.dblclick(p2.x, p2.y);
   await expect(page.locator('.bend-handle.via')).toHaveCount(3);
   const h = (await page.locator('.bend-handle.via').nth(1).boundingBox())!;
   await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
@@ -380,6 +390,34 @@ test('bend points: double-click the arrow to add one, drag it, double-click it t
   await expect(page.locator('.bend-handle.via')).toHaveCount(2);
   await page.locator('.inspector button', { hasText: 'Automatic shape' }).click();
   await expect.poll(() => code(page)).not.toContain('via=');
+});
+
+test('head movement without the arrow', async ({ page }) => {
+  await page.goto('./');
+  await setCode(page, '[TP [T#t -s] [VP [V#v sing] [DP it]]]\n#v -> #t');
+  await expect(page.locator('.prims')).toContainText('sing+-s');
+  const mid = await page.locator('.arrow-hit').first().evaluate((el) => {
+    const p = el as SVGPathElement;
+    const pt = p.getPointAtLength(p.getTotalLength() / 2);
+    const m = p.getScreenCTM()!;
+    return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f };
+  });
+  await page.mouse.click(mid.x, mid.y);
+  await page.locator('.inspector button', { hasText: 'Movement without the arrow' }).click();
+  await expect.poll(() => code(page)).toContain('#v -> #t hide');
+  await expect(page.locator('.arrow-hit')).toHaveCount(0);
+  // the movement stays
+  await expect(page.locator('.prims')).toContainText('sing+-s');
+  // the arrow comes back from the panel of the node
+  await page.locator('[data-node] title', { hasText: /^V\+T$/ }).locator('..').click();
+  await page.locator('.inspector button', { hasText: 'Show arrow' }).click();
+  await expect.poll(() => code(page)).not.toContain('hide');
+  await expect(page.locator('.arrow-hit')).toHaveCount(1);
+  // all head-movement arrows off, the movement still on
+  await page.getByTestId('settings-toggle').click();
+  await page.locator('.settings .toggle', { hasText: 'Arrows for head movement' }).click();
+  await expect(page.locator('.arrow-hit')).toHaveCount(0);
+  await expect(page.locator('.prims')).toContainText('sing+-s');
 });
 
 test('save the canvas to disk and open it again (download where files cannot be written)', async ({ page }) => {
@@ -437,4 +475,30 @@ test('save into a connected file, again with Ctrl+S, and keep it up to date', as
   await setCode(page, '[S [NP Bill] [VP runs]]');
   await expect.poll(async () => (await files())['trees.nanotrees']).toContain('Bill');
   await expect(page.locator('.unsaved-dot')).toHaveCount(0);
+});
+
+test('copy a subtree and paste it as a copy: a daughter, a sister, a new tree', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('./');
+  await setCode(page, '[S [NP John] [VP [V saw] [DP#o Mary]]]');
+  const node = (label: string) => page.locator('[data-node]').filter({ has: page.locator('title', { hasText: new RegExp(`^${label}$`) }) });
+  await node('VP').click();
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('ControlOrMeta+c');
+  await node('NP').first().click();
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('ControlOrMeta+v');
+  // a copy of its own: the id is renamed
+  await expect.poll(() => code(page)).toMatch(/\[NP\s+John\s+\[VP\s+\[V saw\]\s+\[DP#o2 Mary\]\]\]/);
+  await expect.poll(() => code(page)).toContain('[DP#o Mary]');
+  // a copy as a sister (Ctrl+D)
+  await node('V').first().click();
+  await page.keyboard.press('ControlOrMeta+d');
+  await expect.poll(() => code(page)).toMatch(/\[V saw\]\s+\[V saw\]/);
+  // nothing selected: a new tree on the canvas
+  await page.keyboard.press('Escape');
+  await page.locator('.canvas').focus();
+  await page.keyboard.press('ControlOrMeta+v');
+  await expect(page.locator('.tree-tab')).toHaveCount(2);
+  await expect(page.locator('.cm-content')).toContainText('[VP');
 });

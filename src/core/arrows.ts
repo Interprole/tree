@@ -113,6 +113,66 @@ export function splinePath(pts: P[], dirs: { start?: P; end?: P } = {}): Cubic[]
   return segs;
 }
 
+/**
+ * A route (a polyline) as one smooth curve: every bend becomes an arc of a circle (no stretched
+ * ovals), as wide as the neighbouring stretches allow, up to maxR. ok() judges an arc against
+ * the picture; a rejected arc is made smaller until it fits.
+ */
+export function smoothRoute(route: P[], ok: (arc: Cubic, legs: P[]) => boolean = () => true, maxR = 28): Cubic[] {
+  const pts: P[] = [];
+  for (const p of route) {
+    const last = pts[pts.length - 1];
+    if (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 0.5) continue;
+    if (pts.length >= 2) {
+      // a point on the straight continuation of the previous stretch is not a bend
+      const a = pts[pts.length - 2];
+      const ux = last[0] - a[0];
+      const uy = last[1] - a[1];
+      const vx = p[0] - last[0];
+      const vy = p[1] - last[1];
+      const lu = Math.hypot(ux, uy);
+      const lv = Math.hypot(vx, vy);
+      if (Math.abs(ux * vy - uy * vx) / (lu * lv) < 0.02 && ux * vx + uy * vy > 0) {
+        pts[pts.length - 1] = p;
+        continue;
+      }
+    }
+    pts.push(p);
+  }
+  const n = pts.length;
+  if (n < 2) return [line(route[0], route[route.length - 1])];
+  if (n === 2) return [line(pts[0], pts[1])];
+  const segs: Cubic[] = [];
+  let cur = pts[0];
+  for (let i = 1; i < n - 1; i++) {
+    const [A, C, B] = [pts[i - 1], pts[i], pts[i + 1]];
+    const la = Math.hypot(C[0] - A[0], C[1] - A[1]);
+    const lb = Math.hypot(B[0] - C[0], B[1] - C[1]);
+    const ua: P = [(C[0] - A[0]) / la, (C[1] - A[1]) / la];
+    const ub: P = [(B[0] - C[0]) / lb, (B[1] - C[1]) / lb];
+    const r0 = Math.min(i === 1 ? la * 0.95 : la / 2, i === n - 2 ? lb * 0.95 : lb / 2, maxR);
+    let ra = r0;
+    let rb = r0;
+    // handle length of a circular arc through the turn angle, scaled to each side
+    const phi = Math.min(Math.acos(Math.max(-1, Math.min(1, ua[0] * ub[0] + ua[1] * ub[1]))), (170 * Math.PI) / 180);
+    const k = phi < 1e-3 ? 2 / 3 : ((4 / 3) * Math.tan(phi / 4)) / Math.tan(phi / 2);
+    let arc: Cubic;
+    for (let tries = 0; ; tries++) {
+      const P1: P = [C[0] - ua[0] * ra, C[1] - ua[1] * ra];
+      const P2: P = [C[0] + ub[0] * rb, C[1] + ub[1] * rb];
+      arc = [P1, [P1[0] + ua[0] * ra * k, P1[1] + ua[1] * ra * k], [P2[0] - ub[0] * rb * k, P2[1] - ub[1] * rb * k], P2];
+      if (tries >= 7 || Math.max(ra, rb) < 5 || ok(arc, [P1, C, P2])) break;
+      ra *= 0.65;
+      rb *= 0.65;
+    }
+    if (Math.hypot(arc[0][0] - cur[0], arc[0][1] - cur[1]) > 0.01) segs.push(line(cur, arc[0]));
+    segs.push(arc);
+    cur = arc[3];
+  }
+  segs.push(line(cur, pts[n - 1]));
+  return segs;
+}
+
 /* ------------------------------------------------------------ routing */
 
 interface Seg {
@@ -544,29 +604,29 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
     }
     return c;
   };
-  /** a curve that touches no label, and the branches it crosses */
-  const judge = (segs: Cubic[], own: DNode[]): { clear: boolean; crossings: number } => {
+  /** an arc of an arrow touches no label (but the arrow's own nodes) and crosses no more branches than the route */
+  const arcOk = (own: DNode[]) => (arc: Cubic, legs: P[]): boolean => {
     const f = field();
-    const pts = geomSample({ segs }, 14);
-    for (let i = 2; i < pts.length - 2; i++) {
-      const [x, y] = pts[i];
-      if (f.boxes.some(({ box }) => x > box.x1 + 2 && x < box.x2 - 2 && y > box.y1 + 2 && y < box.y2 - 2)) return { clear: false, crossings: Infinity };
+    const pts = geomSample({ segs: [arc] }, 10);
+    for (const [x, y] of pts) {
+      if (f.boxes.some(({ box, node }) => !own.includes(node) && x > box.x1 + 1 && x < box.x2 - 1 && y > box.y1 + 1 && y < box.y2 - 1)) return false;
     }
-    let crossings = 0;
-    const ends = [pts[0], pts[pts.length - 1]];
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const sg: Seg = { x1: pts[i][0], y1: pts[i][1], x2: pts[i + 1][0], y2: pts[i + 1][1] };
-      for (const e of f.segs) {
-        if (own.includes(e.owner!) && ends.some(([ex, ey]) => Math.hypot(e.x1 - ex, e.y1 - ey) < 18)) continue;
-        if (cross(sg, e)) crossings++;
+    const crossings = (poly: P[]) => {
+      let k = 0;
+      for (let i = 0; i + 1 < poly.length; i++) {
+        const sg: Seg = { x1: poly[i][0], y1: poly[i][1], x2: poly[i + 1][0], y2: poly[i + 1][1] };
+        for (const e of f.segs) if (!own.includes(e.owner!) && cross(sg, e)) k++;
       }
-    }
-    return { clear: true, crossings };
+      return k;
+    };
+    return crossings(pts) <= crossings(legs);
   };
 
   // route narrow arrows first: they take the closest channels
   const ordered = [...under.map((u) => u.a), ...arrows.filter((a) => a.route !== 'under')];
   const geomOf = new Map<DArrow, ArrowGeom>();
+  /** radius of the turns of an arrow */
+  const R = Math.max(14, m.fs * 1.8);
   const DOWN: P = [0, 1];
   const UP: P = [0, -1];
   const reverse = (segs: Cubic[]): Cubic[] => segs.map((q) => [q[3], q[2], q[1], q[0]] as Cubic).reverse();
@@ -599,47 +659,20 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
         const chB = getChannel(a, 'to', lt, startsT);
         const ca = chA.pts;
         const cb = chB.pts;
-        const bottom = Math.max(channelBottom + 8, treeBottom + spacing * (0.9 + level) + a.bend[1]);
+        // deep enough below the tree for a whole round turn at the ends
+        const bottom = treeBottom + Math.max(spacing * 0.9, R + 6) + spacing * level + a.bend[1];
         const dx = a.bend[0];
-        /**
-         * The curve below the tree is one round cubic, as it always was: from A down to the depth
-         * of its level and up to B, its lowest point (t = 0.5) at (A.y + B.y)/8 + 0.75·yL.
-         */
-        const belly = (A: P, B: P): Cubic => {
-          const yL = Math.max(A[1], B[1], (bottom - (A[1] + B[1]) / 8) / 0.75);
-          return [A, [A[0] + dx, yL], [B[0] + dx, yL], B];
-        };
-        /** the channel down to its last bend: from there it runs straight down */
-        const lastBend = (c: P[]) => (c.length > 2 ? c.length - 2 : 0);
-        /** the part of a channel above the round curve, running straight down into it */
-        const lead = (c: P[], upto: number): Cubic[] => (upto === 0 ? [] : splinePath(c.slice(0, upto + 1), { start: DOWN, end: DOWN }));
-        const leadA = chA.exit.lead ? [chA.exit.lead] : [];
-        const leadB = chB.exit.lead ? reverse([chB.exit.lead]) : [];
-        const build = (ia: number, ib: number): { segs: Cubic[]; low: Cubic } => {
-          const low = belly(ca[ia], cb[ib]);
-          return { segs: [...leadA, ...lead(ca, ia), low, ...reverse(lead(cb, ib)), ...leadB], low };
-        };
-        // the roundest shape that touches no label and crosses no more branches than the channels do:
-        // one curve from node to node, or from where the channels stop bending
-        let best = build(ca.length - 1, cb.length - 1);
-        const limit = judge(best.segs, [a.from, a.to, ef.node, et.node]).crossings;
-        for (const [ia, ib] of [
-          [0, 0],
-          [0, lastBend(cb)],
-          [lastBend(ca), 0],
-          [lastBend(ca), lastBend(cb)],
-        ]) {
-          const cand = build(ia, ib);
-          const j = judge(cand.segs, [a.from, a.to, ef.node, et.node]);
-          if (j.clear && j.crossings <= limit) {
-            best = cand;
-            break;
-          }
-        }
-        const { segs, low } = best;
-        // few bend points when the shape is taken over by hand: around the lowest point
-        const knots: P[] = [segs[0][0], bez(low, 0.25), bez(low, 0.75), segs[segs.length - 1][3]];
-        g = { arrow: a, segs, knots, mid, handle: bez(low, 0.5), labels: [], level };
+        const xa = ca[ca.length - 1][0];
+        const xb = cb[cb.length - 1][0];
+        // the route: out of the node (sideways from a label), down its channel, below the tree,
+        // up the other channel and into the other node; then every bend is rounded
+        const side = (e: Exit): P[] => (e.lead ? [e.attach, [e.p[0], e.attach[1]]] : []);
+        // (from a label's side the channel's own start, just under the turn, is left out: it would make the turn tight)
+        const inner = (c: P[], e: Exit) => c.slice(e.lead ? 1 : 0, -1);
+        const route: P[] = [...side(chA.exit), ...inner(ca, chA.exit), [xa + dx, bottom], [xb + dx, bottom], ...inner(cb, chB.exit).reverse(), ...side(chB.exit).reverse()];
+        const segs = smoothRoute(route, arcOk([a.from, a.to, ef.node, et.node]), R);
+        const handle: P = [(xa + xb) / 2 + dx, bottom];
+        g = { arrow: a, segs, knots: [route[0], handle, route[route.length - 1]], mid, handle, labels: [], level };
       }
     } else {
       // direct curve from the source label to the target label, bulging outwards
@@ -670,7 +703,7 @@ export function layoutArrows(layout: Layout, arrows: DArrow[], labelWidth?: Labe
           [ex + (2 / 3) * (cx - ex), ey + (2 / 3) * (cy - ey)],
           [ex, ey],
         ];
-        g = { arrow: a, segs: [c], knots: [c[0], c[3]], mid, handle: bez(c, 0.5), labels: [], level: 0, outward: [nx, ny] };
+        g = { arrow: a, segs: [c], knots: [c[0], bez(c, 0.5), c[3]], mid, handle: bez(c, 0.5), labels: [], level: 0, outward: [nx, ny] };
       }
     }
     geomOf.set(a, g);
@@ -739,7 +772,8 @@ export function insertVia(g: ArrowGeom, at: P): [number, number][] {
     }
   }
   const pts = [...inner];
-  pts.splice(best, 0, at);
+  // a point right at an existing one adds nothing
+  if (!inner.some(([x, y]) => Math.hypot(x - at[0], y - at[1]) < 14)) pts.splice(best, 0, at);
   return pts.map(([x, y]) => [Math.round(x - g.mid[0]), Math.round(y - g.mid[1])]);
 }
 

@@ -7,15 +7,18 @@ import type { Edit, TextChange } from './edits';
  * Layout of the bracket code: only whitespace between the elements of a node changes, the
  * elements themselves (labels, words, notes, comments) are copied verbatim.
  *
- *   [TP [DP the cat]
- *       [T' [T will]
+ *   [TP
+ *       [DP the cat]
+ *       [T'
+ *           [T will]
  *           [VP sleep]]]
  *
- * A node that is shallow and short stays on one line; otherwise its first daughter stays on the
- * label's line and every further daughter starts a new line, aligned under the first one.
+ * A node that is shallow and short stays on one line; otherwise every daughter starts a new line,
+ * indented one step deeper than its mother.
  */
 
 const MAX_LINE = 64;
+const INDENT = 4;
 
 interface Item {
   span: Span;
@@ -98,16 +101,14 @@ export function formatNode(src: string, n: ANode, col: number): string {
   if (flat !== null && (!hasNodeKids || (height(n) <= 2 && col + flat.length <= MAX_LINE))) return flat;
   let s = header(src, n);
   let line = col + s.length;
-  let childCol = -1;
+  const indent = col + INDENT;
   let prev: Item | null = null;
   let breakNext = false;
-  let daughters = 0;
   for (const it of its) {
-    const newLine = breakNext || (it.daughter && daughters > 0);
-    if (it.daughter) daughters++;
+    // a daughter on its own line; a comment that had a line of its own keeps it
+    const ownLine = it.raw && /\n/.test(src.slice(prev ? prev.span.to : n.headerSpan.to, it.span.from));
     let at: number;
-    if (newLine) {
-      const indent = childCol >= 0 ? childCol : col + 2;
+    if (breakNext || it.daughter || ownLine) {
       s += '\n' + ' '.repeat(indent);
       at = indent;
     } else {
@@ -115,7 +116,6 @@ export function formatNode(src: string, n: ANode, col: number): string {
       s += sp;
       at = line + sp.length;
     }
-    if (it.daughter && childCol < 0) childCol = at;
     const text = it.node ? formatNode(src, it.node, at) : src.slice(it.span.from, it.span.to);
     s += text;
     const nl = text.lastIndexOf('\n');
