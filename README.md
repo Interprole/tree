@@ -9,7 +9,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 ## Features
 
 - **Bracket notation with live rendering.** Readable errors highlight their position, and the last valid tree stays on screen. Any Unicode works.
-- **Typography close to a typeset paper.** Computer Modern, Libertinus, EB Garamond, Noto, a handwriting font, or any font installed on your computer. Real sub/superscripts, primes, small-caps glosses, feature stacks.
+- **Typography close to a typeset paper.** Computer Modern, Libertinus (Linux Libertine), EB Garamond, Times New Roman (Tinos where it is missing), Charis SIL, Noto, Roboto, a handwriting font, or any font installed on your computer (not in Safari). Real sub/superscripts, primes, small-caps glosses, feature stacks.
 - **Labelling modes:**
   - *Manual*: as written.
   - *X-bar*: shorthand gets X′ levels filled in.
@@ -139,4 +139,4 @@ CI runs the type check, unit tests, LaTeX compilation and Playwright on every pu
 
 ## License
 
-MIT © Gleb Bubnov. Bundled fonts (CMU Serif, Libertinus, EB Garamond, Noto, Caveat, STIX Two Math, IBM Plex Mono) are under the SIL Open Font License.
+MIT © Gleb Bubnov. Bundled fonts (CMU Serif, Libertinus, EB Garamond, Tinos, Charis SIL, Noto, Roboto, Caveat, STIX Two Math, IBM Plex Mono) are under the SIL Open Font License.

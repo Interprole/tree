@@ -1,6 +1,6 @@
 /** Visual settings of a tree (everything that the appearance panel controls). */
 
-export type BuiltinFont = 'cmu' | 'libertinus' | 'garamond' | 'noto-serif' | 'noto-sans' | 'caveat';
+export type BuiltinFont = 'cmu' | 'libertinus' | 'garamond' | 'times' | 'charis' | 'noto-serif' | 'noto-sans' | 'roboto' | 'caveat';
 /** a built-in font, or "local:Family Name" for a font installed on the computer */
 export type FontId = BuiltinFont | `local:${string}`;
 
@@ -10,7 +10,8 @@ export function isLocalFont(f: FontId): f is `local:${string}` {
 
 /** CSS font-family list for a font id. */
 export function fontCss(f: FontId): string {
-  if (isLocalFont(f)) return `"${f.slice(6).replace(/"/g, '')}", "NanoTrees Symbols", serif`;
+  // an installed font not named yet: the default font meanwhile
+  if (isLocalFont(f)) return f.slice(6).trim() ? `"${f.slice(6).replace(/"/g, '')}", "NanoTrees Symbols", serif` : FONT_FAMILIES.cmu.css;
   return (FONT_FAMILIES[f] ?? FONT_FAMILIES.cmu).css;
 }
 
@@ -138,10 +139,14 @@ export const presets: Record<PresetId, Partial<TreeStyle>> = {
 
 export const FONT_FAMILIES: Record<BuiltinFont, { css: string; name: string; italic: boolean }> = {
   cmu: { css: '"CMU Serif", "Latin Modern Roman", "NanoTrees Symbols", serif', name: 'Computer Modern (CMU Serif)', italic: true },
-  libertinus: { css: '"Libertinus Serif", "Linux Libertine", "NanoTrees Symbols", serif', name: 'Libertinus Serif', italic: true },
+  libertinus: { css: '"Libertinus Serif", "Linux Libertine", "NanoTrees Symbols", serif', name: 'Libertinus Serif (Linux Libertine)', italic: true },
   garamond: { css: '"EB Garamond", Garamond, "NanoTrees Symbols", serif', name: 'EB Garamond', italic: true },
+  // Times New Roman cannot be shipped: the computer's own where there is one, else Tinos (its free twin, the same letter widths)
+  times: { css: '"Times New Roman", Tinos, "NanoTrees Symbols", serif', name: 'Times New Roman', italic: true },
+  charis: { css: '"Charis SIL", "NanoTrees Symbols", serif', name: 'Charis SIL', italic: true },
   'noto-serif': { css: '"Noto Serif", "NanoTrees Symbols", serif', name: 'Noto Serif', italic: true },
   'noto-sans': { css: '"Noto Sans", "NanoTrees Symbols", "Helvetica Neue", Arial, sans-serif', name: 'Noto Sans', italic: true },
+  roboto: { css: 'Roboto, "NanoTrees Symbols", "Helvetica Neue", Arial, sans-serif', name: 'Roboto', italic: true },
   caveat: { css: 'Caveat, "NanoTrees Symbols", cursive', name: 'Caveat (handwriting)', italic: false },
 };
 

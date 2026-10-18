@@ -840,3 +840,80 @@ test('ids renamed in another tree: head movement follows', async ({ page }) => {
   await expect.poll(() => code(page)).toContain('[T#t2;to=c2 did]');
   await expect(page.locator('.status.ok')).toBeVisible();
 });
+
+/** choose a font in the font menu (by id: a built-in font, or 'local:' for one of the computer) */
+async function pickFont(page: Page, id: string) {
+  await page.locator('.font-current').click();
+  await page.locator(`.font-options [data-font="${id}"]`).click();
+}
+
+test('font menu: every name in its own font; an installed font keeps the tree as it is until named; a name the computer lacks is pointed out', async ({ page }) => {
+  await page.goto('./');
+  await page.locator('.canvas-svg').click({ position: { x: 5, y: 5 } });
+  await page.locator('.font-current').click();
+  const roboto = page.locator('.font-options [data-font="roboto"]');
+  await expect(roboto).toHaveText('Roboto');
+  expect(await roboto.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/^Roboto/);
+  await roboto.click();
+  await expect(page.locator('.font-options')).toHaveCount(0);
+  await expect(page.locator('.font-current')).toHaveText('Roboto');
+  const text = page.locator('.canvas-svg text').first();
+  await expect(text).toHaveAttribute('font-family', /^Roboto/);
+  await pickFont(page, 'local:');
+  await expect(page.locator('.local-font input')).toBeVisible();
+  await expect(text).toHaveAttribute('font-family', /^Roboto/);
+  await page.locator('.local-font input').fill('No Such Font Qx');
+  await page.locator('.local-font input').press('Enter');
+  await expect(text).toHaveAttribute('font-family', /No Such Font Qx/);
+  await expect(page.locator('.hint.warn')).toContainText('No Such Font Qx');
+  await pickFont(page, 'cmu');
+  await expect(page.locator('.local-font')).toHaveCount(0);
+});
+
+test('installed fonts: picking from the list takes the font picked, not what was typed', async ({ page }) => {
+  // the browser's list of installed fonts, counted
+  await page.addInitScript(() => {
+    const w = window as unknown as { queryLocalFonts: () => Promise<unknown[]>; asked: number };
+    w.asked = 0;
+    w.queryLocalFonts = async () => {
+      w.asked++;
+      return ['Robin Sans Test', 'Robust Serif Test', 'Other Test'].map((family) => ({ family, style: 'Regular', fullName: family, postscriptName: family, blob: async () => new Blob() }));
+    };
+  });
+  await page.goto('./');
+  await page.locator('.canvas-svg').click({ position: { x: 5, y: 5 } });
+  await pickFont(page, 'local:');
+  await page.locator('.local-font button', { hasText: 'List the fonts installed' }).click();
+  await expect(page.locator('.font-names button')).toHaveCount(3);
+  await page.locator('.local-font input').fill('rob');
+  await expect(page.locator('.font-names button')).toHaveCount(2);
+  await page.locator('.font-names button', { hasText: 'Robust Serif Test' }).click();
+  const text = page.locator('.canvas-svg text').first();
+  await expect(text).toHaveAttribute('font-family', /^"Robust Serif Test"/);
+  await expect(page.locator('.local-font input')).toHaveValue('Robust Serif Test');
+  await expect(page.locator('.font-names button.on')).toHaveText('Robust Serif Test');
+  // typing alone changes nothing until Enter
+  await page.locator('.local-font input').fill('Other');
+  await page.locator('.canvas-svg').click({ position: { x: 5, y: 5 } });
+  await expect(text).toHaveAttribute('font-family', /^"Robust Serif Test"/);
+});
+
+test.describe('Safari', () => {
+  test.use({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15' });
+  test('only the fonts of the system, listed to pick from, and why', async ({ page }) => {
+    await page.goto('./');
+    await page.locator('.canvas-svg').click({ position: { x: 5, y: 5 } });
+    await page.locator('.font-current').click();
+    await expect(page.locator('.font-options [data-font="local:"]')).toHaveText('A system font…');
+    await page.locator('.font-options [data-font="local:"]').click();
+    await expect(page.locator('.local-font .hint', { hasText: 'only the fonts that come with macOS' })).toBeVisible();
+    await expect(page.locator('.local-font button', { hasText: 'List the fonts' })).toHaveCount(0);
+    const first = page.locator('.font-names button').first();
+    if (await first.count()) {
+      const name = (await first.textContent())!;
+      await first.click();
+      await expect(page.locator('.canvas-svg text').first()).toHaveAttribute('font-family', new RegExp(name));
+      await expect(page.locator('.font-names button.on')).toHaveText(name);
+    }
+  });
+});

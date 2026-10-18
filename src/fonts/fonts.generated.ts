@@ -160,14 +160,110 @@ import f156 from '@fontsource/caveat/files/caveat-cyrillic-700-normal.woff2?url'
 import f157 from '@fontsource/caveat/files/caveat-cyrillic-700-normal.woff?url';
 import f158 from '@fontsource/caveat/files/caveat-cyrillic-ext-700-normal.woff2?url';
 import f159 from '@fontsource/caveat/files/caveat-cyrillic-ext-700-normal.woff?url';
-import f160 from 'computer-modern/fonts/cmu-serif-500-roman.woff2?url';
-import f161 from 'computer-modern/fonts/cmu-serif-500-roman.ttf?url';
-import f162 from 'computer-modern/fonts/cmu-serif-500-italic.woff2?url';
-import f163 from 'computer-modern/fonts/cmu-serif-500-italic.ttf?url';
-import f164 from 'computer-modern/fonts/cmu-serif-700-roman.woff2?url';
-import f165 from 'computer-modern/fonts/cmu-serif-700-roman.ttf?url';
-import f166 from '@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2?url';
-import f167 from '@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff?url';
+import f160 from '@fontsource/tinos/files/tinos-latin-400-normal.woff2?url';
+import f161 from '@fontsource/tinos/files/tinos-latin-400-normal.woff?url';
+import f162 from '@fontsource/tinos/files/tinos-latin-ext-400-normal.woff2?url';
+import f163 from '@fontsource/tinos/files/tinos-latin-ext-400-normal.woff?url';
+import f164 from '@fontsource/tinos/files/tinos-cyrillic-400-normal.woff2?url';
+import f165 from '@fontsource/tinos/files/tinos-cyrillic-400-normal.woff?url';
+import f166 from '@fontsource/tinos/files/tinos-cyrillic-ext-400-normal.woff2?url';
+import f167 from '@fontsource/tinos/files/tinos-cyrillic-ext-400-normal.woff?url';
+import f168 from '@fontsource/tinos/files/tinos-greek-400-normal.woff2?url';
+import f169 from '@fontsource/tinos/files/tinos-greek-400-normal.woff?url';
+import f170 from '@fontsource/tinos/files/tinos-greek-ext-400-normal.woff2?url';
+import f171 from '@fontsource/tinos/files/tinos-greek-ext-400-normal.woff?url';
+import f172 from '@fontsource/tinos/files/tinos-latin-400-italic.woff2?url';
+import f173 from '@fontsource/tinos/files/tinos-latin-400-italic.woff?url';
+import f174 from '@fontsource/tinos/files/tinos-latin-ext-400-italic.woff2?url';
+import f175 from '@fontsource/tinos/files/tinos-latin-ext-400-italic.woff?url';
+import f176 from '@fontsource/tinos/files/tinos-cyrillic-400-italic.woff2?url';
+import f177 from '@fontsource/tinos/files/tinos-cyrillic-400-italic.woff?url';
+import f178 from '@fontsource/tinos/files/tinos-cyrillic-ext-400-italic.woff2?url';
+import f179 from '@fontsource/tinos/files/tinos-cyrillic-ext-400-italic.woff?url';
+import f180 from '@fontsource/tinos/files/tinos-greek-400-italic.woff2?url';
+import f181 from '@fontsource/tinos/files/tinos-greek-400-italic.woff?url';
+import f182 from '@fontsource/tinos/files/tinos-greek-ext-400-italic.woff2?url';
+import f183 from '@fontsource/tinos/files/tinos-greek-ext-400-italic.woff?url';
+import f184 from '@fontsource/tinos/files/tinos-latin-700-normal.woff2?url';
+import f185 from '@fontsource/tinos/files/tinos-latin-700-normal.woff?url';
+import f186 from '@fontsource/tinos/files/tinos-latin-ext-700-normal.woff2?url';
+import f187 from '@fontsource/tinos/files/tinos-latin-ext-700-normal.woff?url';
+import f188 from '@fontsource/tinos/files/tinos-cyrillic-700-normal.woff2?url';
+import f189 from '@fontsource/tinos/files/tinos-cyrillic-700-normal.woff?url';
+import f190 from '@fontsource/tinos/files/tinos-cyrillic-ext-700-normal.woff2?url';
+import f191 from '@fontsource/tinos/files/tinos-cyrillic-ext-700-normal.woff?url';
+import f192 from '@fontsource/tinos/files/tinos-greek-700-normal.woff2?url';
+import f193 from '@fontsource/tinos/files/tinos-greek-700-normal.woff?url';
+import f194 from '@fontsource/tinos/files/tinos-greek-ext-700-normal.woff2?url';
+import f195 from '@fontsource/tinos/files/tinos-greek-ext-700-normal.woff?url';
+import f196 from '@fontsource/charis-sil/files/charis-sil-latin-400-normal.woff2?url';
+import f197 from '@fontsource/charis-sil/files/charis-sil-latin-400-normal.woff?url';
+import f198 from '@fontsource/charis-sil/files/charis-sil-latin-ext-400-normal.woff2?url';
+import f199 from '@fontsource/charis-sil/files/charis-sil-latin-ext-400-normal.woff?url';
+import f200 from '@fontsource/charis-sil/files/charis-sil-cyrillic-400-normal.woff2?url';
+import f201 from '@fontsource/charis-sil/files/charis-sil-cyrillic-400-normal.woff?url';
+import f202 from '@fontsource/charis-sil/files/charis-sil-cyrillic-ext-400-normal.woff2?url';
+import f203 from '@fontsource/charis-sil/files/charis-sil-cyrillic-ext-400-normal.woff?url';
+import f204 from '@fontsource/charis-sil/files/charis-sil-latin-400-italic.woff2?url';
+import f205 from '@fontsource/charis-sil/files/charis-sil-latin-400-italic.woff?url';
+import f206 from '@fontsource/charis-sil/files/charis-sil-latin-ext-400-italic.woff2?url';
+import f207 from '@fontsource/charis-sil/files/charis-sil-latin-ext-400-italic.woff?url';
+import f208 from '@fontsource/charis-sil/files/charis-sil-cyrillic-400-italic.woff2?url';
+import f209 from '@fontsource/charis-sil/files/charis-sil-cyrillic-400-italic.woff?url';
+import f210 from '@fontsource/charis-sil/files/charis-sil-cyrillic-ext-400-italic.woff2?url';
+import f211 from '@fontsource/charis-sil/files/charis-sil-cyrillic-ext-400-italic.woff?url';
+import f212 from '@fontsource/charis-sil/files/charis-sil-latin-700-normal.woff2?url';
+import f213 from '@fontsource/charis-sil/files/charis-sil-latin-700-normal.woff?url';
+import f214 from '@fontsource/charis-sil/files/charis-sil-latin-ext-700-normal.woff2?url';
+import f215 from '@fontsource/charis-sil/files/charis-sil-latin-ext-700-normal.woff?url';
+import f216 from '@fontsource/charis-sil/files/charis-sil-cyrillic-700-normal.woff2?url';
+import f217 from '@fontsource/charis-sil/files/charis-sil-cyrillic-700-normal.woff?url';
+import f218 from '@fontsource/charis-sil/files/charis-sil-cyrillic-ext-700-normal.woff2?url';
+import f219 from '@fontsource/charis-sil/files/charis-sil-cyrillic-ext-700-normal.woff?url';
+import f220 from '@fontsource/roboto/files/roboto-latin-400-normal.woff2?url';
+import f221 from '@fontsource/roboto/files/roboto-latin-400-normal.woff?url';
+import f222 from '@fontsource/roboto/files/roboto-latin-ext-400-normal.woff2?url';
+import f223 from '@fontsource/roboto/files/roboto-latin-ext-400-normal.woff?url';
+import f224 from '@fontsource/roboto/files/roboto-cyrillic-400-normal.woff2?url';
+import f225 from '@fontsource/roboto/files/roboto-cyrillic-400-normal.woff?url';
+import f226 from '@fontsource/roboto/files/roboto-cyrillic-ext-400-normal.woff2?url';
+import f227 from '@fontsource/roboto/files/roboto-cyrillic-ext-400-normal.woff?url';
+import f228 from '@fontsource/roboto/files/roboto-greek-400-normal.woff2?url';
+import f229 from '@fontsource/roboto/files/roboto-greek-400-normal.woff?url';
+import f230 from '@fontsource/roboto/files/roboto-greek-ext-400-normal.woff2?url';
+import f231 from '@fontsource/roboto/files/roboto-greek-ext-400-normal.woff?url';
+import f232 from '@fontsource/roboto/files/roboto-latin-400-italic.woff2?url';
+import f233 from '@fontsource/roboto/files/roboto-latin-400-italic.woff?url';
+import f234 from '@fontsource/roboto/files/roboto-latin-ext-400-italic.woff2?url';
+import f235 from '@fontsource/roboto/files/roboto-latin-ext-400-italic.woff?url';
+import f236 from '@fontsource/roboto/files/roboto-cyrillic-400-italic.woff2?url';
+import f237 from '@fontsource/roboto/files/roboto-cyrillic-400-italic.woff?url';
+import f238 from '@fontsource/roboto/files/roboto-cyrillic-ext-400-italic.woff2?url';
+import f239 from '@fontsource/roboto/files/roboto-cyrillic-ext-400-italic.woff?url';
+import f240 from '@fontsource/roboto/files/roboto-greek-400-italic.woff2?url';
+import f241 from '@fontsource/roboto/files/roboto-greek-400-italic.woff?url';
+import f242 from '@fontsource/roboto/files/roboto-greek-ext-400-italic.woff2?url';
+import f243 from '@fontsource/roboto/files/roboto-greek-ext-400-italic.woff?url';
+import f244 from '@fontsource/roboto/files/roboto-latin-700-normal.woff2?url';
+import f245 from '@fontsource/roboto/files/roboto-latin-700-normal.woff?url';
+import f246 from '@fontsource/roboto/files/roboto-latin-ext-700-normal.woff2?url';
+import f247 from '@fontsource/roboto/files/roboto-latin-ext-700-normal.woff?url';
+import f248 from '@fontsource/roboto/files/roboto-cyrillic-700-normal.woff2?url';
+import f249 from '@fontsource/roboto/files/roboto-cyrillic-700-normal.woff?url';
+import f250 from '@fontsource/roboto/files/roboto-cyrillic-ext-700-normal.woff2?url';
+import f251 from '@fontsource/roboto/files/roboto-cyrillic-ext-700-normal.woff?url';
+import f252 from '@fontsource/roboto/files/roboto-greek-700-normal.woff2?url';
+import f253 from '@fontsource/roboto/files/roboto-greek-700-normal.woff?url';
+import f254 from '@fontsource/roboto/files/roboto-greek-ext-700-normal.woff2?url';
+import f255 from '@fontsource/roboto/files/roboto-greek-ext-700-normal.woff?url';
+import f256 from 'computer-modern/fonts/cmu-serif-500-roman.woff2?url';
+import f257 from 'computer-modern/fonts/cmu-serif-500-roman.ttf?url';
+import f258 from 'computer-modern/fonts/cmu-serif-500-italic.woff2?url';
+import f259 from 'computer-modern/fonts/cmu-serif-500-italic.ttf?url';
+import f260 from 'computer-modern/fonts/cmu-serif-700-roman.woff2?url';
+import f261 from 'computer-modern/fonts/cmu-serif-700-roman.ttf?url';
+import f262 from '@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff2?url';
+import f263 from '@fontsource/stix-two-math/files/stix-two-math-latin-400-normal.woff?url';
 
 export interface FontFace {
   id: string;
@@ -262,8 +358,56 @@ export const FACES: FontFace[] = [
   { id: 'caveat', family: 'Caveat', weight: 700, style: 'normal', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f154, sfnt: f155 },
   { id: 'caveat', family: 'Caveat', weight: 700, style: 'normal', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f156, sfnt: f157 },
   { id: 'caveat', family: 'Caveat', weight: 700, style: 'normal', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f158, sfnt: f159 },
-  { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'normal', range: '', woff2: f160, sfnt: f161 },
-  { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'italic', range: '', woff2: f162, sfnt: f163 },
-  { id: 'cmu', family: 'CMU Serif', weight: 700, style: 'normal', range: '', woff2: f164, sfnt: f165 },
-  { id: 'symbols', family: 'NanoTrees Symbols', weight: 400, style: 'normal', range: 'U+0370-03FF,U+2000-2BFF', woff2: f166, sfnt: f167 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'normal', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f160, sfnt: f161 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'normal', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f162, sfnt: f163 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'normal', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f164, sfnt: f165 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'normal', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f166, sfnt: f167 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'normal', range: 'U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF', woff2: f168, sfnt: f169 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'normal', range: 'U+1F00-1FFF', woff2: f170, sfnt: f171 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'italic', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f172, sfnt: f173 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'italic', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f174, sfnt: f175 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'italic', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f176, sfnt: f177 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'italic', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f178, sfnt: f179 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'italic', range: 'U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF', woff2: f180, sfnt: f181 },
+  { id: 'times', family: 'Tinos', weight: 400, style: 'italic', range: 'U+1F00-1FFF', woff2: f182, sfnt: f183 },
+  { id: 'times', family: 'Tinos', weight: 700, style: 'normal', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f184, sfnt: f185 },
+  { id: 'times', family: 'Tinos', weight: 700, style: 'normal', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f186, sfnt: f187 },
+  { id: 'times', family: 'Tinos', weight: 700, style: 'normal', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f188, sfnt: f189 },
+  { id: 'times', family: 'Tinos', weight: 700, style: 'normal', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f190, sfnt: f191 },
+  { id: 'times', family: 'Tinos', weight: 700, style: 'normal', range: 'U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF', woff2: f192, sfnt: f193 },
+  { id: 'times', family: 'Tinos', weight: 700, style: 'normal', range: 'U+1F00-1FFF', woff2: f194, sfnt: f195 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'normal', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f196, sfnt: f197 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'normal', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f198, sfnt: f199 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'normal', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f200, sfnt: f201 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'normal', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f202, sfnt: f203 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'italic', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f204, sfnt: f205 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'italic', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f206, sfnt: f207 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'italic', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f208, sfnt: f209 },
+  { id: 'charis', family: 'Charis SIL', weight: 400, style: 'italic', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f210, sfnt: f211 },
+  { id: 'charis', family: 'Charis SIL', weight: 700, style: 'normal', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f212, sfnt: f213 },
+  { id: 'charis', family: 'Charis SIL', weight: 700, style: 'normal', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f214, sfnt: f215 },
+  { id: 'charis', family: 'Charis SIL', weight: 700, style: 'normal', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f216, sfnt: f217 },
+  { id: 'charis', family: 'Charis SIL', weight: 700, style: 'normal', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f218, sfnt: f219 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'normal', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f220, sfnt: f221 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'normal', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f222, sfnt: f223 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'normal', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f224, sfnt: f225 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'normal', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f226, sfnt: f227 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'normal', range: 'U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF', woff2: f228, sfnt: f229 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'normal', range: 'U+1F00-1FFF', woff2: f230, sfnt: f231 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'italic', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f232, sfnt: f233 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'italic', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f234, sfnt: f235 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'italic', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f236, sfnt: f237 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'italic', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f238, sfnt: f239 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'italic', range: 'U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF', woff2: f240, sfnt: f241 },
+  { id: 'roboto', family: 'Roboto', weight: 400, style: 'italic', range: 'U+1F00-1FFF', woff2: f242, sfnt: f243 },
+  { id: 'roboto', family: 'Roboto', weight: 700, style: 'normal', range: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD', woff2: f244, sfnt: f245 },
+  { id: 'roboto', family: 'Roboto', weight: 700, style: 'normal', range: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF', woff2: f246, sfnt: f247 },
+  { id: 'roboto', family: 'Roboto', weight: 700, style: 'normal', range: 'U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116', woff2: f248, sfnt: f249 },
+  { id: 'roboto', family: 'Roboto', weight: 700, style: 'normal', range: 'U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F', woff2: f250, sfnt: f251 },
+  { id: 'roboto', family: 'Roboto', weight: 700, style: 'normal', range: 'U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF', woff2: f252, sfnt: f253 },
+  { id: 'roboto', family: 'Roboto', weight: 700, style: 'normal', range: 'U+1F00-1FFF', woff2: f254, sfnt: f255 },
+  { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'normal', range: '', woff2: f256, sfnt: f257 },
+  { id: 'cmu', family: 'CMU Serif', weight: 400, style: 'italic', range: '', woff2: f258, sfnt: f259 },
+  { id: 'cmu', family: 'CMU Serif', weight: 700, style: 'normal', range: '', woff2: f260, sfnt: f261 },
+  { id: 'symbols', family: 'NanoTrees Symbols', weight: 400, style: 'normal', range: 'U+0370-03FF,U+2000-2BFF', woff2: f262, sfnt: f263 },
 ];

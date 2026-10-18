@@ -511,6 +511,100 @@ body.resizing * {
   margin: 6px 0;
 }
 
+.font-menu {
+  position: relative;
+}
+
+.font-current {
+  text-align: left;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 28px 6px 9px;
+  cursor: pointer;
+  position: relative;
+}
+
+.font-current::after {
+  content: '';
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: translateY(-70%) rotate(45deg);
+}
+
+.font-options,
+.font-names {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px;
+  overflow-y: auto;
+}
+
+.font-options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  z-index: 30;
+  max-height: 340px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.font-names {
+  max-height: 220px;
+  margin: 6px 0;
+}
+
+.font-options button,
+.font-names button {
+  text-align: left;
+  font-size: 15px;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.font-options button:hover,
+.font-names button:hover {
+  background: var(--danger-bg, rgba(0, 0, 0, 0.05));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.font-options button.on,
+.font-names button.on {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.font-options button.other {
+  font-size: 13px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 4px 4px;
+  margin-top: 2px;
+}
+
+.hint.warn {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
 /* ------------------------------------------------------------ menu */
 
 .menu {

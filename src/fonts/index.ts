@@ -84,17 +84,75 @@ interface LocalFontData {
   blob(): Promise<Blob>;
 }
 
+/**
+ * Safari (and every browser on iPhone and iPad, all built on Safari's engine) lets pages use only
+ * the fonts that come with the system, not the ones installed by the user.
+ */
+export function onlySystemFonts(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /AppleWebKit/.test(ua) && !/Chrome|Chromium|Android/.test(ua);
+}
+
+/** fonts that come with macOS (and some with iOS): what Safari lets pages use besides their own */
+const SYSTEM_FONTS = [
+  'American Typewriter', 'Arial', 'Arial Narrow', 'Athelas', 'Avenir', 'Avenir Next', 'Baskerville', 'Big Caslon', 'Bodoni 72',
+  'Charter', 'Cochin', 'Copperplate', 'Courier', 'Courier New', 'Didot', 'Futura', 'Geneva', 'Georgia', 'Gill Sans', 'Helvetica',
+  'Helvetica Neue', 'Hoefler Text', 'Iowan Old Style', 'Lucida Grande', 'Marker Felt', 'Menlo', 'Monaco', 'Optima', 'Palatino',
+  'Seravek', 'Superclarendon', 'Tahoma', 'Times', 'Times New Roman', 'Trebuchet MS', 'Verdana',
+];
+
+/** The fonts of the system this browser lets pages use (for Safari, where nothing else can be listed). */
+export function systemFonts(): string[] {
+  return SYSTEM_FONTS.filter(localFontAvailable);
+}
+
 /** Whether the browser can list installed fonts (Local Font Access API, Chromium). */
 export function canListLocalFonts(): boolean {
   return typeof window !== 'undefined' && 'queryLocalFonts' in window;
 }
 
-/** Families of the fonts installed on this computer (asks for permission). */
-export async function listLocalFamilies(): Promise<string[]> {
-  const q = (window as unknown as { queryLocalFonts?: () => Promise<LocalFontData[]> }).queryLocalFonts;
-  if (!q) return [];
-  const fonts = await q();
-  return [...new Set(fonts.map((f) => f.family))].sort((a, b) => a.localeCompare(b));
+/**
+ * Whether this computer has a font of that name, as the browser sees it: text in it is as wide as
+ * in neither fallback (a missing font falls back to serif, usually Times New Roman).
+ */
+export function localFontAvailable(family: string): boolean {
+  if (typeof document === 'undefined') return true;
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return true;
+  const sample = 'mmmmmmmmmmlliWQ@ 0123456789';
+  const name = `"${family.replace(/"/g, '')}"`;
+  return ['monospace', 'sans-serif', 'serif'].some((fallback) => {
+    ctx.font = `72px ${fallback}`;
+    const base = ctx.measureText(sample).width;
+    ctx.font = `72px ${name}, ${fallback}`;
+    return Math.abs(ctx.measureText(sample).width - base) > 0.5;
+  });
+}
+
+let families: Promise<string[]> | null = null;
+
+/** Families of the fonts installed on this computer (asks for permission once; kept for the session). */
+export function listLocalFamilies(): Promise<string[]> {
+  if (!families) {
+    const q = (window as unknown as { queryLocalFonts?: () => Promise<LocalFontData[]> }).queryLocalFonts;
+    if (!q) return Promise.resolve([]);
+    families = q().then((fonts) => [...new Set(fonts.map((f) => f.family))].sort((a, b) => a.localeCompare(b)));
+    // refused: asking again later is allowed
+    families.catch(() => (families = null));
+  }
+  return families;
+}
+
+/** The list of installed fonts without asking: only when reading it is already allowed (else null). */
+export async function localFamiliesIfAllowed(): Promise<string[] | null> {
+  if (!canListLocalFonts()) return null;
+  try {
+    const p = await navigator.permissions.query({ name: 'local-fonts' as PermissionName });
+    return p.state === 'granted' ? await listLocalFamilies() : null;
+  } catch {
+    return null;
+  }
 }
 
 const localCache = new Map<string, Promise<FontFace[]>>();

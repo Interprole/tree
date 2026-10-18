@@ -8,6 +8,9 @@ const FONTSOURCE = [
   { id: 'noto-serif', pkg: 'noto-serif', family: 'Noto Serif', variants: ['400-normal', '400-italic', '700-normal'] },
   { id: 'noto-sans', pkg: 'noto-sans', family: 'Noto Sans', variants: ['400-normal', '400-italic', '700-normal'] },
   { id: 'caveat', pkg: 'caveat', family: 'Caveat', variants: ['400-normal', '700-normal'] },
+  { id: 'times', pkg: 'tinos', family: 'Tinos', variants: ['400-normal', '400-italic', '700-normal'] },
+  { id: 'charis', pkg: 'charis-sil', family: 'Charis SIL', variants: ['400-normal', '400-italic', '700-normal'] },
+  { id: 'roboto', pkg: 'roboto', family: 'Roboto', variants: ['400-normal', '400-italic', '700-normal'] },
 ];
 
 const imports = [];

@@ -1,14 +1,15 @@
 import { useSignal } from '@preact/signals';
+import { useEffect, useRef } from 'preact/hooks';
 import { defaultBuildOptions } from '../core/build';
 import type { BuildOptions } from '../core/build';
 import { defaultStyle, FONT_FAMILIES, isLocalFont, presets } from '../core/style';
 import type { BuiltinFont, FontId, PresetId, TreeStyle } from '../core/style';
-import { canListLocalFonts, listLocalFamilies } from '../fonts';
+import { canListLocalFonts, listLocalFamilies, localFamiliesIfAllowed, localFontAvailable, onlySystemFonts, systemFonts } from '../fonts';
 import { t } from '../i18n';
 import { activeTree, appearanceScope, showToast, shownBuild as build, shownStyle as style, trees } from '../state';
 import { applyBuild as setBuild, applyStyle as setStyle } from '../overrides';
 import { overridePolicy } from '../ask';
-import { ColorField, ResetBtn, Section, Seg, Select, Slider, Toggle } from './controls';
+import { ColorField, ResetBtn, Section, Seg, Slider, Toggle } from './controls';
 import { NumField } from './Inspector';
 
 /** reset handler for a style key, or undefined when it already has its default value */
@@ -81,13 +82,56 @@ export function ChainOptions() {
   );
 }
 
+/** the CSS of a font id, for writing its name in itself */
+const faceOf = (f: FontId) => (isLocalFont(f) ? `"${f.slice(6).replace(/"/g, '')}", var(--ui-font, sans-serif)` : FONT_FAMILIES[f as BuiltinFont]?.css);
+
+/** A list of font names, each written in its own font. */
+function FontNames({ names, current, filter, onPick }: { names: string[]; current: string; filter: string; onPick: (name: string) => void }) {
+  const q = filter.trim().toLowerCase();
+  // the name of the font in use shows them all; anything else typed narrows the list
+  const shown = (q && q !== current.toLowerCase() ? names.filter((n) => n.toLowerCase().includes(q)) : names).slice(0, 200);
+  if (!shown.length) return null;
+  return (
+    <div class="font-names" role="listbox" aria-label="Fonts">
+      {shown.map((n) => (
+        <button key={n} type="button" role="option" aria-selected={n === current} class={n === current ? 'on' : ''} style={{ fontFamily: faceOf(`local:${n}`) }} onPointerDown={(e) => e.preventDefault()} onClick={() => onPick(n)}>
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FontPicker() {
   const s = style.value;
   const families = useSignal<string[] | null>(null);
   const custom = useSignal(isLocalFont(s.font) ? s.font.slice(6) : '');
-  const local = isLocalFont(s.font);
-  const builtins = (Object.keys(FONT_FAMILIES) as BuiltinFont[]).map((f) => ({ v: f as FontId, label: FONT_FAMILIES[f].name }));
-  const options = [...builtins, { v: (local ? s.font : 'local:') as FontId, label: local ? `Installed: ${s.font.slice(6)}` : 'An installed font…' }];
+  const local = isLocalFont(s.font) && s.font.slice(6).trim() !== '';
+  // "An installed font…" chosen, no name yet: the tree keeps its font until one is given
+  const picking = useSignal(false);
+  const menu = useSignal(false);
+  const open = local || picking.value || s.font === ('local:' as FontId);
+  const missing = local && !localFontAvailable(s.font.slice(6));
+  // Safari: only the fonts of the system, not the ones installed by the user
+  const safari = onlySystemFonts();
+  const noTimes = s.font === 'times' && !localFontAvailable('Times New Roman');
+  const box = useRef<HTMLDivElement>(null);
+  // the list once allowed: shown again without asking
+  useEffect(() => {
+    if (open && !families.value && !safari) void localFamiliesIfAllowed().then((l) => l && (families.value = l));
+  }, [open]);
+  // the menu closes on a click elsewhere or Escape
+  useEffect(() => {
+    if (!menu.value) return;
+    const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && (menu.value = false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && (menu.value = false);
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [menu.value]);
   const loadList = async () => {
     try {
       families.value = await listLocalFamilies();
@@ -95,48 +139,98 @@ function FontPicker() {
       showToast('The browser did not allow reading the list of installed fonts. Type the name instead.');
     }
   };
+  const useLocal = (name: string) => {
+    custom.value = name;
+    setStyle({ font: `local:${name}` });
+  };
+  const localLabel = safari ? 'A system font…' : 'An installed font…';
+  const currentName = local ? s.font.slice(6) : open ? localLabel : FONT_FAMILIES[s.font as BuiltinFont]?.name ?? s.font;
+  const names = safari ? systemFonts() : families.value;
   return (
     <>
-      <Select<FontId>
-        label={t('font')}
-        value={local || s.font === ('local:' as FontId) ? (local ? s.font : ('local:' as FontId)) : s.font}
-        reset={rs('font')}
-        onChange={(v) => {
-          if (v === 'local:') {
-            custom.value = '';
-            setStyle({ font: 'local:' as FontId });
-          } else setStyle({ font: v });
-        }}
-        options={options}
-      />
-      {(local || s.font === ('local:' as FontId)) && (
+      <div class="field font-menu" ref={box}>
+        <span class="lbl">
+          {t('font')} <ResetBtn reset={rs('font')} />
+        </span>
+        <button type="button" class="font-current" aria-haspopup="listbox" aria-expanded={menu.value} style={{ fontFamily: local || !open ? faceOf(s.font) : undefined }} onClick={() => (menu.value = !menu.value)}>
+          {currentName}
+        </button>
+        {menu.value && (
+          <div class="font-options" role="listbox" aria-label={t('font')}>
+            {(Object.keys(FONT_FAMILIES) as BuiltinFont[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                role="option"
+                data-font={f}
+                aria-selected={s.font === f && !open}
+                class={s.font === f && !open ? 'on' : ''}
+                style={{ fontFamily: FONT_FAMILIES[f].css }}
+                onClick={() => {
+                  picking.value = false;
+                  menu.value = false;
+                  setStyle({ font: f });
+                }}
+              >
+                {FONT_FAMILIES[f].name}
+              </button>
+            ))}
+            <button
+              type="button"
+              role="option"
+              data-font="local:"
+              aria-selected={open}
+              class={`other ${open ? 'on' : ''}`}
+              onClick={() => {
+                menu.value = false;
+                if (!local) {
+                  custom.value = '';
+                  picking.value = true;
+                }
+              }}
+            >
+              {local ? `${safari ? 'System' : 'Installed'}: ${s.font.slice(6)}` : localLabel}
+            </button>
+          </div>
+        )}
+      </div>
+      {s.font === 'times' && (
+        <p class={noTimes ? 'hint warn' : 'hint'}>
+          {noTimes
+            ? 'This computer has no Times New Roman, so Tinos is shown instead: its free twin, with the same letter widths. Exports use Tinos too.'
+            : 'PDF export uses Tinos, the free twin of Times New Roman with the same letter widths (Times New Roman itself cannot be embedded); so do SVG files opened where there is no Times New Roman.'}
+        </p>
+      )}
+      {open && (
         <div class="local-font">
+          {safari && <p class="hint">Safari lets websites use only the fonts that come with macOS (Helvetica, Georgia, Palatino…). Fonts you installed yourself work only in Chrome, Edge or Firefox.</p>}
           <form
             class="row"
             onSubmit={(e) => {
               e.preventDefault();
-              if (custom.value.trim()) setStyle({ font: `local:${custom.value.trim()}` });
+              if (custom.value.trim()) useLocal(custom.value.trim());
             }}
           >
-            <input class="grow" list="local-font-list" placeholder="Font name, e.g. Times New Roman" value={custom.value} onInput={(e) => (custom.value = (e.target as HTMLInputElement).value)} onChange={(e) => {
-              const v = (e.target as HTMLInputElement).value.trim();
-              if (v) setStyle({ font: `local:${v}` });
-            }} />
+            <input
+              class="grow"
+              placeholder={names?.length ? 'Pick below or type a name' : 'Font name, e.g. Times New Roman'}
+              value={custom.value}
+              onInput={(e) => (custom.value = (e.target as HTMLInputElement).value)}
+            />
             <button class="btn small" type="submit">Use</button>
           </form>
-          {families.value && (
-            <datalist id="local-font-list">
-              {families.value.map((f) => (
-                <option key={f} value={f} />
-              ))}
-            </datalist>
-          )}
-          {canListLocalFonts() && !families.value && (
+          {names && <FontNames names={names} current={local ? s.font.slice(6) : ''} filter={custom.value} onPick={useLocal} />}
+          {!safari && canListLocalFonts() && !families.value && (
             <button class="btn small ghost" type="button" onClick={loadList}>
               List the fonts installed on this computer
             </button>
           )}
-          <p class="hint">Installed fonts show on this computer; PNG, SVG and PDF exports embed them when the browser allows reading the font file (Chrome, Edge).</p>
+          {missing && (
+            <p class="hint warn">
+              The browser finds no font called “{s.font.slice(6)}” on this computer, so it shows a fallback (usually Times New Roman). Check the name{names?.length ? ' against the list' : ''}. A font installed while the browser was open appears only after the browser is closed completely and opened again. Safari and Firefox with strict privacy settings do not let pages use fonts you installed yourself.
+            </p>
+          )}
+          {!safari && <p class="hint">Installed fonts show on this computer; PNG, SVG and PDF exports embed them when the browser allows reading the font file (Chrome, Edge).</p>}
         </div>
       )}
     </>
