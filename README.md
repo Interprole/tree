@@ -19,22 +19,23 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
   - **multidominance**: one node, several mothers.
 
   Several copies can be pronounced (`#wh!`), a copy can be pronounced with different words, with a gloss if you like (`#wh"whom"`, `#subj"zij | she"` for pronoun copying as in Wambeek Dutch), and a lower position can get its own meaning (`#wh$x : e$`, triggering Predicate Abstraction). Arrows for phrasal movement are drawn automatically and each can be edited; deleting one (keeping the movement) hides it. Movement indices are separate from the indices you type for binding.
-- **Head movement.** An arrow between two heads strikes out the source and turns the target into a complex head written as text: the labels (V+v, V+v+T, T+C) and the words (sing+-s) are joined with +. No extra edges are drawn. The arrow itself can be hidden (one by one, or all head-movement arrows) while the movement stays.
+- **Head movement.** Written on the moved head (`[V#root;to=v sing]`). The source is struck out and the target becomes a complex head written as text: the labels (V+v, V+v+T, T+C) and the words (sing+-s) are joined with +. No extra edges are drawn. The arrow is drawn by itself and can be hidden (one by one, or all head-movement arrows) while the movement stays.
+- **Arrows.** An arrow drawn on the canvas is just an arrow; *Movement* in its panel turns it into a chain (two constituents of one category) or head movement (two heads). Every arrow is one smooth curve, as TikZ draws `to[out=…, in=…]`: it leaves and enters towards the centres of its nodes, never through the daughters of a node, and picks the sides that touch no label and cross nothing; bend points are added only when one curve cannot get through. Where it leaves and enters can be set by hand, and any number of bend points can be added.
 - **Compositional semantics.** Write meanings as `$λx. cat(x) : <e,t>$` (or `lambda x.`, `iota x.`, `exists`, `forall`; numbers and comparisons work; types can be any names). The meanings of the other nodes are computed bottom-up with Functional Application, Predicate Conjunction, Event Identification and Function Composition. Type errors are shown at the node; the rule used can be shown or hidden, and meaning colours are configurable.
-- **Several trees on one canvas.** Each tree has its own code, settings and place on the canvas (drag it by its name) and is exported on its own. A tree can be copied: an independent copy, or a linked copy that shares the code (edit one, both change) while its settings stay its own, e.g. copies in one and traces in the other.
+- **Several trees on one canvas.** Each tree has its own code, settings and place on the canvas (drag it by its name) and is exported on its own. Appearance settings apply to the tree you clicked or to all trees (click the empty canvas); where some trees, nodes or copies have values of their own, you are asked whether to replace them (or set it once: always replace / always keep). The sheet of a tree can be resized (drag its corner): the tree grows or shrinks with it, and exports have the same size. A tree can be copied as an independent copy or as a linked copy (its settings stay its own, e.g. copies in one and traces in the other). New trees start empty; *Clear canvas* is on the canvas toolbar.
 - **Canvas editing** in an edit panel beside the canvas, so nothing covers the tree:
-  - rename (the tree follows as you type), add daughters, sisters or a mother; copy, cut and paste a subtree as a copy of its own (Ctrl+C / X / V, Ctrl+D), also as a new tree; drag a branch by its root to move it; right-click menu; Shift + drag selects a branch;
+  - rename (the tree follows as you type), add daughters, sisters or a mother; copy, cut and paste a subtree as a copy of its own (Ctrl+C / X / V, Ctrl+D), also as a new tree or into an empty one; drag a branch by its root to move it, also into another tree (a branch that leaves its tree takes its copies with it written out in full, and what stays behind still makes sense); right-click menus for nodes, trees and the canvas; Shift + drag selects a branch;
   - linked branches (`;link=…`): copies of a branch, in one tree or in several, that change together inside while everything around them stays free (shown with a dashed frame); the code is laid out with line breaks and indentation as you go (also *Format*, Shift+Alt+F);
   - add an existing constituent again by clicking it (a new chain position);
   - triangles that keep the structure in the code;
   - features, meanings, notes next to a node (several, positioned automatically or by side, draggable);
   - colours of the label, the edge above, the whole branch (edges, labels and meanings) or the meaning, from the palette or any colour; edge width and length, spread of the daughters (changed at once with ▲▼, the arrow keys or the wheel);
-  - arrows: line, head direction, reverse, colour, route, several labels at chosen sides (draggable), any number of bend points (double-click an arrow); an arrow can be *just an arrow* instead of head movement;
-  - arrows leave and enter the node itself: at the side of a node with daughters, under a word; a head with only a word uses the word by default, or the node (`from=node`, `to=node`);
+  - arrows: line, head direction, reverse, colour, where it leaves and enters (below, above, left, right or the best way), several labels at chosen sides (draggable), bend points (double-click an arrow; drag the round handles); *Just an arrow* or *Movement*; deleting a movement arrow keeps the movement or undoes it;
+  - a head with only a word: arrows use the word by default, or the node (`from=node`, `to=node`);
   - Markdown (`**bold**`, `*italic*`, `~~struck~~`) in labels, words, notes and arrow labels;
   - changing the branching of a node with two daughters (left ↔ right swaps them: `[XP X [Z]]` ↔ `[XP [Z] X]`);
   - click a note or an arrow label to rename or delete it, drag it to move it;
-  - c-command and dominance highlighting;
+  - c-command and dominance highlighting (keys C and D);
   - undo and redo.
 - **Export and sharing:**
   - SVG and PDF with embedded fonts, PNG up to 576 dpi;
@@ -42,7 +43,7 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
   - save the canvas to disk (a `.nanotrees` file with all its trees; in Chrome and Edge Ctrl+S writes into the same file again, optionally on every change) and open it again;
   - share links, autosave in the browser, a list of saved trees.
 - **Offline:** `npm run build:offline` makes `dist-offline/nanotrees.html`, the whole app in one file: open it by double-click, no internet needed.
-- **Interface:** resizable panes (drag the borders); every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
+- **Interface:** resizable panes (drag the borders), the code panel folds away; an edit panel and an appearance panel on the right; every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
 
 ## Bracket notation
 
@@ -61,15 +62,15 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 | `[VP;spread=30;sem=blue …]` | wider gaps between daughters; meaning colour |
 | `[DP &"focus" &right"✓"@4,-2 …]` | notes next to the node (side, drag offset) |
 | `[DP#wh what] … #wh` | a chain: the same constituent in two positions |
+| `[DP;link=a …]` | a linked branch: every copy with the same `link` changes together inside |
 | `#wh!`, `[DP#wh? what]` | pronounce / silence a position |
 | `#wh"whom"`, `#wh"zij \| she"`, `#wh$x : e$` | a position with its own words (and gloss) / meaning |
 | `$λx_e.λe_s. agent(e)(x)$` | a meaning (optionally `: <type>`) |
-| `#a -> #b dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; between heads it is head movement |
+| `#a -> #b plain dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; `plain` = just an arrow (without it, an arrow between two heads is read as head movement, as in older files) |
 | `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
 | `#wh/2: ^ @gray {uφ} &"x" $x : e$` | one copy on its own: triangle, colour, features, note, meaning (also edge=, width=, len=, "words") — written on the constituent it goes to every copy |
 | `#a -> #b out=below in=left` | where the arrow leaves and enters (default: one smooth curve that touches nothing, as TikZ draws `to[out=…, in=…]`) |
-| `#a -> #b plain` | just an arrow (what the arrow tool draws); Movement turns it into a chain or head movement |
-| `[V#v;to=t sing]` | head movement of V to the head #t (V is struck through, T shows V+T) |
+| `[V#v;to=t sing]` | head movement of V to the head #t (V is struck through, T shows V+T); the arrow is drawn by itself |
 | `#v -> #t hide` / `visible` | the arrow of a movement hidden / shown against the switch for that kind of arrows |
 | `#wh/2: open` · `#wh/2: @none` | this copy without the triangle / colour that all copies have |
 | `#a -> #b via=0,40;-20,60` | bend points (px from the middle of the two ends) |
@@ -82,10 +83,8 @@ Example: head movement, together with a subject chain.
 [TP [DP#subj she]
     [T' [T#t -s]
         [vP #subj
-            [v' [v#v ∅]
-                [VP [V#root sing] [DP songs]]]]]]
-#root -> #v
-#v -> #t
+            [v' [v#v;to=t ∅]
+                [VP [V#root;to=v sing] [DP songs]]]]]]
 ```
 
 ![Head movement, dark theme](docs/screenshot-dark.png)
@@ -127,7 +126,9 @@ src/core/      no DOM, tested on its own
   modes.ts     X-bar projection
   semantics.ts typed λ-calculus, β-reduction, composition rules
   layout.ts    tidy layout, multidominance placement and routing
-  arrows.ts    movement arrows
+  arrows.ts    arrow curves (as TikZ to[out, in]) and bend points
+  links.ts     linked branches
+  standalone.ts a branch moved into another tree
   scene.ts     drawing primitives → SVG, PNG, PDF
   latex.ts     forest / tikz-qtree / TikZ export
   edits.ts     canvas operations as minimal text edits

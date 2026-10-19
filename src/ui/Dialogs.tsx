@@ -187,17 +187,18 @@ const GUIDE: GuideSection[] = [
         <p>On the canvas: select a position → ⋯ → <em>Pronounce / Silence this position</em>.</p>
         <h4>Arrows and indices</h4>
         <p>
-          Arrows between the positions of a chain are drawn automatically (switch: <em>Arrows for phrasal movement</em>). Each one can still be edited: click it to change line, head, route or label, or drag its round handle to bend it. Editing writes a line like <code>#wh/2 -&gt; #wh/1 dashed</code> into the code (<code>/2</code> = the second position from the top); deleting the arrow (keeping the movement) writes <code>… hide</code>; with the switch off, <code>… visible</code> shows one arrow anyway.
+          Arrows between the positions of a chain are drawn automatically (switch: <em>Arrows for phrasal movement</em>). Each one can still be edited: click it to change line, head, where it leaves and enters, or label, or drag its round handle to bend it. Editing writes a line like <code>#wh/2 -&gt; #wh/1 dashed</code> into the code (<code>/2</code> = the second position from the top); deleting the arrow (keeping the movement) writes <code>… hide</code>; with the switch off, <code>… visible</code> shows one arrow anyway.
         </p>
         <p>
           <em>Movement indices</em> adds subscripts to all positions of each chain. They are separate from indices you type yourself (<code>DP_i</code>, used for binding): movement indices come from the # ids and never reuse a letter you already typed.
         </p>
         <h4>Head movement</h4>
-        <p>An arrow from one head to another (e.g. V to v) is head movement: the source is struck through and the target shows the complex head as text, with the words joined by + too. Several steps add up: V+v, then V+v+T (sing+∅+-s). ∅ is left out of the words.</p>
+        <p>Head movement of one head to another (e.g. V to v) strikes the source through, and the target shows the complex head as text, with the words joined by + too. Several steps add up: V+v, then V+v+T (sing+∅+-s). ∅ is left out of the words.</p>
 <p>
           Head movement is written on the moved head: <code>[V#v;to=t sing]</code>. On the canvas: draw an arrow (it is just an arrow), then choose <em>Movement</em> in its panel. Two heads of different categories become head movement; two constituents of the same category become copies of one chain (silent if they are the same, pronounced with their own words otherwise); different categories cannot move into each other. A movement arrow can be deleted keeping the movement (written <code>hide</code>, or nothing when such arrows are switched off) or with it. The switches <em>Arrows for phrasal movement</em> and <em>Arrows for head movement</em> hide only movement arrows, never just-arrows.
         </p>
-        <Pre>{'[TP [T#t -s] [vP [v#v ∅] [VP [V#root sing] [DP songs]]]]\n#root -> #v\n#v -> #t'}</Pre>
+        <Pre>{'[TP [T#t -s] [vP [v#v;to=t ∅] [VP [V#root;to=v sing] [DP songs]]]]'}</Pre>
+        <p>An arrow line between two heads without <code>plain</code> (<code>#root -&gt; #v</code>) is still read as head movement, as in files from older versions.</p>
         <h4>Arrow lines</h4>
         <Table rows={[
           ['#a -> #b', 'Arrow from the node #a to the node #b (one arrow per line, after the tree).'],
@@ -205,10 +206,10 @@ const GUIDE: GuideSection[] = [
           ['dashed  dotted', 'Line style.'],
           ['out=below  in=left', 'Where the arrow leaves and enters (below, above, left, right); by default the sides that touch nothing, as one smooth curve like TikZ’s to[out=…, in=…].'],
           ['"label"   @red', 'A label, a colour. Several labels are allowed.'],
-          ['above"x"  below"y"  left"z"', 'Label position (default: auto = under an arrow below the tree, outside a curve). Drag a label to move it: writes "x"@dx,dy.'],
-          ['bend=0,20', 'Offset of the bend (set by dragging the handle).'],
+          ['above"x"  below"y"  left"z"', 'Label position (default: auto = on the outer side of the curve). Drag a label to move it: writes "x"@dx,dy.'],
           ['via=0,40;-30,60', 'Bend points: the arrow is a smooth curve through them (offsets in px from the middle of its two ends). Double-click an arrow to add one, drag the round handles, double-click a handle to remove it.'],
-          ['plain', 'Just an arrow: between two heads it is not head movement (nothing struck through, no V+v).'],
+          ['plain', 'Just an arrow (what the arrow tool draws): between two heads it is not head movement (nothing struck through, no V+v).'],
+          ['hide   visible', 'The arrow of a movement hidden / shown against the switch for that kind of arrows.'],
           ['#wh/2 -> #wh/1 hide', 'Hide one automatic arrow of a chain.'],
         ]} />
       </>
@@ -273,16 +274,16 @@ const GUIDE: GuideSection[] = [
         <p>Drag the borders between the code, the canvas, the edit panel and the settings to make them wider or narrower (double-click a border: default). The ≡ button in the code (Shift+Alt+F) lays out the whole code.</p>
         <h4>Several trees</h4>
         <p>
-          The tabs above the code are the trees on the canvas; <strong>+</strong> adds one. Each tree has its own code and settings and is exported on its own. Click a tree on the canvas to edit it, drag its name to move it. ⋯ on a tab: <em>Copy</em> makes an independent copy, <em>Linked copy</em> one that shares the code (an edit in one changes both, while e.g. copies vs traces or colours stay separate); <em>Unlink</em> and <em>Link to…</em> change that later.
+          The tabs above the code are the trees on the canvas; <strong>+</strong> adds one. Each tree has its own code and settings and is exported on its own. Click a tree on the canvas to edit it, drag its name to move it. ⋯ on a tab or a right click on a tree: <em>Copy</em> makes an independent copy, <em>Linked copy</em> one whose whole tree is a linked branch (an edit inside one changes both, while e.g. copies vs traces or colours stay separate); <em>Unlink</em> undoes that. A click on a tree's sheet opens its appearance; a click on the empty canvas, the appearance of all trees. Drag the corner of a sheet to resize it (double-click: fit); <em>Clear canvas</em> is on the canvas toolbar.
         </p>
         <h4>Tools (bottom of the canvas)</h4>
         <Table rows={[
           ['Select', 'Select and edit.'],
-          ['Arrow', 'Click the moved element, then the landing site.'],
-          ['C-command', 'Click a node: green shows what it c-commands.'],
-          ['Dominance', 'Click a node: blue shows what it dominates.'],
+          ['Arrow', 'Click where the arrow starts, then where it ends. It is just an arrow; Movement in its panel makes it a chain or head movement.'],
+          ['C (key)', 'C-command: click a node, green shows what it c-commands.'],
+          ['D (key)', 'Dominance: click a node, blue shows what it dominates.'],
         ]} />
-        <p>Click a note or an arrow label to edit or delete it; drag it to move it. Every bend of a selected arrow is marked with a round handle: drag it, double-click it to remove it, double-click the arrow to add one. Click an arrow to change its line, head direction (→ ← ↔ —), colour, route, labels and bend points, to reverse it, or to make it <em>just an arrow</em> (not head movement). Deleting an arrow between two positions of a chain hides it (it does not come back with default settings). Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the trees.</p>
+        <p>Click a note or an arrow label to edit or delete it; drag it to move it. Every bend of a selected arrow is marked with a round handle: drag it, double-click it to remove it, double-click the arrow to add one. Click an arrow to change its line, head direction (→ ← ↔ —), colour, where it leaves and enters, labels and bend points, to reverse it, or to choose <em>Just an arrow</em> or <em>Movement</em>. Deleting a movement arrow keeps the movement (the arrow is hidden) or undoes it. Drag the background to pan, Ctrl + wheel or pinch to zoom, and use the percentage button to fit the trees.</p>
       </>
     ),
   },
