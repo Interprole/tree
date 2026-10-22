@@ -8,7 +8,12 @@ async function canvas(page: Page) {
   });
 }
 async function setCode(page: Page, code: string) {
-  await page.locator('.active-sheet .paper').click({ position: { x: 12, y: 12 } });
+  if (!await page.locator('.cm-content').isVisible()) {
+    await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
+    const paper = page.locator('.active-sheet .paper');
+    const box = (await paper.boundingBox())!;
+    await paper.click({ position: { x: box.width / 2, y: box.height - 5 } });
+  }
   await page.locator('.cm-content').click();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.insertText(code);
@@ -26,7 +31,12 @@ async function enable(page: Page) {
   if (await button.getAttribute('aria-pressed') !== 'true') await button.click();
 }
 async function context(page: Page) {
-  await page.locator('.active-sheet .paper').click({ button: 'right', position: { x: 12, y: 12 } });
+  const paper = page.locator('.active-sheet .paper');
+  const box = (await paper.boundingBox())!;
+  const area = (await page.getByTestId('canvas').boundingBox())!;
+  if (box.x < area.x) await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
+  const visible = (await paper.boundingBox())!;
+  await paper.click({ button: 'right', position: { x: visible.width / 2, y: visible.height - 5 } });
 }
 async function selectSheet(page: Page, id: string) {
   await page.getByRole('button', { name: 'Fit to window', exact: true }).click();

@@ -150,16 +150,18 @@ export function Canvas() {
 
   useEffect(() => {
     const el = wrap.current!;
+    let previousBounds: DOMRect | null = null;
     const ro = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
-      const previous = size.peek();
-      const first = size.value.w === 800 && size.value.h === 600;
       size.value = { w: r.width, h: r.height };
-      if (first) fit();
+      if (!previousBounds) fit();
       else {
         const current = view.peek();
-        view.value = { ...current, x: current.x + (r.width - previous.w) / 2, y: current.y + (r.height - previous.h) / 2 };
+        // Panels change the canvas origin. Keep trees at the same screen
+        // coordinates rather than recentering them in the remaining space.
+        view.value = { ...current, x: current.x + previousBounds.left - r.left, y: current.y + previousBounds.top - r.top };
       }
+      previousBounds = r;
     });
     ro.observe(el);
     return () => ro.disconnect();

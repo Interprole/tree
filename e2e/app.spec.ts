@@ -13,7 +13,12 @@ async function setCode(page: Page, text: string) {
 
 async function showCode(page: Page) {
   if (!await page.locator('.cm-content').isVisible()) {
-    await page.locator('.active-sheet .paper').click({ position: { x: 12, y: 12 } });
+    await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
+    const paper = page.locator('.active-sheet .paper');
+    const box = (await paper.boundingBox())!;
+    // The top corner can lie under another sheet's caption. Select the
+    // white bottom margin without relying on panels recentering the canvas.
+    await paper.click({ position: { x: box.width / 2, y: box.height - 5 } });
   }
 }
 async function selectTree(page: Page, index: number) {
@@ -22,6 +27,7 @@ async function selectTree(page: Page, index: number) {
   await showCode(page);
 }
 async function copyWholeBranch(page: Page, linked = false) {
+  await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
   await page.locator('.active-sheet [data-node]').first().click({ button: 'right' });
   await page.getByRole('menuitem', { name: linked ? /^Copy as a linked branch/ : /^Copy branch/ }).click();
   await page.getByTestId('canvas').click({ button: 'right', position: { x: 5, y: 5 } });
@@ -816,8 +822,9 @@ test('a branch with a copy moves into another tree in full; the copy left behind
   // the DP leaves tree 1 the other way: tree 1 keeps a pronounced what
   await selectTree(page, 0);
   await setCode(page, '[CP [DP#wh what] [C\' [C did] [VP [V buy] #wh]]]');
-  await copyWholeBranch(page);
-  await setCode(page, '');
+  // Use a separate empty sheet as the drop target. Pasting at the canvas
+  // corner can overlap the source when opening panels leaves the view fixed.
+  await page.locator('.add-tree').click();
   await selectTree(page, 0);
   await page.locator('button[aria-label="Fit to window"]').click();
   const dp = (await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^DP$/ }) }).first().boundingBox())!;

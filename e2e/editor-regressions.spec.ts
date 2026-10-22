@@ -1,5 +1,72 @@
 import { expect, test } from '@playwright/test';
 
+test('opening and closing code keeps the tree at the same screen position', async ({ page }) => {
+  await page.goto('./');
+  await page.evaluate(() => document.fonts.ready);
+  await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
+  await expect(page.locator('.cm-content')).not.toBeVisible();
+  const root = page.locator('.active-sheet [data-node] title', { hasText: /^TP$/ }).locator('..');
+  const before = await root.boundingBox();
+  await root.click();
+  await expect(page.locator('.cm-content')).toBeVisible();
+  await expect.poll(async () => {
+    const now = (await root.boundingBox())!;
+    return Math.abs(now.x - before!.x) + Math.abs(now.y - before!.y);
+  }).toBeLessThan(1);
+  await page.getByRole('button', { name: 'Hide the code', exact: true }).click();
+  await expect(page.locator('.cm-content')).not.toBeVisible();
+  await expect.poll(async () => {
+    const now = (await root.boundingBox())!;
+    return Math.abs(now.x - before!.x) + Math.abs(now.y - before!.y);
+  }).toBeLessThan(1);
+  await page.getByRole('button', { name: 'Show the code', exact: true }).click();
+  await expect(page.locator('.cm-content')).toBeVisible();
+  await expect.poll(async () => {
+    const now = (await root.boundingBox())!;
+    return Math.abs(now.x - before!.x) + Math.abs(now.y - before!.y);
+  }).toBeLessThan(1);
+  const splitter = await page.getByRole('separator', { name: 'Width of the code', exact: true }).boundingBox();
+  await page.mouse.move(splitter!.x + splitter!.width / 2, splitter!.y + splitter!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(splitter!.x + 60, splitter!.y + splitter!.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => {
+    const now = (await root.boundingBox())!;
+    return Math.abs(now.x - before!.x) + Math.abs(now.y - before!.y);
+  }).toBeLessThan(1);
+});
+
+test('settings panel visibility and width keep the tree at the same screen position', async ({ page }) => {
+  await page.goto('./');
+  await page.evaluate(() => document.fonts.ready);
+  await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
+  const root = page.locator('.active-sheet [data-node] title', { hasText: /^TP$/ }).locator('..');
+  const before = await root.boundingBox();
+  for (let i = 0; i < 2; i++) {
+    await page.getByTestId('settings-toggle').click();
+    await expect(page.locator('.side-pane')).not.toBeVisible();
+    await expect.poll(async () => {
+      const now = (await root.boundingBox())!;
+      return Math.abs(now.x - before!.x) + Math.abs(now.y - before!.y);
+    }).toBeLessThan(1);
+    await page.getByTestId('settings-toggle').click();
+    await expect(page.locator('.side-pane')).toBeVisible();
+    await expect.poll(async () => {
+      const now = (await root.boundingBox())!;
+      return Math.abs(now.x - before!.x) + Math.abs(now.y - before!.y);
+    }).toBeLessThan(1);
+  }
+  const splitter = await page.getByRole('separator', { name: 'Width of the right panel' }).boundingBox();
+  await page.mouse.move(splitter!.x + splitter!.width / 2, splitter!.y + splitter!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(splitter!.x - 90, splitter!.y + splitter!.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => {
+    const now = (await root.boundingBox())!;
+    return Math.abs(now.x - before!.x) + Math.abs(now.y - before!.y);
+  }).toBeLessThan(1);
+});
+
 test('Nanosyntax is the last side-panel tab', async ({ page }) => {
   await page.goto('./');
   await page.getByTestId('nanosyntax-toggle').click();
