@@ -1,6 +1,6 @@
 import { arrowEnd, layoutArrows } from './arrows';
 import type { ArrowGeom } from './arrows';
-import { noteSide, semDisplay } from './layout';
+import { noteSide, semDisplay, spelloutDomainNodes, spelloutRuns, spelloutSide } from './layout';
 import type { Layout } from './layout';
 import type { DArrow, DNode, DTree } from './model';
 import type { Run, Runs } from './richtext';
@@ -33,7 +33,7 @@ const MATH: Record<string, string> = {
   φ: '\\varphi', ϕ: '\\phi', χ: '\\chi', ψ: '\\psi', ω: '\\omega', Γ: '\\Gamma', Δ: '\\Delta', Θ: '\\Theta', Λ: '\\Lambda',
   Ξ: '\\Xi', Π: '\\Pi', Σ: '\\Sigma', Φ: '\\Phi', Ψ: '\\Psi', Ω: '\\Omega',
   '∅': '\\varnothing', Ø: '\\varnothing', '′': "{}'", '″': "{}''", '⟨': '\\langle', '⟩': '\\rangle', '→': '\\rightarrow',
-  '←': '\\leftarrow', '⇒': '\\Rightarrow', '±': '\\pm', '×': '\\times', '·': '\\cdot', '√': '\\surd', '∀': '\\forall',
+  '←': '\\leftarrow', '⇒': '\\Rightarrow', '⇔': '\\Leftrightarrow', '⇄': '\\rightleftarrows', '±': '\\pm', '×': '\\times', '·': '\\cdot', '√': '\\surd', '∀': '\\forall',
   '∃': '\\exists', '∈': '\\in', '∪': '\\cup', '∩': '\\cap', '¬': '\\neg', '⊂': '\\subset', '⊃': '\\supset', '≺': '\\prec',
   '⁰': '^{0}', '∧': '\\wedge', '∨': '\\vee', '↔': '\\leftrightarrow', '⟦': '[\\![', '⟧': ']\\!]', '•': '\\bullet', '♯': '\\sharp', '♭': '\\flat', '✓': '\\checkmark',
 };
@@ -78,6 +78,21 @@ function texRun(r: Run): string {
 
 export function texRuns(runs: Runs): string {
   return runs.map(texRun).join('');
+}
+
+/** Match expression italics and upright (optionally crossed) arrows in editable exports. */
+function spelloutTex(n: DNode, style: TreeStyle): string {
+  const runs = spelloutRuns(n, style.leafItalic).map((r) => n.spellout?.failed ? { ...r, text: r.text.replace('⇐', '⇍').replace('⇒', '⇏') } : r);
+  const rendered = texRuns(runs);
+  return n.spellout?.failed && n.spellout.lexical ? rendered.replace('\\Leftrightarrow', '\\not\\Leftrightarrow') : rendered;
+}
+
+function spelloutCircles(tree: DTree, style: TreeStyle): DNode[][] {
+  return style.circlePhrasalSpellout ? tree.nodes.filter((n) => spelloutRuns(n).length).map(spelloutDomainNodes) : [];
+}
+
+function circleTikz(nodes: DNode[], names: Map<DNode, string>, style: TreeStyle): string {
+  return `\\node[draw, ellipse, fit=${nodes.map((n) => '(' + names.get(n) + ')').join('')}, inner sep=4pt, line width=${px2pt(style.lineWidth)}pt] {};`;
 }
 
 /* ---------------------------------------------------------------- colours */
@@ -219,6 +234,8 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     }
     return s;
   };
+  const circles = spelloutCircles(tree, style);
+  for (const nodes of circles) for (const n of nodes) nameOf(n);
   // arrow endpoints and multidominance participants need names
   const geoms = arrowGeoms(tree, layout);
   tree.arrows.forEach((a, i) => {
@@ -264,6 +281,7 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
       const shift = note.off ? `, xshift=${px2pt(note.off[0])}pt, yshift=${px2pt(-note.off[1])}pt` : '';
       opts.push(`label={[font=\\small${shift}]${side}:{${texRuns(note.runs)}}}`);
     }
+    if (spelloutRuns(n).length) opts.push(`label={[font=\\small]${spelloutSide(n)}:{${spelloutTex(n, style)}}}`);
     if (n.copy && style.copyStyle === 'gray' && parent) opts.push('edge={gray, densely dashed}');
     if (!plain(n.label).trim() && !n.features?.length && n.kind === 'phrase') opts.push('coordinate');
     const kids = n.children.filter((c) => c.parents.length < 2 || host.get(c) === n);
@@ -279,7 +297,7 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
   ];
   if (style.leavesAtBottom) treeOpts.push('where n children=0{tier=word}{}');
   const body = emit(tree.root, null, '');
-  const tikz: string[] = [];
+  const tikz: string[] = circles.map((nodes) => circleTikz(nodes, names, style));
   if (tree.arrows.length) tikz.push('\\coordinate (tf-bottom) at (current bounding box.south);');
   for (const [p, n] of extra) {
     const ec = colors.name(n.branchColor);
@@ -288,7 +306,7 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
   tree.arrows.forEach((a, i) => tikz.push(arrowTikz(a, names, geoms[i]?.level ?? i, colors, geoms[i], layout)));
   const forest = ['\\begin{forest}', treeOpts.join(',\n'), body, ...tikz, '\\end{forest}'].join('\n');
   if (!standalone) return forest;
-  const doc = preamble(forest, colors.preamble(), ['\\usepackage[linguistics]{forest}', '\\usetikzlibrary{arrows.meta, calc}']);
+  const doc = preamble(forest, colors.preamble(), ['\\usepackage[linguistics]{forest}', '\\usetikzlibrary{arrows.meta, calc, fit, shapes.geometric}']);
   return `${doc}\n\\begin{document}\n${forest}\n\\end{document}\n`;
 }
 
@@ -311,6 +329,9 @@ export function exportQtree(tree: DTree, style: TreeStyle, layout: Layout | unde
       if (!names.has(n)) names.set(n, `q${++counter}`);
     }
   });
+  const spelled = tree.nodes.filter((n) => spelloutRuns(n).length);
+  const circles = spelloutCircles(tree, style);
+  for (const n of [...spelled, ...circles.flat()]) if (!names.has(n)) names.set(n, `q${++counter}`);
   const seen = new Set<DNode>();
   const emit = (n: DNode, parent: DNode | null): string => {
     const content = labelTex(n, style).replace(/\\\\ /g, '\\\\');
@@ -330,12 +351,17 @@ export function exportQtree(tree: DTree, style: TreeStyle, layout: Layout | unde
   const lines: string[] = [];
   if (shared) lines.push('% tikz-qtree cannot draw multidominance: shared nodes are repeated. Use the forest export instead.');
   lines.push('\\begin{tikzpicture}[every tree node/.style={align=center, anchor=north}]', `\\Tree ${emit(tree.root, null)}`);
+  for (const nodes of circles) lines.push(circleTikz(nodes, names, style));
+  for (const n of spelled) {
+    const left = spelloutSide(n) === 'left';
+    lines.push(`\\node[anchor=${left ? 'east' : 'west'}, inner sep=0pt, font=\\small] at ([xshift=${left ? '-4pt' : '4pt'}]${names.get(n)}.${left ? 'west' : 'east'}) {${spelloutTex(n, style)}};`);
+  }
   if (tree.arrows.length) lines.push('\\coordinate (tf-bottom) at (current bounding box.south);');
   tree.arrows.forEach((a, i) => lines.push(arrowTikz(a, names, geoms[i]?.level ?? i, colors, geoms[i], layout)));
   lines.push('\\end{tikzpicture}');
   const pic = lines.join('\n');
   if (!standalone) return pic;
-  const doc = preamble(pic, colors.preamble(), ['\\usepackage{tikz-qtree}', '\\usetikzlibrary{arrows.meta, calc}']);
+  const doc = preamble(pic, colors.preamble(), ['\\usepackage{tikz-qtree}', '\\usetikzlibrary{arrows.meta, calc, fit, shapes.geometric}']);
   return `${doc}\n\\begin{document}\n${pic}\n\\end{document}\n`;
 }
 

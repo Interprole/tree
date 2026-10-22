@@ -31,7 +31,10 @@ export interface TreeStyle {
   nodeColor: string;
   /** terminals */
   leafColor: string;
+  /** Italicize word/morpheme expressions, including phrasal side expressions. */
   leafItalic: boolean;
+  /** Outline the constituent lexicalized by a phrasal expression. */
+  circlePhrasalSpellout: boolean;
   /** terminals on a common baseline */
   leavesAtBottom: boolean;
   /** how unpronounced copies look */
@@ -65,6 +68,7 @@ export const defaultStyle: TreeStyle = {
   nodeColor: '#111111',
   leafColor: '#111111',
   leafItalic: true,
+  circlePhrasalSpellout: false,
   leavesAtBottom: false,
   copyStyle: 'gray',
   arrowColor: '#1a1a1a',

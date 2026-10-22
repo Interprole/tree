@@ -205,6 +205,18 @@ kbd {
   min-height: 0;
 }
 
+.app.side-hidden .workspace { grid-template-columns: var(--code-w) minmax(0, 1fr); }
+.app.side-hidden .side-pane { display: none; }
+.topbar .btn.nanosyntax-toggle.active, .topbar .btn.nanosyntax-toggle.active:hover { background: #ed8b2c; color: #201409; border-color: #ed8b2c; }
+.tree-group-frame { fill: rgba(110, 120, 130, .025); stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 4; pointer-events: all; }
+.tree-group-head { position: absolute; padding: 4px 9px; background: var(--surface); color: var(--muted); border: 1px solid var(--border); border-radius: 5px; font-size: 11px; cursor: grab; }
+.ns-algorithm-description { line-height: 1.6; margin: 10px 0; padding-left: 22px; font-size: 12px; }
+.ns-algorithm-description li + li { margin-top: 9px; }
+.scope.ns-settings-scope { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.ns-settings-scope > .btn { white-space: normal; }
+.app.code-hidden.side-hidden .workspace { grid-template-columns: 0 minmax(0, 1fr); }
+.code-hidden .editor-wrap, .code-hidden .code-pane > .status { display: none; }
+
 body.resizing,
 body.resizing * {
   cursor: col-resize !important;
@@ -333,8 +345,8 @@ body.resizing * {
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
-  padding: 7px 10px 8px;
-  font-size: 13.5px;
+  padding: 7px 7px 8px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
@@ -2370,3 +2382,53 @@ body.resizing .splitter::after {
 .num-row.two {
   grid-template-columns: repeat(2, 1fr);
 }
+
+/* Phrasal spellout and nanosyntactic derivations. */
+.nanosyntax-panel { padding: 2px 14px 24px; font-size: 13px; }
+.nanosyntax-panel .insp-group { padding: 14px 0; }
+.nanosyntax-panel p { line-height: 1.5; }
+.nanosyntax-panel textarea, .nanosyntax-panel select, .insp-field select {
+  width: 100%; box-sizing: border-box; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 5px; padding: 7px 8px; font: inherit;
+}
+.nanosyntax-panel textarea { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; resize: vertical; }
+.ns-build { width: 100%; justify-content: center; margin-top: 8px; }
+.ltree-entry { margin: 14px 0; border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.ltree-entry-top { display: flex; align-items: end; gap: 6px; }
+.ltree-preview { width: 100%; max-height: 150px; display: block; background: #fff; border-radius: 4px; margin-top: 8px; }
+.ns-add-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.ns-step-nav { display: flex; gap: 3px; flex-wrap: wrap; max-height: 150px; overflow-y: auto; margin: 10px 0; }
+.ns-step-nav button { min-width: 28px; justify-content: center; }
+.ns-result { border-left: 3px solid var(--accent); padding-left: 10px !important; }
+.ns-surface { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.ns-success { color: #15803d; }
+.ns-failure { color: #b91c1c; }
+.derivation-frame { fill: var(--accent); fill-opacity: .025; stroke: var(--accent); stroke-opacity: .3; stroke-dasharray: 8 5; pointer-events: none; }
+.derivation-head { position: absolute; display: flex; gap: 12px; align-items: center; font-size: 12px; white-space: nowrap; padding: 5px 8px; border-radius: 5px; background: var(--surface); border: 1px solid var(--border); cursor: grab; user-select: none; }
+.derivation-head:active { cursor: grabbing; }
+.ns-guide summary { cursor: pointer; color: var(--muted); }
+.ns-guide code { overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .side-nanosyntax .side-pane { display: flex; } }
+@media (max-width: 700px) { .topbar [data-testid='nanosyntax-toggle'] { padding: 5px; font-size: 11px; } }
+
+/* Visible lexical trees and their attachment to an S-tree. */
+.ltree-badge { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 5px; border: 1px solid #168077; border-radius: 4px; color: #09695f; background: #e1f2ee; font: 600 10px var(--ui); white-space: nowrap; }
+.lexical-sheet .paper { stroke: #168077; stroke-width: 1.2; }
+.lexical-cluster-frame { fill: #168077; fill-opacity: .025; stroke: #168077; stroke-opacity: .45; stroke-dasharray: 5 5; pointer-events: none; }
+.lexical-cluster-head { position: absolute; padding: 3px 7px; border: 1px solid #16807766; border-radius: 4px; background: var(--surface); color: var(--text); font-size: 11px; white-space: nowrap; user-select: none; }
+.lexical-cluster-head.movable { cursor: grab; }
+.lexical-cluster-head.movable:active { cursor: grabbing; }
+.ltree-entry-actions, .ns-assignment-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ns-example-list { display: grid; gap: 8px; margin: 10px 0; }
+.ns-example-list button { text-align: left; white-space: normal; }
+.ns-source { font-size: 11px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+:root[data-theme='dark'] .ltree-badge { background: #163c37; color: #a5ded4; }
+@media (max-width: 980px) { .side-nanosyntax .side-pane { max-height: calc(100dvh - 80px); } }
+.ltree-open { display: block; width: 100%; border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 4px 0; font: inherit; text-align: left; }
+.ltree-open:hover { color: var(--accent); }
+.ltree-open span { display: block; margin-top: 5px; font-size: 11px; }
+.nanosyntax-panel .check { display: flex; align-items: start; gap: 7px; margin: 10px 0; line-height: 1.4; }
+.nanosyntax-panel .check input { flex: none; margin-top: 2px; }
+.sheet-head { display: flex; align-items: center; gap: 4px; box-sizing: border-box; overflow: hidden; }
+.sheet-caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sheet-head .ltree-badge { flex: none; margin-left: 0; }

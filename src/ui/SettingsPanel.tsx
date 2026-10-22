@@ -302,6 +302,10 @@ export function SettingsPanel() {
         </div>
       </Section>
 
+      <Section title="Expressions">
+        <Toggle label="Circle phrasal spellout domains" hint="Outline the constituent lexicalized by an expression, including a failed expression." checked={s.circlePhrasalSpellout} reset={rs('circlePhrasalSpellout')} onChange={(v) => setStyle({ circlePhrasalSpellout: v })} />
+      </Section>
+
       <Section title={t('typography')}>
         <FontPicker />
         <Slider label={t('fontSize')} value={s.fontSize} min={9} max={40} unit="px" reset={rs('fontSize')} onInput={(v) => setStyle({ fontSize: v })} />

@@ -324,14 +324,18 @@ function NodePanel({ n }: { n: DNode }) {
       )}
       <TextField key={n.key} label={n.kind === 'leaf' ? 'Expression' : 'Label'} value={labelValue} live autoFocusOn={focus.value} onCommit={(v) => A.renameNode(n, v)} placeholder={n.kind === 'leaf' ? 'words' : 'e.g. DP, T′, V_i'} />
       {n.kind === 'phrase' && !n.synthetic && n.src?.kind === 'node' && (
-        <TextField
-          key={'x' + n.key}
-          label="Expression (its words or morpheme)"
-          value={(n.src.children.find((c) => c.kind === 'leaf') as { text: string } | undefined)?.text ?? ''}
-          live
-          placeholder="e.g. student, -s, ∅"
-          onCommit={(v) => A.setExpression(n, v)}
-        />
+        <div class="expression-field">
+          <TextField
+            key={'x' + n.key}
+            label="Expression (its words or morpheme)"
+            value={n.src.opts?.spell ?? (n.src.children.find((c) => c.kind === 'leaf') as { text: string } | undefined)?.text ?? ''}
+            live
+            placeholder="e.g. student, -s, ∅"
+            onCommit={(v) => A.setExpression(n, v)}
+          />
+          <label class="row hint"><input type="checkbox" aria-label="Failed expression" checked={n.src.opts?.spellfail === 'yes'} onChange={(e) => A.setOption(n, 'spellfail', e.currentTarget.checked ? 'yes' : null)} /> Failed expression</label>
+          {(n.src.children.some((c) => c.kind !== 'leaf') || n.src.opts?.spell !== undefined || n.src.opts?.spellfail === 'yes') && <label class="insp-field"><span>Expression side</span><select aria-label="Expression side" value={n.src.opts?.spellside ?? 'auto'} onChange={(e) => A.setOption(n, 'spellside', e.currentTarget.value === 'auto' ? null : e.currentTarget.value)}><option value="auto">Automatic (free side)</option><option value="left">Left: expression ⇐</option><option value="right">Right: ⇒ expression</option></select></label>}
+        </div>
       )}
       <ToolRow>
         <Tool title={t('addChild')} icon={<IChild />} text="Daughter" disabled={disabled} onClick={() => A.addChild(n)} />
@@ -348,6 +352,19 @@ function NodePanel({ n }: { n: DNode }) {
         <Tool title="Draw an arrow from here, then click the target (M)" icon={<IArrowTool />} text="Arrow" onClick={() => A.startArrow(n)} />
         <Tool title={t('delete')} icon={<ITrash />} text="Delete" danger disabled={disabled} onClick={() => A.deleteNode(n)} />
       </ToolRow>
+
+      {n.kind === 'phrase' && (
+        <Group title="Branching" hint="Swaps the two daughters">
+          <div class="row tight">
+            <button class="btn small" onClick={() => A.restructure(n, 'left')} disabled={disabled} title="[XP X [Z]] → [XP [Z] X]">
+              ← left
+            </button>
+            <button class="btn small" onClick={() => A.restructure(n, 'right')} disabled={disabled} title="[XP [Z] X] → [XP X [Z]]">
+              right →
+            </button>
+          </div>
+        </Group>
+      )}
 
       <Group title="Movement">
         <div class="row wrap">
@@ -411,18 +428,6 @@ function NodePanel({ n }: { n: DNode }) {
         </div>
       </Group>
 
-      {n.kind === 'phrase' && (
-        <Group title="Branching" hint="Swaps the two daughters">
-          <div class="row tight">
-            <button class="btn small" onClick={() => A.restructure(n, 'left')} disabled={disabled} title="[XP X [Z]] → [XP [Z] X]">
-              ← left
-            </button>
-            <button class="btn small" onClick={() => A.restructure(n, 'right')} disabled={disabled} title="[XP [Z] X] → [XP X [Z]]">
-              right →
-            </button>
-          </div>
-        </Group>
-      )}
       <Group title="Copy and paste" hint="A pasted copy is a constituent of its own (its #ids are renamed), not one more position of the original">
         <div class="row wrap">
           <button class="btn small" disabled={!n.src} onClick={() => A.copyNode(n) && showToast('Copied.')} title="Ctrl+C">

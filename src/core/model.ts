@@ -51,6 +51,8 @@ export interface DNode {
   edgeLen?: number;
   spread?: number;
   semColor?: string;
+  /** The expression lexicalizing a constituent (terminal expressions remain word daughters). */
+  spellout?: { runs: Runs; side: 'auto' | 'left' | 'right'; failed?: boolean; lexical?: boolean };
   /** notes next to the node */
   notes?: DLabel[];
   /** semantic value shown under the node */

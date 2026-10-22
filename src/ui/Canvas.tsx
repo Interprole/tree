@@ -9,9 +9,12 @@ import { collectNodes } from '../core/model';
 import type { DNode } from '../core/model';
 import { primToSvg } from '../render/svg';
 import { t } from '../i18n';
+import { buildDerivation, derivationBounds, derivationBusy, derivationTargets, moveDerivation } from '../nanosyntax';
 import {
-  activateTree, activeId, activeTree, addTree, appearanceScope, setStyle, arrowSource, EMPTY_SHEET, sideTab, clearCanvas, duplicateTree, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
+  activateTree, activeId, activeTree, addTree, appearanceScope, setStyle, arrowSource, EMPTY_SHEET, sideTab, clearCanvas, modal, removeTree, renameTree, bendOverride, editable, fitRequest, fontEpoch, linkCounts, linkedIds, moveTree, otherScenes, pick, relationOf, requestLabelFocus, scene, selection, tool, tree, trees,
 } from '../state';
+import { focusTreeRequest, sheetSize, lexicalTreeExpression, lexicalTreesFor } from '../state';
+import { addToTreeGroup, assignLexicalTree, codeSelection, createLexicalTree, groupAssignment, groupTrees, lexicalAssignment, moveTreeGroup, nanosyntaxEnabled, removeFromTreeGroups, treeGroupBounds, treeGroups, treeTargetPick, unassignLexicalTree, visibleTrees } from '../state';
 import type { Tool } from '../state';
 import { IArrowTool, IFit, ILink, IMinus, IPlus, IPointer, ITrash } from './icons';
 
@@ -24,6 +27,8 @@ interface View {
 type Box = { x1: number; y1: number; x2: number; y2: number };
 
 type Drag =
+  | { kind: 'group'; id: string; lastX: number; lastY: number }
+  | { kind: 'tree-group'; id: string; lastX: number; lastY: number }
   | { kind: 'pan'; vx: number; vy: number; target: Element }
   | { kind: 'bend'; index: number; bend: [number, number] }
   | { kind: 'via'; index: number; point: number; via: [number, number][] }
@@ -84,6 +89,33 @@ function LinkedFrames({ sc, counts }: { sc: Scene; counts: Map<string, number> }
   );
 }
 
+/** Related lexical trees remain a visible cluster alongside their S-tree. */
+function lexicalClusters() {
+  if (!nanosyntaxEnabled.value) return [];
+  const groups: { key: string; name: string; owner?: string; x: number; y: number; w: number; h: number }[] = [];
+  const add = (key: string, name: string, members: typeof trees.value, owner?: string) => {
+    if (!members.length) return;
+    const x = Math.min(...members.map((e) => e.x)) - 14;
+    const y = Math.min(...members.map((e) => e.y)) - 52;
+    groups.push({ key, name, owner, x, y,
+      w: Math.max(...members.map((e) => e.x + sheetSize(e.id).w)) - x + 14,
+      h: Math.max(...members.map((e) => e.y + sheetSize(e.id).h)) - y + 14 });
+  };
+  const byOwner = new Map<string, typeof trees.value>();
+  const indexed = new Map(trees.value.map((e) => [e.id, e]));
+  for (const entry of trees.value) if (entry.lexical?.scope === 'tree' && entry.lexical.owner) {
+    const local = byOwner.get(entry.lexical.owner) ?? [];
+    local.push(entry);
+    byOwner.set(entry.lexical.owner, local);
+  }
+  for (const [ownerId, local] of byOwner) {
+    const owner = indexed.get(ownerId);
+    if (owner) add(owner.id, owner.name + ' · lexical entries', [owner, ...local], owner.id);
+  }
+  add('canvas', 'Canvas lexicon · L-trees', lexicalTreesFor('canvas').filter((tree) => !treeGroups.value.some((group) => group.members.includes(tree.id))));
+  return groups;
+}
+
 export function Canvas() {
   const wrap = useRef<HTMLDivElement>(null);
   const view = useSignal<View>({ zoom: 1, x: 0, y: 0 });
@@ -110,7 +142,9 @@ export function Canvas() {
     const margin = w < 600 ? 16 : 40;
     const bottom = 64; // floating toolbar
     const z = Math.min(1.5, (w - margin * 2) / (x2 - x1), (h - margin - bottom) / (y2 - y1));
-    const zoom = Math.max(0.15, z);
+    // A derivation can span hundreds of sheets. Fit must include the whole
+    // canvas even when that requires a smaller scale than manual zooming.
+    const zoom = Math.max(0.001, z);
     view.value = { zoom, x: (w - (x2 - x1) * zoom) / 2 - x1 * zoom, y: Math.max(margin, (h - bottom + margin - (y2 - y1) * zoom) / 2) - y1 * zoom };
   };
 
@@ -118,9 +152,14 @@ export function Canvas() {
     const el = wrap.current!;
     const ro = new ResizeObserver(() => {
       const r = el.getBoundingClientRect();
+      const previous = size.peek();
       const first = size.value.w === 800 && size.value.h === 600;
       size.value = { w: r.width, h: r.height };
       if (first) fit();
+      else {
+        const current = view.peek();
+        view.value = { ...current, x: current.x + (r.width - previous.w) / 2, y: current.y + (r.height - previous.h) / 2 };
+      }
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -133,6 +172,18 @@ export function Canvas() {
   });
   // a font has loaded and the picture changed size: fit again, unless the view was set by hand
   useSignalEffect(() => {
+    const requested = focusTreeRequest.value;
+    if (!requested) return;
+    requestAnimationFrame(() => {
+      const entry = trees.value.find((t) => t.id === requested.id);
+      if (!entry) return;
+      const sheet = sheetSize(entry.id);
+      const { w, h } = size.value;
+      const zoom = Math.max(0.15, Math.min(1.35, (w - 64) / sheet.w, (h - 110) / sheet.h));
+      setView({ zoom, x: (w - sheet.w * zoom) / 2 - entry.x * zoom, y: (h - 50 - sheet.h * zoom) / 2 - entry.y * zoom });
+    });
+  });
+  useSignalEffect(() => {
     void fontEpoch.value;
     requestAnimationFrame(() => !touched.current && fit());
   });
@@ -140,7 +191,7 @@ export function Canvas() {
   const sc = scene.value;
   const tr = tree.value;
   const active = activeTree.value;
-  const many = trees.value.length > 1;
+  const many = visibleTrees.value.length > 1;
 
   // ---------- relations
   const relation = useComputed(() => {
@@ -175,7 +226,7 @@ export function Canvas() {
   const pinch = useRef<null | { d: number; zoom: number; cx: number; cy: number; vx: number; vy: number }>(null);
 
   const onPointerDown = (e: PointerEvent) => {
-    if ((e.target as Element).closest('.canvas-tools, .canvas-hint, .ctx-menu')) return;
+    if ((e.target as Element).closest('.canvas-tools, .canvas-hint, .ctx-menu, .modal-backdrop')) return;
     ctx.value = null;
     if (e.button === 2) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -188,9 +239,37 @@ export function Canvas() {
       return;
     }
     const target = e.target as Element;
+    const pickTarget = treeTargetPick.value;
+    if (pickTarget) {
+      const pickedGroup = target.closest('[data-group-head]')?.getAttribute('data-group-head');
+      const picked = target.closest('[data-tree-head]')?.getAttribute('data-tree-head') ?? target.closest('[data-tree]')?.getAttribute('data-tree') ?? (target.closest('.active-sheet') ? activeId.value : null);
+      if (pickTarget.kind === 'group-member' && picked) { addToTreeGroup(picked, pickTarget.id); treeTargetPick.value = null; }
+      else if (pickTarget.kind === 'group' && pickedGroup) { addToTreeGroup(pickTarget.id, pickedGroup); treeTargetPick.value = null; }
+      else if (picked && picked !== pickTarget.id) {
+        if (pickTarget.kind === 'lexical') {
+          const owner = trees.value.find((tree) => tree.id === picked);
+          if (owner && !owner.lexical && !owner.derivation) { assignLexicalTree(pickTarget.id, 'tree', picked); treeTargetPick.value = null; }
+        } else { groupTrees(pickTarget.id, picked); treeTargetPick.value = null; }
+      }
+      return;
+    }
     const base = { sx: e.clientX, sy: e.clientY, moved: false };
+    const treeGroupHead = target.closest('[data-group-head]');
+    if (treeGroupHead) {
+      codeSelection.value = false;
+      selection.value = null;
+      drag.current = { ...base, kind: 'tree-group', id: treeGroupHead.getAttribute('data-group-head')!, lastX: 0, lastY: 0 };
+      return;
+    }
+    const groupHead = target.closest('[data-derivation-head]');
+    if (groupHead) {
+      drag.current = { ...base, kind: 'group', id: groupHead.getAttribute('data-derivation-head')!, lastX: 0, lastY: 0 };
+      return;
+    }
     const head = target.closest('[data-tree-head]');
     if (head) {
+      selection.value = null;
+      codeSelection.value = false;
       const id = head.getAttribute('data-tree-head')!;
       const en = trees.value.find((x) => x.id === id);
       if (en) drag.current = { ...base, kind: 'tree', id, x: en.x, y: en.y };
@@ -262,6 +341,13 @@ export function Canvas() {
     if (!d.moved) return;
     const z = view.value.zoom;
     if (d.kind === 'pan') setView({ ...view.value, x: d.vx + dx, y: d.vy + dy });
+    else if (d.kind === 'group' || d.kind === 'tree-group') {
+      const gx = Math.round(dx / z), gy = Math.round(dy / z);
+      if (d.kind === 'group') moveDerivation(d.id, gx - d.lastX, gy - d.lastY);
+      else moveTreeGroup(d.id, gx - d.lastX, gy - d.lastY);
+      d.lastX = gx;
+      d.lastY = gy;
+    }
     else if (d.kind === 'tree') moveTree(d.id, d.x + dx / z, d.y + dy / z);
     else if (d.kind === 'sheet') setStyle({ sheetWidth: Math.max(40, Math.round(d.w + dx / z)), sheetHeight: Math.max(40, Math.round(d.h + dy / z)) });
     else if (d.kind === 'label') labelGhost.value = { box: d.label.box, dx: dx / z, dy: dy / z };
@@ -300,13 +386,22 @@ export function Canvas() {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
+    if (d.kind === 'tree-group') return;
+    if (d.kind === 'group') {
+      const member = trees.value.find((t) => t.derivation?.group === d.id);
+      if (!d.moved && member && activeTree.value.derivation?.group !== d.id) activateTree(member.id);
+      if (nanosyntaxEnabled.value) sideTab.value = 'nanosyntax';
+      codeSelection.value = false;
+      return;
+    }
     if (d.kind === 'sheet') return;
     if (d.kind === 'tree') {
-      if (!d.moved) activateTree(d.id);
+      if (!d.moved) { activateTree(d.id); focusTreeRequest.value = { id: d.id }; }
       appearanceScope.value = 'tree';
       return;
     }
     if (d.kind === 'label') {
+      codeSelection.value = false;
       const g = labelGhost.value;
       labelGhost.value = null;
       const l = d.label;
@@ -359,13 +454,14 @@ export function Canvas() {
     const nodeEl = target.closest('[data-node]');
     const arrowEl = target.closest('[data-arrow]');
     if (nodeEl) clickNode(nodeEl.getAttribute('data-node')!);
-    else if (arrowEl) selection.value = { kind: 'arrow', index: Number(arrowEl.getAttribute('data-arrow')) };
+    else if (arrowEl) { codeSelection.value = false; selection.value = { kind: 'arrow', index: Number(arrowEl.getAttribute('data-arrow')) }; }
     else {
       selection.value = null;
       relationOf.value = null;
       if (tool.value === 'arrow') arrowSource.value = null;
       // the empty canvas: Appearance sets every tree; the sheet of a tree: that tree
       appearanceScope.value = target.closest('.active-sheet') ? 'tree' : 'canvas';
+      codeSelection.value = !!target.closest('.active-sheet');
       sideTab.value = 'appearance';
     }
   };
@@ -382,6 +478,7 @@ export function Canvas() {
       key = o.scene.hits.find((h) => lx >= h.box.x1 && lx <= h.box.x2 && ly >= h.box.y1 && ly <= h.box.y2)?.key ?? null;
     }
     activateTree(id);
+    codeSelection.value = true;
     appearanceScope.value = 'tree';
     if (key) queueMicrotask(() => (selection.value = { kind: 'node', key: key! }));
   };
@@ -421,11 +518,21 @@ export function Canvas() {
     const under = document.elementFromPoint(e.clientX, e.clientY);
     const el = under?.closest('[data-node]');
     const key = el?.getAttribute('data-node') ?? null;
-    if (key) selection.value = { kind: 'node', key };
     // a tree: its name, its sheet (another tree), or the sheet of the tree being edited
     const tree = under?.closest('[data-tree-head]')?.getAttribute('data-tree-head') ?? under?.closest('[data-tree]')?.getAttribute('data-tree') ?? (under?.closest('.active-sheet') ? activeId.value : null);
+    if (key) {
+      if (tree && tree !== activeId.value) activateTree(tree);
+      selection.value = { kind: 'node', key };
+    }
+    if (key) codeSelection.value = true;
+    else if (under?.closest('[data-tree-head]')) { selection.value = null; codeSelection.value = false; }
+    else if (tree) { activateTree(tree); selection.value = null; codeSelection.value = true; }
+    else codeSelection.value = false;
     const vv = view.value;
-    ctx.value = { x: e.clientX - r.left, y: e.clientY - r.top, key, tree: key ? null : tree, world: [(e.clientX - r.left - vv.x) / vv.zoom, (e.clientY - r.top - vv.y) / vv.zoom] };
+    const world: [number, number] = [(e.clientX - r.left - vv.x) / vv.zoom, (e.clientY - r.top - vv.y) / vv.zoom];
+    const group = under?.closest('[data-group-head]')?.getAttribute('data-group-head') ?? treeGroupBounds().find((group) => world[0] >= group.x && world[0] <= group.x + group.w && world[1] >= group.y && world[1] <= group.y + group.h)?.group.id;
+    const cluster = lexicalClusters().find((cluster) => world[0] >= cluster.x && world[0] <= cluster.x + cluster.w && world[1] >= cluster.y && world[1] <= cluster.y + cluster.h);
+    ctx.value = { x: e.clientX - r.left, y: e.clientY - r.top, key, tree: key ? null : tree ?? cluster?.owner ?? null, group, world };
   };
 
   const clickNode = (key: string) => {
@@ -527,7 +634,7 @@ export function Canvas() {
   const rel = relation.value;
   const srcKey = arrowSource.value;
   const primsHtml = useMemo(() => (sc ? sc.prims.map(primToSvg).join('') : ''), [sc]);
-  const others = otherScenes.value;
+  const others = otherScenes.value.filter((other) => visibleTrees.value.some((tree) => tree.id === other.entry.id));
 
   const box = (h: NodeHit, pad = 3) => ({ x: h.box.x1 - pad, y: h.box.y1 - pad, width: h.box.x2 - h.box.x1 + pad * 2, height: h.box.y2 - h.box.y1 + pad * 2 });
 
@@ -583,13 +690,16 @@ export function Canvas() {
           </filter>
         </defs>
         <g transform={`translate(${v.x} ${v.y}) scale(${v.zoom})`}>
+          {derivationBounds().map((g) => <rect key={g.group.id} class="derivation-frame" data-derivation-group={g.group.id} x={g.x} y={g.y} width={g.width} height={g.height} rx="10" />)}
+          {treeGroupBounds().map((g) => <rect key={g.group.id} class="tree-group-frame" data-tree-group={g.group.id} x={g.x} y={g.y} width={g.w} height={g.h} rx="8" />)}
+          {lexicalClusters().map((g) => <rect key={'lex' + g.key} class="lexical-cluster-frame" data-lexical-cluster={g.key} x={g.x} y={g.y} width={g.w} height={g.h} rx="10" />)}
           {others.map(({ entry, scene: osc }) =>
             osc ? <OtherSheet key={entry.id} id={entry.id} x={entry.x} y={entry.y} scene={osc} /> : <EmptySheet key={entry.id} id={entry.id} x={entry.x} y={entry.y} />,
           )}
           {!sc && <EmptySheet id={active.id} x={active.x} y={active.y} active />}
           {otherDrop && <rect class="drop-target" x={otherDrop.x1} y={otherDrop.y1} width={otherDrop.x2 - otherDrop.x1} height={otherDrop.y2 - otherDrop.y1} rx="5" />}
           {sc && (
-            <g transform={`translate(${active.x} ${active.y})`} class="sheet active-sheet">
+            <g transform={`translate(${active.x} ${active.y})`} class={"sheet active-sheet" + (active.lexical ? " lexical-sheet" : "")}>
               <rect class={`paper ${many ? 'paper-active' : ''}`} width={sc.width} height={sc.height} fill={sc.background === 'transparent' ? '#ffffff' : sc.background} filter="url(#paper-shadow)" rx="2" />
               <LinkedFrames sc={sc} counts={linkCounts.value} />
               {selBranch && <rect class="branch-sel" x={selBranch.x1} y={selBranch.y1} width={selBranch.x2 - selBranch.x1} height={selBranch.y2 - selBranch.y1} rx="8" />}
@@ -654,13 +764,28 @@ export function Canvas() {
           )}
         </g>
       </svg>
+      {treeGroupBounds().map((g) => {
+        const position = toScreen(g.x + 8, g.y + 5);
+        return <div key={g.group.id} class="tree-group-head" data-group-head={g.group.id} style={{ left: position.x + 'px', top: position.y + 'px' }}>{g.group.name}</div>;
+      })}
+      {lexicalClusters().map((g) => {
+        const p = toScreen(g.x + 10, g.y + 3);
+        return <div key={'lex' + g.key} class={'lexical-cluster-head' + (g.owner ? ' movable' : '')} data-tree-head={g.owner} style={{ left: p.x + 'px', top: p.y + 'px' }} title={g.owner ? 'Drag to move this S-tree with its L-trees' : 'Lexical entries available to every S-tree'}>{g.name}</div>;
+      })}
+      {derivationBounds().map((g) => {
+        const p = toScreen(g.x + 12, g.y + 8);
+        return <div key={g.group.id} class="derivation-head" data-derivation-head={g.group.id} style={{ left: p.x + 'px', top: p.y + 'px' }} title="Drag to move this derivation as a group">
+          <strong>{g.group.name}</strong><span class={g.group.complete ? 'ns-success' : 'ns-failure'}>{g.group.complete ? '✓ Fully lexicalised' : '✗ Partial lexicalisation'}</span>
+        </div>;
+      })}
 
       {many &&
-        trees.value.map((en) => {
+        visibleTrees.value.map((en) => {
           const p = toScreen(en.x, en.y);
           return (
-            <div key={en.id} class={`sheet-head ${en.id === activeId.value ? 'on' : ''}`} style={{ left: `${p.x}px`, top: `${p.y - 26}px` }} data-tree-head={en.id} title="Drag to move the tree · click to edit it">
-              {en.name}
+            <div key={en.id} class={`sheet-head ${en.id === activeId.value ? 'on' : ''}`} style={{ left: `${p.x}px`, top: `${p.y - 26}px`, maxWidth: Math.max(28, sheetSize(en.id).w * v.zoom + 32 * v.zoom - 8) + "px" }} data-tree-head={en.id} title={en.name + " · Drag to move the tree · click to edit it"}>
+              <span class="sheet-caption">{en.name}</span>
+              {en.lexical && <span class="ltree-badge" title={en.lexical.scope === 'canvas' ? 'L-tree · whole canvas' : 'L-tree · ' + (trees.value.find((t) => t.id === en.lexical!.owner)?.name ?? 'this tree')}>L · {lexicalTreeExpression(en) || '∅'}</span>}
               {linked.has(en.id) && <span class="link-mark" title="Linked copy: shares its code with another tree"><ILink size={11} /></span>}
             </div>
           );
@@ -694,7 +819,7 @@ export function Canvas() {
         </button>
       </div>
 
-      {hint && <div class="canvas-hint">{hint}</div>}
+      {(hint || treeTargetPick.value) && <div class="canvas-hint">{treeTargetPick.value ? <>Click {treeTargetPick.value.kind === 'lexical' ? 'the S-tree for this L-tree' : 'a tree or group'}. <button class="btn small" onClick={() => treeTargetPick.value = null}>Cancel</button></> : hint}</div>}
 
       {ctx.value && <ContextMenu at={ctx.value} close={() => (ctx.value = null)} />}
     </div>
@@ -705,7 +830,7 @@ export function Canvas() {
 function OtherSheet({ id, x, y, scene: sc }: { id: string; x: number; y: number; scene: Scene }) {
   const html = useMemo(() => sc.prims.map(primToSvg).join(''), [sc]);
   return (
-    <g transform={`translate(${x} ${y})`} class="sheet other-sheet" data-tree={id}>
+    <g transform={`translate(${x} ${y})`} class={"sheet other-sheet" + (trees.value.find((t) => t.id === id)?.lexical ? " lexical-sheet" : "")} data-tree={id}>
       <rect class="paper" width={sc.width} height={sc.height} fill={sc.background === 'transparent' ? '#ffffff' : sc.background} filter="url(#paper-shadow)" rx="2" />
       <LinkedFrames sc={sc} counts={linkCounts.value} />
       <g class="prims" dangerouslySetInnerHTML={{ __html: html }} />
@@ -735,7 +860,11 @@ function allSheets(): { x: number; y: number; w: number; h: number }[] {
   const at = activeTree.value;
   const sc = scene.value;
   out.push({ x: at.x, y: at.y, w: sc?.width ?? EMPTY_SHEET.w, h: sc?.height ?? EMPTY_SHEET.h });
-  for (const o of otherScenes.value) out.push({ x: o.entry.x, y: o.entry.y, w: o.scene?.width ?? EMPTY_SHEET.w, h: o.scene?.height ?? EMPTY_SHEET.h });
+  const visible = new Set(visibleTrees.value.map((tree) => tree.id));
+  for (const o of otherScenes.value) if (visible.has(o.entry.id)) out.push({ x: o.entry.x, y: o.entry.y, w: o.scene?.width ?? EMPTY_SHEET.w, h: o.scene?.height ?? EMPTY_SHEET.h });
+  for (const g of treeGroupBounds()) out.push({ x: g.x, y: g.y, w: g.w, h: g.h });
+  for (const g of derivationBounds()) out.push({ x: g.x, y: g.y, w: g.width, h: g.height });
+  for (const g of lexicalClusters()) out.push({ x: g.x, y: g.y, w: g.w, h: g.h });
   return out;
 }
 
@@ -745,6 +874,7 @@ interface CtxAt {
   y: number;
   key: string | null;
   tree: string | null;
+  group?: string;
   /** canvas coordinates of the click */
   world: [number, number];
 }
@@ -822,7 +952,33 @@ function ContextMenu({ at, close }: { at: CtxAt; close: () => void }) {
           </button>
         </>
       )}
+      {n && <DerivationItems id={activeId.value} run={run} />}
+      {!n && <button role="menuitem" onClick={run(() => {
+        const id = addTree(undefined, { x: at.world[0], y: at.world[1] });
+        if (at.group) addToTreeGroup(id, at.group);
+      })}><strong>New tree here</strong></button>}
+      {!n && nanosyntaxEnabled.value && (at.tree || at.group) && <button role="menuitem" onClick={run(() => {
+        const group = treeGroups.value.find((group) => group.id === at.group);
+        const clicked = trees.value.find((tree) => tree.id === at.tree);
+        const owner = clicked?.lexical?.owner ?? (!clicked?.lexical && !clicked?.derivation ? clicked?.id : undefined) ?? group?.members.find((id) => trees.value.some((tree) => tree.id === id && !tree.lexical && !tree.derivation));
+        const lexical = createLexicalTree(owner ? 'tree' : 'canvas', owner);
+        if (group) addToTreeGroup(lexical, group.id);
+        activateTree(lexical);
+        codeSelection.value = true;
+        const root = tree.value?.root;
+        if (root) selection.value = { kind: 'node', key: root.key };
+        focusTreeRequest.value = { id: lexical };
+      })}><strong>New L-tree to this tree</strong></button>}
       {!n && at.tree && <TreeItems id={at.tree} run={run} />}
+      {!n && at.group && <>
+        <button role="menuitem" onClick={run(() => treeTargetPick.value = { kind: 'group-member', id: at.group! })}><strong>Add a tree to this group…</strong></button>
+        <button role="menuitem" onClick={run(() => {
+          const group = treeGroups.value.find((group) => group.id === at.group);
+          const name = prompt('Name of the group', group?.name);
+          if (name) treeGroups.value = treeGroups.value.map((group) => group.id === at.group ? { ...group, name } : group);
+        })}><strong>Rename group…</strong></button>
+        <button role="menuitem" onClick={run(() => treeGroups.value = treeGroups.value.filter((group) => group.id !== at.group))}><strong>Ungroup</strong></button>
+      </>}
       {!n && (
         <>
           {c && (
@@ -831,10 +987,7 @@ function ContextMenu({ at, close }: { at: CtxAt; close: () => void }) {
               <small>Ctrl+V with nothing selected</small>
             </button>
           )}
-          <button role="menuitem" onClick={run(() => addTree(undefined, { x: at.world[0], y: at.world[1] }))}>
-            <strong>New tree here</strong>
-          </button>
-          {!at.tree && (
+          {!at.tree && !at.group && (
             <button role="menuitem" class="danger" onClick={run(() => confirm('Clear the canvas? All its trees go (they stay in My trees if saved there).') && clearCanvas())}>
               <strong>Clear the canvas</strong>
             </button>
@@ -850,64 +1003,40 @@ function isEmptyTree(id: string): boolean {
   return id === activeId.value ? !scene.value : !otherScenes.value.find((o) => o.entry.id === id)?.scene;
 }
 
+function DerivationItems({ id, run }: { id: string; run: (f: () => void) => () => void }) {
+  const entry = trees.value.find((tree) => tree.id === id);
+  if (!nanosyntaxEnabled.value || !entry) return null;
+  const targets = derivationTargets(entry);
+  if (!targets.length) return entry.lexical ? <button role="menuitem" disabled title="Add a non-empty S-tree to derive first."><strong>Derive</strong></button> : null;
+  return <>{targets.map((owner) => <button key={owner.id} role="menuitem" data-testid="build-derivation" disabled={derivationBusy.value || !editable.value} onClick={run(() => void buildDerivation(owner))}><strong>{targets.length > 1 ? 'Derive · ' + owner.name : 'Derive'}</strong></button>)}</>;
+}
+
 /** What can be done with a whole tree (right click on its sheet or its name). */
 function TreeItems({ id, run }: { id: string; run: (f: () => void) => () => void }) {
-  const e = trees.value.find((x) => x.id === id);
-  if (!e) return null;
-  return (
-    <>
-      <p class="ctx-title">{e.name}</p>
-      {isEmptyTree(id) && (
-        <button role="menuitem" onClick={run(() => A.addRootNode(id))}>
-          <strong>Add a node</strong>
-          <small>The first node of this tree</small>
-        </button>
-      )}
-      {isEmptyTree(id) && A.clip.value && (
-        <button role="menuitem" onClick={run(() => A.pasteIntoTree(id))}>
-          <strong>Paste here</strong>
-          <small>The copied branch becomes this tree</small>
-        </button>
-      )}
-      {id !== activeId.value && (
-        <button role="menuitem" onClick={run(() => activateTree(id))}>
-          <strong>Edit this tree</strong>
-        </button>
-      )}
-      <button role="menuitem" onClick={run(() => duplicateTree(id, false))}>
-        <strong>Copy the tree</strong>
-        <small>An independent copy next to it</small>
-      </button>
-      <button role="menuitem" onClick={run(() => A.duplicateTreeLinked(id))}>
-        <strong>Linked copy of the tree</strong>
-        <small>The whole tree as a linked branch</small>
-      </button>
-      <button
-        role="menuitem"
-        onClick={run(() => {
-          const name = prompt('Name of the tree', e.name);
-          if (name) renameTree(id, name);
-        })}
-      >
-        <strong>Rename…</strong>
-      </button>
-      <button
-        role="menuitem"
-        onClick={run(() => {
-          activateTree(id);
-          modal.value = 'export';
-        })}
-      >
-        <strong>Export this tree…</strong>
-      </button>
-      {trees.value.length > 1 && (
-        <button role="menuitem" class="danger" onClick={run(() => confirm(`Delete “${e.name}” from the canvas?`) && removeTree(id))}>
-          <strong>Delete from the canvas</strong>
-        </button>
-      )}
-      <hr class="ctx-sep" />
-    </>
-  );
+  const entry = trees.value.find((tree) => tree.id === id);
+  if (!entry) return null;
+  return <>
+    <p class="ctx-title">{entry.name}</p>
+    {isEmptyTree(id) && <button role="menuitem" onClick={run(() => {
+      activateTree(id);
+      codeSelection.value = true;
+      A.addRootNode(id);
+    })}><strong>Add a node</strong></button>}
+    {isEmptyTree(id) && A.clip.value && <button role="menuitem" onClick={run(() => A.pasteIntoTree(id))}><strong>Paste here</strong></button>}
+    <button role="menuitem" onClick={run(() => { const name = prompt('Name of the tree', entry.name); if (name) renameTree(id, name); })}><strong>Rename the tree…</strong></button>
+    <button role="menuitem" onClick={run(() => { activateTree(id); modal.value = 'export'; })}><strong>Export…</strong></button>
+    <button role="menuitem" onClick={run(() => groupAssignment.value = id)}><strong>Add to a group…</strong></button>
+    {treeGroups.value.some((group) => group.members.includes(id)) && <button role="menuitem" onClick={run(() => removeFromTreeGroups(id))}><strong>Remove from group</strong></button>}
+    <DerivationItems id={id} run={run} />
+    {nanosyntaxEnabled.value && <button role="menuitem" onClick={run(() => lexicalAssignment.value = id)}><strong>{entry.lexical ? 'Change L-tree scope…' : 'Use as an L-tree…'}</strong></button>}
+    {nanosyntaxEnabled.value && entry.lexical && <button role="menuitem" onClick={run(() => {
+      unassignLexicalTree(id);
+    })}><strong>Stop using as an L-tree</strong></button>}
+    <button role="menuitem" class="danger" onClick={run(() => {
+      if (trees.value.length === 1) clearCanvas();
+      else if (confirm('Delete “' + entry.name + '” from the canvas?')) removeTree(id);
+    })}><strong>Delete</strong></button>
+  </>;
 }
 
 export const canvasApi: { zoomIn?: () => void; zoomOut?: () => void; fit?: () => void } = {};

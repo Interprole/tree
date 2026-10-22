@@ -34,10 +34,13 @@ export function serialize(tree: DTree): string {
     let head = runsToMarkup(n.label, true);
     if (n.copy && n.trace) head = `<${head}>`;
     if (ids.has(n)) head += '#' + ids.get(n);
+    if (n.spellout) head += `;spell=${JSON.stringify(runsToMarkup(n.spellout.runs, false))}${n.spellout.side === 'auto' ? '' : ';spellside=' + n.spellout.side}${n.spellout.failed ? ';spellfail=yes' : ''}`;
+    const terminalExpression = !n.spellout && n.src?.kind === 'node' && n.src.opts?.spell !== undefined;
+    if (terminalExpression && n.src?.kind === 'node') head += ';spell=' + JSON.stringify(n.src.opts!.spell);
     const parts: string[] = [];
     if (n.features?.length) parts.push(`{${n.features.map((f) => runsToMarkup(f, false)).join(', ')}}`);
     if (n.triangle) parts.push('^' + n.children.filter((c) => c.kind === 'leaf').map((c) => go(c, '')).join(' '));
-    const kids = n.triangle ? n.children.filter((c) => c.kind !== 'leaf') : n.children;
+    const kids = n.triangle ? n.children.filter((c) => c.kind !== 'leaf') : terminalExpression ? n.children.filter((child) => child.src !== n.src) : n.children;
     const simple = kids.every((c) => c.kind === 'leaf' || c.children.length === 0 || (c.children.length === 1 && c.children[0].kind === 'leaf'));
     const childStr = kids.map((c) => go(c, indent + '  '));
     if (simple) parts.push(...childStr);

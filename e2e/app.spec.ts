@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 async function setCode(page: Page, text: string) {
+  await showCode(page);
   const ed = page.locator('.cm-content');
   await ed.click();
   await page.keyboard.press('ControlOrMeta+a');
@@ -10,7 +11,25 @@ async function setCode(page: Page, text: string) {
   await page.waitForTimeout(150);
 }
 
-const code = (page: Page) => page.locator('.cm-content').innerText();
+async function showCode(page: Page) {
+  if (!await page.locator('.cm-content').isVisible()) {
+    await page.locator('.active-sheet .paper').click({ position: { x: 12, y: 12 } });
+  }
+}
+async function selectTree(page: Page, index: number) {
+  await showCode(page);
+  await page.locator('.tree-tab .tab-name').nth(index).click();
+  await showCode(page);
+}
+async function copyWholeBranch(page: Page, linked = false) {
+  await page.locator('.active-sheet [data-node]').first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: linked ? /^Copy as a linked branch/ : /^Copy branch/ }).click();
+  await page.getByTestId('canvas').click({ button: 'right', position: { x: 5, y: 5 } });
+  await page.getByRole('menuitem', { name: /^Paste as a new tree here/ }).click();
+  await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
+  await showCode(page);
+}
+const code = async (page: Page) => (await page.locator('.cm-line').allTextContents()).join('\n');
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
@@ -285,34 +304,28 @@ test('custom colour, mother, layout of the code', async ({ page }) => {
 test('several trees: a copy, a linked copy, each with its own export', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[S [NP John] [VP runs]]');
-  // an independent copy
-  await page.locator('.tree-tab').first().locator('.tab-more').click();
-  // the menu is really on top (not cut off by the strip of tabs)
-  const item = page.locator('.tab-menu button', { hasText: 'Copy' }).first();
-  const box = (await item.boundingBox())!;
-  expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.tab-menu'), { x: box.x + box.width / 2, y: box.y + box.height / 2 })).toBe(true);
-  await item.click();
+  // Whole trees are copied through their root branch.
+  await copyWholeBranch(page);
   await expect(page.locator('.tree-tab')).toHaveCount(2);
   await expect(page.locator('.sheet-head')).toHaveCount(2);
   await setCode(page, '[S [NP Mary] [VP sleeps]]');
-  await page.locator('.tree-tab .tab-name').first().click();
+  await selectTree(page, 0);
   await expect(page.locator('.cm-content')).toContainText('John');
   // a linked copy follows every edit
-  await page.locator('.tree-tab').first().locator('.tab-more').click();
-  await page.locator('.tab-menu button', { hasText: 'Linked copy' }).click();
+  await copyWholeBranch(page, true);
   await expect(page.locator('.tree-tab')).toHaveCount(3);
   await expect(page.locator('.tree-tab.on .link-mark')).toHaveCount(1);
   // an edit inside the linked tree (its root is the linked branch) reaches the original
   await expect(page.locator('.cm-content')).toContainText(';link=');
   await setCode(page, (await code(page)).replace('John', 'Bill'));
-  await page.locator('.tree-tab .tab-name').first().click();
+  await selectTree(page, 0);
   await expect(page.locator('.cm-content')).toContainText('Bill');
-  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await selectTree(page, 1);
   await expect(page.locator('.cm-content')).toContainText('Mary');
   // all three are on the canvas; the export names the tree
   await expect(page.locator('.other-sheet')).toHaveCount(2);
   await page.getByTestId('export').click();
-  await expect(page.locator('.modal h2')).toContainText('Tree 1 (copy)');
+  await expect(page.locator('.modal h2')).toContainText((await page.locator('.tree-tab.on .tab-name').textContent())!.trim());
   await page.keyboard.press('Escape');
   // the whole canvas is autosaved
   await expect
@@ -340,6 +353,7 @@ test('deleting a restyled chain arrow hides it instead of restoring the default'
 
 test('panes can be resized', async ({ page }) => {
   await page.goto('./');
+  await showCode(page);
   const pane = page.locator('.code-pane');
   const w0 = (await pane.boundingBox())!.width;
   const sp = (await page.locator('.code-pane .splitter').boundingBox())!;
@@ -446,7 +460,7 @@ test('arrows are just arrows; movement: head movement written on the head, phras
   await expect.poll(() => code(page)).not.toContain('hide');
   await expect(page.locator('.arrow-hit')).toHaveCount(1);
   // the switch hides movement arrows only
-  await page.getByTestId('settings-toggle').click();
+  await page.getByTestId('side-appearance').click();
   await page.locator('.settings .toggle', { hasText: 'Arrows for head movement' }).click();
   await expect(page.locator('.arrow-hit')).toHaveCount(0);
   await expect(page.locator('.prims')).toContainText('sing+-s');
@@ -484,8 +498,7 @@ test('save the canvas to disk and open it again (download where files cannot be 
   });
   await page.goto('./');
   await setCode(page, '[S [NP John] [VP runs]]');
-  await page.locator('.tree-tab').first().locator('.tab-more').click();
-  await page.locator('.tab-menu button', { hasText: 'Linked copy' }).click();
+  await copyWholeBranch(page, true);
   const [dl] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('ControlOrMeta+s')]);
   expect(dl.suggestedFilename()).toMatch(/\.nanotrees$/);
   const { readFileSync } = await import('node:fs');
@@ -668,7 +681,7 @@ test('one copy open although all copies are triangles; expression; code panel; c
   await setCode(page, '[S [NP] [VP runs]]');
   await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^NP$/ }) }).click();
   await page.locator('.inspector input[aria-label^="Expression"]').fill('student');
-  await expect.poll(() => code(page)).toContain('[NP student]');
+  await expect.poll(() => code(page)).toContain('[NP;spell="student"]');
   // the code panel folds away and comes back
   await page.locator('.code-hide').click();
   await expect.poll(async () => (await page.locator('.code-pane').boundingBox())?.width ?? 0).toBeLessThan(5);
@@ -679,20 +692,21 @@ test('one copy open although all copies are triangles; expression; code panel; c
   await page.locator('.ctx-menu button', { hasText: 'New tree here' }).click();
   await expect(page.locator('.tree-tab')).toHaveCount(2);
   // right click on a tree
+  await page.getByRole('button', { name: 'Fit to window', exact: true }).click();
   await page.locator('.sheet-head').first().click({ button: 'right' });
   await expect(page.locator('.ctx-menu .ctx-title')).toBeVisible();
   await page.keyboard.press('Escape');
   page.once('dialog', (d) => d.accept());
   await page.getByTestId('clear-canvas').click();
   await expect(page.locator('.tree-tab')).toHaveCount(1);
+  await showCode(page);
   await expect(page.locator('.cm-placeholder')).toBeVisible();
 });
 
 test('appearance for all trees: trees with their own value are asked about', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[S [NP John] [VP runs]]');
-  await page.locator('.tree-tab').first().locator('.tab-more').click();
-  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  await copyWholeBranch(page);
   // tree 2 has its own setting
   await page.getByTestId('side-appearance').click();
   await page.locator('.settings .seg button', { hasText: 'Struck through' }).click();
@@ -704,11 +718,11 @@ test('appearance for all trees: trees with their own value are asked about', asy
   await expect(page.getByTestId('override-no')).toBeVisible();
   await page.getByTestId('override-no').click();
   // tree 1 followed, tree 2 kept its own
-  await page.locator('.tree-tab .tab-name').first().click();
+  await selectTree(page, 0);
   await page.getByTestId('side-appearance').click();
   await page.locator('.appearance-scope button').first().click();
   await expect(page.locator('.settings .seg button.on', { hasText: '⟨Angle brackets⟩' })).toHaveCount(1);
-  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await selectTree(page, 1);
   await page.getByTestId('side-appearance').click();
   await page.locator('.appearance-scope button').first().click();
   await expect(page.locator('.settings .seg button.on', { hasText: 'Struck through' })).toHaveCount(1);
@@ -721,7 +735,7 @@ test('empty trees: the sheet stays, a first node by right click, a branch dragge
   await page.locator('.add-tree').click();
   await expect(page.locator('.empty-sheet')).toHaveCount(1);
   // drag NP from tree 1 onto the empty tree
-  await page.locator('.tree-tab .tab-name').first().click();
+  await selectTree(page, 0);
   await page.locator('button[aria-label="Fit to window"]').click();
   const np = (await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^NP$/ }) }).boundingBox())!;
   const empty = (await page.locator('.empty-sheet .paper').boundingBox())!;
@@ -731,7 +745,7 @@ test('empty trees: the sheet stays, a first node by right click, a branch dragge
   await expect(page.locator('.drop-target')).toHaveCount(1);
   await page.mouse.up();
   await expect.poll(() => code(page)).not.toContain('John');
-  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await selectTree(page, 1);
   await expect.poll(() => code(page)).toContain('[NP John]');
   // deleting the whole tree leaves its sheet; right click: add a node
   await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^NP$/ }) }).click();
@@ -787,7 +801,7 @@ test('a branch with a copy moves into another tree in full; the copy left behind
   await setCode(page, '[CP [DP#wh what] [C\' [C did] [VP [V buy] #wh]]]');
   await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
   await page.locator('.add-tree').click();
-  await page.locator('.tree-tab .tab-name').first().click();
+  await selectTree(page, 0);
   await page.locator('button[aria-label="Fit to window"]').click();
   // VP holds the silent copy of what: in the other tree it is written out
   const vp = (await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^VP$/ }) }).boundingBox())!;
@@ -797,15 +811,14 @@ test('a branch with a copy moves into another tree in full; the copy left behind
   await page.mouse.move(empty.x + empty.width / 2, empty.y + empty.height / 2, { steps: 10 });
   await page.mouse.up();
   await expect.poll(() => code(page)).not.toContain('VP');
-  await page.locator('.tree-tab .tab-name').nth(1).click();
+  await selectTree(page, 1);
   await expect.poll(() => code(page)).toBe('[VP [V buy] [DP what]]');
   // the DP leaves tree 1 the other way: tree 1 keeps a pronounced what
-  await page.locator('.tree-tab .tab-name').first().click();
+  await selectTree(page, 0);
   await setCode(page, '[CP [DP#wh what] [C\' [C did] [VP [V buy] #wh]]]');
-  await page.locator('.tree-tab').first().locator('.tab-more').click();
-  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  await copyWholeBranch(page);
   await setCode(page, '');
-  await page.locator('.tree-tab .tab-name').first().click();
+  await selectTree(page, 0);
   await page.locator('button[aria-label="Fit to window"]').click();
   const dp = (await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^DP$/ }) }).first().boundingBox())!;
   const empty2 = (await page.locator('.empty-sheet .paper').first().boundingBox())!;
@@ -827,8 +840,7 @@ test('a branch with a copy moves into another tree in full; the copy left behind
 test('ids renamed in another tree: head movement follows', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[CP [C#c ∅] [TP [T#t;to=c did] [VP buy]]]');
-  await page.locator('.tree-tab').first().locator('.tab-more').click();
-  await page.locator('.tab-menu button', { hasText: 'Copy' }).first().click();
+  await copyWholeBranch(page);
   // copy the whole tree 2 and paste it into tree 2 again: the ids are taken there
   await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^CP$/ }) }).click();
   await page.locator('.canvas').focus();

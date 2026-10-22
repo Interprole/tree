@@ -1,5 +1,7 @@
 import type { BuildOptions } from './core/build';
 import type { TreeStyle } from './core/style';
+import { nanosyntaxExamples } from './core/nanosyntaxExamples';
+import type { NanosyntaxExample } from './core/nanosyntaxExamples';
 
 type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
 
@@ -10,6 +12,7 @@ export interface Example {
   src: string;
   build?: DeepPartial<BuildOptions>;
   style?: Partial<TreeStyle>;
+  nanosyntax?: NanosyntaxExample;
 }
 
 export const examples: Example[] = [
@@ -68,22 +71,10 @@ export const examples: Example[] = [
             [&' [& and]
                 [TP [DP Mary] [VP [V sell] #wh]]]]]]`,
   },
-  {
-    id: 'nano',
-    title: 'Nanosyntax: case sequence',
-    note: 'Feature stacks in {…}; the coloured branch is spelled out by one morpheme.',
-    src: `% Caha (2009): NOM ⊂ ACC ⊂ GEN ⊂ DAT
-[DatP{K1, K2, K3, K4}
-  [K4]
-  [GenP{K1, K2, K3}
-    [K3]
-    [AccP@@#b4441c{K1, K2}
-      [K2]
-      [NomP{K1}
-        [K1]
-        [NP ^stol- | table]]]]]`,
-    style: { leavesAtBottom: false },
-  },
+  ...['starke-sugar-of', 'caha-mara-portmanteau', 'caha-friulian-1sg'].map((id): Example => {
+    const example = nanosyntaxExamples.find((entry) => entry.id === id)!;
+    return { id: example.id, title: example.title, note: example.description, src: '% ' + example.citation + '\n' + example.source, nanosyntax: example };
+  }),
   {
     id: 'russian',
     title: 'Russian sentence with glosses',

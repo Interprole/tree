@@ -108,6 +108,85 @@ export function noteSide(n: DNode, side: LabelSide): Exclude<LabelSide, 'auto'> 
 
 export const NOTE_SCALE = 0.82;
 
+/** Prefer the outside of a branch; reserve that space during layout, including other notes. */
+export function spelloutSide(n: DNode): 'left' | 'right' {
+  if (n.spellout?.side && n.spellout.side !== 'auto') return n.spellout.side;
+  const occupied = (side: 'left' | 'right') => (n.notes ?? []).filter((x) => noteSide(n, x.side) === side).length;
+  if (occupied('left') !== occupied('right')) return occupied('left') < occupied('right') ? 'left' : 'right';
+  return noteSide(n, 'auto') === 'left' ? 'left' : 'right';
+}
+
+export function spelloutRuns(n: DNode, italicExpressions = false): Runs {
+  if (!n.spellout || n.copy) return [];
+  const expression = (n.spellout.failed ? [{ text: '∅' }] : n.spellout.runs).map((r) => ({ ...r, i: italicExpressions !== !!r.i }));
+  // Arrows stay upright even when word/morpheme expressions are italicized.
+  const arrow = n.spellout.lexical ? '⇔' : spelloutSide(n) === 'right' ? '⇒' : '⇐';
+  return spelloutSide(n) === 'right' ? [{ text: ' ' + arrow + ' ' }, ...expression] : [...expression, { text: ' ' + arrow + ' ' }];
+}
+
+/** Overt nodes inside the lexicalized constituent; movement copies are separate domains. */
+export function spelloutDomainNodes(root: DNode): DNode[] {
+  const seen = new Set<DNode>();
+  const nodes: DNode[] = [];
+  const visit = (n: DNode) => {
+    if (seen.has(n) || n.copy) return;
+    seen.add(n);
+    nodes.push(n);
+    for (const child of n.children) visit(child);
+  };
+  visit(root);
+  return nodes;
+}
+
+/** Ellipses enclose the actual nodes of the domain, without its side expression or lower copies. */
+export function spelloutDomains(layout: Layout): { node: DNode; box: Box }[] {
+  if (!layout.style.circlePhrasalSpellout) return [];
+  const domains: { node: DNode; box: Box }[] = [];
+  for (const ln of layout.list) {
+    if (!spelloutRuns(ln.node).length) continue;
+    const nodes = spelloutDomainNodes(ln.node).map((n) => layout.nodes.get(n)).filter((x): x is LNode => !!x);
+    domains.push({ node: ln.node, box: domainEllipse(nodes, layout.style) });
+  }
+  return domains;
+}
+
+/** Smallest proportional enlargement of a bounding ellipse that encloses each padded label. */
+function domainEllipse(nodes: LNode[], style: TreeStyle): Box {
+  const pad = Math.max(5, style.fontSize * .35);
+  const bounds = nodes.map((n) => ({
+    x1: n.x - n.block.w / 2 - pad, x2: n.x + n.block.w / 2 + pad,
+    y1: n.y - pad, y2: n.y + Math.max(n.block.fullH, 2) + pad,
+  }));
+  const cx = (Math.min(...bounds.map((b) => b.x1)) + Math.max(...bounds.map((b) => b.x2))) / 2;
+  const cy = (Math.min(...bounds.map((b) => b.y1)) + Math.max(...bounds.map((b) => b.y2))) / 2;
+  let rx = Math.max(...bounds.map((b) => b.x2 - cx), pad);
+  let ry = Math.max(...bounds.map((b) => b.y2 - cy), pad);
+  const scale = Math.max(1, ...bounds.flatMap((b) => [b.x1, b.x2].flatMap((x) => [b.y1, b.y2].map((y) => Math.hypot((x - cx) / rx, (y - cy) / ry)))));
+  rx *= scale; ry *= scale;
+  return { x1: cx - rx, x2: cx + rx, y1: cy - ry, y2: cy + ry };
+}
+
+/** Expression position, beyond any notes and the optional domain outline. */
+export function spelloutPosition(ln: LNode, style: TreeStyle, measure: Measure, domain?: Box): { x: number; width: number } {
+  const n = ln.node;
+  const size = style.fontSize * NOTE_SCALE;
+  const width = runsWidth(spelloutRuns(n, style.leafItalic), { font: style.font, size }, measure);
+  const side = spelloutSide(n);
+  const notes = (n.notes ?? []).filter((note) => !note.off && noteSide(n, note.side) === side);
+  const noteW = Math.max(0, ...notes.map((note) => runsWidth(note.runs, { font: style.font, size }, measure) + 6));
+  let left = ln.x - ln.block.labelW / 2 - noteW;
+  let right = ln.x + ln.block.labelW / 2 + noteW;
+  if (domain) {
+    const cx = (domain.x1 + domain.x2) / 2, cy = (domain.y1 + domain.y2) / 2;
+    const rx = (domain.x2 - domain.x1) / 2, ry = (domain.y2 - domain.y1) / 2;
+    const y = ln.y + metricsFor(style).ascent - size * .3;
+    const half = rx * Math.sqrt(Math.max(0, 1 - ((y - cy) / ry) ** 2));
+    left = Math.min(left, cx - half);
+    right = Math.max(right, cx + half);
+  }
+  return { x: side === 'right' ? right + 6 : left - 6 - width, width };
+}
+
 /** The meaning line under a node: formula, type, composition rule, or an error. */
 export function semDisplay(n: DNode): { runs: Runs; kind: 'given' | 'computed' | 'error'; title?: string } | null {
   const s = n.sem;
@@ -165,6 +244,12 @@ export function measureBlock(n: DNode, style: TreeStyle, measure: Measure): Bloc
       notesBelowH += noteFs * 1.25;
       belowW = Math.max(belowW, nw);
     }
+  }
+  const spell = spelloutRuns(n, style.leafItalic);
+  if (spell.length) {
+    const width = runsWidth(spell, { font: style.font, size: noteFs }, measure) + 6;
+    if (spelloutSide(n) === 'left') extraL += width;
+    else extraR += width;
   }
   const point = empty && !n.features?.length && !sem && n.kind === 'phrase';
   const w = Math.max(labelW, featureW, glossW, semW, belowW, point ? 2 : 0);
@@ -274,7 +359,40 @@ export function layoutTree(tree: DTree, style: TreeStyle, measure: Measure): Lay
       // the feature stack / gloss hang below the label: they belong to the same row
       const kids = n.children.filter((c) => !isShared(c) || lowerMothers.get(c)!.includes(n));
       const offsets = new Map<DNode, number>();
+      const reserveDomain = (offsets: Map<DNode, number>) => {
+        if (!style.circlePhrasalSpellout || !spelloutRuns(n).length) return;
+        // An outline and its side expression belong to the subtree's contour too.
+        // Reserving them here prevents sister circles from intersecting and inward
+        // expressions from crossing a neighbouring constituent's labels.
+        const domainNodes: LNode[] = [];
+        const gather = (q: DNode, x: number, extraY: number, seen = new Set<DNode>()) => {
+          if (q.copy || seen.has(q)) return;
+          seen.add(q);
+          domainNodes.push({ node: q, x, y: rowTops[row.get(q)!] + extraY, row: row.get(q)!, block: blocks.get(q)! });
+          const qs = q === n ? { offsets } : subs.get(q);
+          if (!qs) return;
+          for (const [c, childX] of qs.offsets) gather(c, x + childX, extraY + (c.edgeLen ?? 0), seen);
+        };
+        gather(n, 0, 0);
+        const ellipse = domainEllipse(domainNodes, style);
+        const cx = (ellipse.x1 + ellipse.x2) / 2, cy = (ellipse.y1 + ellipse.y2) / 2;
+        const rx = (ellipse.x2 - ellipse.x1) / 2, ry = (ellipse.y2 - ellipse.y1) / 2;
+        const circleContour: Contour = new Map();
+        for (let r = 0; r < rowTops.length; r++) {
+          const y1 = rowTops[r] - style.levelGap / 2;
+          const y2 = rowTops[r] + (rowH[r] || m.lineH) + style.levelGap / 2;
+          if (y2 < ellipse.y1 || y1 > ellipse.y2) continue;
+          const y = Math.max(y1, Math.min(cy, y2));
+          const half = rx * Math.sqrt(Math.max(0, 1 - ((y - cy) / ry) ** 2));
+          circleContour.set(r, [cx - half, cx + half]);
+        }
+        const expression = spelloutPosition(domainNodes[0], style, measure, ellipse);
+        const expressionContour: Contour = new Map([[row.get(n)!, [expression.x, expression.x + expression.width]]]);
+        mergeInto(contour, circleContour, 0);
+        mergeInto(contour, expressionContour, 0);
+      };
       if (kids.length === 0) {
+        reserveDomain(offsets);
         const s: Sub = { contour, offsets };
         subs.set(n, s);
         return s;
@@ -308,6 +426,7 @@ export function layoutTree(tree: DTree, style: TreeStyle, measure: Measure): Lay
         else slotRel.set(slotKey(n, k), slotRel.get(slotKey(n, k))! - centre);
       }
       mergeInto(contour, merged, -centre);
+      reserveDomain(offsets);
       // a parent label wider than its daughters is already in the contour
       const s: Sub = { contour, offsets };
       subs.set(n, s);

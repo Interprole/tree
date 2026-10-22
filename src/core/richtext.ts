@@ -35,7 +35,8 @@ export const LATEX_SYMBOLS: Record<string, string> = {
   Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
   // arrows
   rightarrow: '→', to: '→', leftarrow: '←', gets: '←', leftrightarrow: '↔', uparrow: '↑', downarrow: '↓', updownarrow: '↕',
-  Rightarrow: '⇒', Leftarrow: '⇐', Leftrightarrow: '⇔', Uparrow: '⇑', Downarrow: '⇓', Updownarrow: '⇕',
+  Rightarrow: '⇒', Leftarrow: '⇐', nRightarrow: '⇏', nLeftarrow: '⇍', Leftrightarrow: '⇔', Uparrow: '⇑', Downarrow: '⇓', Updownarrow: '⇕',
+  Rightleftarrow: '⇄', rightleftarrows: '⇄',
   longrightarrow: '⟶', longleftarrow: '⟵', longleftrightarrow: '⟷', Longrightarrow: '⟹', Longleftarrow: '⟸', Longleftrightarrow: '⟺',
   implies: '⟹', impliedby: '⟸', iff: '⟺', mapsto: '↦', longmapsto: '⟼', hookrightarrow: '↪', hookleftarrow: '↩',
   nearrow: '↗', searrow: '↘', swarrow: '↙', nwarrow: '↖', leadsto: '⇝', rightsquigarrow: '⇝', rightharpoonup: '⇀', leftharpoonup: '↼',

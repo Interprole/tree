@@ -38,8 +38,8 @@ export function askOverride(key: string, message: string): Promise<boolean> {
   if (p !== 'ask') return Promise.resolve(p === 'replace');
   // while a slider is being dragged the answer holds (each change keeps it a moment longer)
   const r = recent.get(key);
-  if (r && Date.now() - r.at < 1200) {
-    r.at = Date.now();
+  if (r && performance.now() - r.at < 1200) {
+    r.at = performance.now();
     return Promise.resolve(r.replace);
   }
   const waiting = pending.get(key);
@@ -50,7 +50,7 @@ export function askOverride(key: string, message: string): Promise<boolean> {
       answer: (replace, remember) => {
         question.value = null;
         pending.delete(key);
-        recent.set(key, { replace, at: Date.now() });
+        recent.set(key, { replace, at: performance.now() });
         if (remember) overridePolicy.value = replace ? 'replace' : 'keep';
         resolve(replace);
       },

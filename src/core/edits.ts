@@ -57,7 +57,7 @@ export function modifiers(n: Mods): string {
   const opts = Object.entries(n.opts ?? {})
     .filter(([, v]) => v !== undefined && v !== '')
     .sort(([a], [b]) => OPT_ORDER.indexOf(a) - OPT_ORDER.indexOf(b))
-    .map(([k, v]) => `;${k}=${v}`)
+    .map(([k, v]) => `;${k}=${k === 'spell' ? JSON.stringify(v) : v}`)
     .join('');
   return (n.id ? '#' + n.id : '') + voice + (n.color ? '@' + n.color : '') + (n.branchColor ? '@@' + n.branchColor : '') + opts;
 }
@@ -72,11 +72,30 @@ function setModifiers(n: ANode, patch: Partial<Mods>): TextChange {
 }
 
 /** Set (or remove, with null) a node option: edge colour, edge width, length, spread, meaning colour. */
-export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'link' | 'to', value: string | null): Edit {
+export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'link' | 'to' | 'spell' | 'spellside' | 'spellfail', value: string | null): Edit {
   const opts = { ...(n.opts ?? {}) };
   if (value === null || value === '') delete opts[key];
   else opts[key] = value;
   return { changes: [setModifiers(n, { opts })] };
+}
+
+/** One expression field for both ordinary words and the spellout of a phrase. */
+export function setExpression(src: string, doc: ADoc, n: ANode, text: string): Edit {
+  const value = text.trim();
+  const leaf = n.children.find((c): c is ALeaf => c.kind === 'leaf');
+  const opts = { ...(n.opts ?? {}) };
+  const changes: TextChange[] = [];
+  {
+    if (value) opts.spell = value;
+    else delete opts.spell;
+    const header = setModifiers(n, { opts });
+    const removal = leaf ? deleteElement(src, doc, leaf).changes : [];
+    // A direct word may begin immediately after an unmodified label. Merge these
+    // adjacent ranges so CodeMirror and applyChanges agree at the insertion point.
+    if (removal[0]?.from === header.to) changes.push({ ...header, to: removal[0].to }, ...removal.slice(1));
+    else changes.push(header, ...removal);
+  }
+  return { changes };
 }
 
 /** A label of an arrow or a note: side"text"@dx,dy */

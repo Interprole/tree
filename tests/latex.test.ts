@@ -129,6 +129,12 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
   cases.push({ name: 'latex-symbols', src: `[S [A ${Object.keys(LATEX_SYMBOLS).slice(0, 120).map((k) => '\\' + k).join(' ')}] [B ${Object.keys(LATEX_SYMBOLS).slice(120).map((k) => '\\' + k).join(' ')}]]` });
   cases.push({ name: 'special-chars', src: '[S [A 50\\% \\& \\$ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
 
+  cases.push({ name: 'circled-phrasal-expression', src: '[AccP;spell="-a" [Acc] [NomP [Nom] [N cat]]]', style: { circlePhrasalSpellout: true } });
+  cases.push({ name: 'phrasal-failure', src: '[AccP;spellfail=yes;spellside=left [Acc] [NomP [Nom] [N cat]]]', style: { circlePhrasalSpellout: true } });
+  cases.push({ name: 'phrasal-spellout', src: '[DP;spell="the cat";spellside=left &right"focus" [D the] [NP;spell="cat" cat]]' });
+  cases.push({ name: 'nanosyntax-movement', src: '[ [NP#n;spell="cat" N Root] [KP;spell="-s" K #n]]' });
+  cases.push({ name: 'lexical-correspondence', src: '[NumP;spell="fin" [Num]]', build: { lexicalTree: true } });
+  cases.push({ name: 'lexical-failed-correspondence', src: '[NumP;spellfail=yes [Num]]', build: { lexicalTree: true } });
   for (const c of cases) {
     for (const format of ['forest', 'qtree', 'tikz'] as LatexFormat[]) {
       test(`${c.name} (${format})`, async () => {

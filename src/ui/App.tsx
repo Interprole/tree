@@ -9,7 +9,7 @@ import { examples } from '../examples';
 import { copyText } from '../export';
 import { t } from '../i18n';
 import {
-  activateTree, activeId, addTree, arrowSource, build, duplicateTree, error, linkedIds, loadExample, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, shareUrl, showToast, sideTab, source, theme, toast, tool, tree, trees, unlinkTree,
+  activateTree, activeId, addTree, arrowSource, build, error, linkedIds, mobileTab, modal, paneWidths, pick, relationOf, removeTree, renameTree, requestLabelFocus, scene, selection, shareUrl, showToast, sideTab, source, theme, toast, tool, tree, unlinkTree,
 } from '../state';
 import { Canvas, canvasApi } from './Canvas';
 import { Seg } from './controls';
@@ -18,8 +18,12 @@ import { Editor } from './Editor';
 import { ExportDialog } from './ExportDialog';
 import { IAuto, IBook, IChevron, IHelp, IDownload, IEdit, IFolder, IFormat, IKeyboard, ILink, IMoon, IMore, IPlus, IRedo, ISliders, ISun, IUndo, IClose } from './icons';
 import { Inspector } from './Inspector';
+import { NanosyntaxPanel } from './NanosyntaxPanel';
+import { loadCanvasExample } from '../nanosyntax';
+import { TreeAssignmentDialogs } from './TreeAssignmentDialogs';
+import { codeSelection, focusTreeRequest, nanosyntaxEnabled, rightPanelOpen, toggleNanosyntax, treeTargetPick, visibleTrees } from '../state';
 import { autoSaveFile, canWriteFiles, fileHandle, fileName, loadFile, openFromDisk, saveToDisk, unsaved } from '../files';
-import { ChainOptions, ModeOptions, SettingsPanel } from './SettingsPanel';
+import { SettingsPanel } from './SettingsPanel';
 
 function useTheme() {
   useSignalEffect(() => {
@@ -52,6 +56,17 @@ function isTyping(e: KeyboardEvent) {
   return el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || !!el.closest('.cm-editor');
 }
 
+/** A canvas selection must not steal ordinary text selected in a side panel. */
+function hasSelectedTextOutsideCanvas() {
+  const selected = window.getSelection();
+  if (!selected || selected.isCollapsed || !selected.toString()) return false;
+  const outside = (node: Node | null) => {
+    const element = node instanceof Element ? node : node?.parentElement;
+    return !!element && !element.closest('.canvas');
+  };
+  return outside(selected.anchorNode) || outside(selected.focusNode);
+}
+
 /** Arrow-key navigation in the tree. */
 function navigate(dir: 'up' | 'down' | 'left' | 'right') {
   const n = A.selectedNode();
@@ -78,7 +93,7 @@ function useShortcuts() {
   // copy and paste of nodes (when the keyboard is not in the code or a field)
   useEffect(() => {
     let sister = false;
-    const busy = (e: Event) => modal.value !== null || isTyping(e as KeyboardEvent);
+    const busy = (e: Event) => modal.value !== null || isTyping(e as KeyboardEvent) || hasSelectedTextOutsideCanvas();
     const onCopy = (e: ClipboardEvent) => {
       if (busy(e) || selection.value?.kind !== 'node') return;
       const c = A.copyNode();
@@ -114,7 +129,8 @@ function useShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (e.key === 'Escape') {
-        if (modal.value) modal.value = null;
+        if (treeTargetPick.value) treeTargetPick.value = null;
+        else if (modal.value) modal.value = null;
         else if (pick.value) pick.value = null;
         else if (tool.value !== 'select') {
           tool.value = 'select';
@@ -247,7 +263,7 @@ function ExamplesMenu() {
               role="menuitem"
               data-example={ex.id}
               onClick={() => {
-                loadExample(ex);
+                void loadCanvasExample(ex);
                 open.value = false;
               }}
             >
@@ -382,7 +398,7 @@ function TreeTabs() {
     window.addEventListener('pointerdown', close);
     return () => window.removeEventListener('pointerdown', close);
   }, []);
-  const list = trees.value;
+  const list = visibleTrees.value;
   return (
     <div class="tree-tabs" role="tablist" aria-label="Trees on the canvas">
       {list.map((e) => (
@@ -408,8 +424,9 @@ function TreeTabs() {
               }}
             />
           ) : (
-            <button class="tab-name" onClick={() => activateTree(e.id)} onDblClick={() => (editing.value = e.id)} title={linked.has(e.id) ? 'Linked copy: shares its code with another tree. Double-click to rename.' : 'Double-click to rename'}>
+            <button class="tab-name" onClick={() => { activateTree(e.id); selection.value = null; codeSelection.value = false; focusTreeRequest.value = { id: e.id }; }} onDblClick={() => (editing.value = e.id)} title={linked.has(e.id) ? 'Linked copy: shares its code with another tree. Double-click to rename.' : 'Double-click to rename'}>
               {e.name}
+              {e.lexical && <span class="ltree-badge" title={e.lexical.scope === 'canvas' ? 'Canvas L-tree' : 'L-tree attached to an S-tree'}>L</span>}
               {linked.has(e.id) && <span class="link-mark"><ILink size={11} /></span>}
             </button>
           )}
@@ -427,14 +444,6 @@ function TreeTabs() {
           </button>
           {menu.value === e.id && (
             <div class="menu-pop tab-menu" role="menu" style={{ left: `${menuAt.value.left}px`, top: `${menuAt.value.top}px` }}>
-              <button role="menuitem" onClick={() => ((menu.value = null), duplicateTree(e.id, false))}>
-                <strong>Copy</strong>
-                <small>An independent copy: change it without touching this one.</small>
-              </button>
-              <button role="menuitem" onClick={() => ((menu.value = null), A.duplicateTreeLinked(e.id))}>
-                <strong>Linked copy</strong>
-                <small>The whole tree as a linked branch: what changes inside it changes in both; above and around its root each tree is free, settings stay separate.</small>
-              </button>
               {list.some((o) => o.id !== e.id && o.srcId === e.srcId) && (
                 <button role="menuitem" onClick={() => ((menu.value = null), unlinkTree(e.id))}>
                   <strong>Unlink</strong>
@@ -503,10 +512,11 @@ export function App() {
   useShortcuts();
   // picking something on the tree brings the editing back
   useSignalEffect(() => {
-    if (selection.value) sideTab.value = 'edit';
+    if (selection.value) { sideTab.value = 'edit'; if (selection.value.kind === 'node') codeSelection.value = true; }
   });
   /** on narrow screens the right panel is a sheet, shown only when it has something to show */
-  const sideOpen = sideTab.value === 'appearance' || !!selection.value;
+  const sideOpen = rightPanelOpen.value;
+  const codeOpen = codeSelection.value && !paneWidths.value.codeHidden;
   const b = build.value;
   const th = theme.value;
   const nextTheme = th === 'auto' ? 'light' : th === 'light' ? 'dark' : 'auto';
@@ -526,9 +536,9 @@ export function App() {
         e.preventDefault();
         void loadFile(f);
       }}
-      class={`app ${paneWidths.value.codeHidden ? 'code-hidden' : ''} side-${sideTab.value} ${selection.value ? 'has-selection' : ''} ${sideOpen ? 'side-open' : ''} tab-${mobileTab.value}`}
+      class={`app ${codeOpen ? '' : 'code-hidden'} ${sideOpen ? 'side-open' : 'side-hidden'} side-${sideTab.value} ${selection.value ? 'has-selection' : ''} tab-${mobileTab.value}`}
       style={{
-        '--code-w': paneWidths.value.codeHidden ? '0px' : paneWidths.value.code ? `${paneWidths.value.code}px` : 'minmax(300px, 30%)',
+        '--code-w': !codeOpen ? '0px' : paneWidths.value.code ? `${paneWidths.value.code}px` : 'minmax(300px, 30%)',
         '--side-w': `${paneWidths.value.inspector}px`,
       }}
     >
@@ -546,6 +556,7 @@ export function App() {
           </div>
         </div>
         <ExamplesMenu />
+        <button class={`btn ghost nanosyntax-toggle ${nanosyntaxEnabled.value ? 'active' : ''}`} title="Show or hide nanosyntax" data-testid="nanosyntax-toggle" aria-pressed={nanosyntaxEnabled.value} onClick={toggleNanosyntax}>Nanosyntax</button>
         <div class="mode-switch hide-xs" title="Labelling">
           <Seg value={b.mode} onChange={(v) => applyBuild({ mode: v })} options={[
             { v: 'manual', label: t('modeManual'), title: t('modeManualHint') },
@@ -586,11 +597,14 @@ export function App() {
             {th === 'auto' ? <IAuto /> : th === 'light' ? <ISun /> : <IMoon />}
           </button>
           <button
-            class={`icon-btn panel-toggle ${sideTab.value === 'appearance' ? 'active' : ''}`}
+            class={`icon-btn panel-toggle ${rightPanelOpen.value ? 'active' : ''}`}
             title={`${t('settings')} (the right panel: Edit / Appearance)`}
             aria-label={t('settings')}
-            aria-pressed={sideTab.value === 'appearance'}
-            onClick={() => (sideTab.value = sideTab.value === 'appearance' ? 'edit' : 'appearance')}
+            aria-pressed={rightPanelOpen.value}
+            onClick={() => {
+              rightPanelOpen.value = !rightPanelOpen.value;
+              if (rightPanelOpen.value) sideTab.value = 'appearance';
+            }}
             data-testid="settings-toggle"
           >
             <ISliders />
@@ -608,15 +622,11 @@ export function App() {
             </button>
           </div>
           <StatusBar />
-          <div class="mode-options">
-            <ModeOptions />
-            <ChainOptions />
-          </div>
           <Splitter side="right" label="Width of the code" onReset={() => (paneWidths.value = { ...paneWidths.value, code: null })} onDrag={(dx, w0) => (paneWidths.value = { ...paneWidths.value, code: clampW(w0 + dx, 220) })} />
         </section>
         <section class="pane canvas-pane" aria-label={t('tree')}>
           <Canvas />
-          {paneWidths.value.codeHidden && (
+          {codeSelection.value && paneWidths.value.codeHidden && (
             <button class="code-show" title="Show the code" aria-label="Show the code" onClick={() => (paneWidths.value = { ...paneWidths.value, codeHidden: false })}>
               <IChevron size={14} /> Code
             </button>
@@ -631,19 +641,19 @@ export function App() {
             <button role="tab" aria-selected={sideTab.value === 'appearance'} class={sideTab.value === 'appearance' ? 'on' : ''} onClick={() => (sideTab.value = 'appearance')} data-testid="side-appearance">
               <ISliders size={15} /> {t('settings')}
             </button>
+            {nanosyntaxEnabled.value && <button role="tab" aria-selected={sideTab.value === 'nanosyntax'} class={sideTab.value === 'nanosyntax' ? 'on' : ''} onClick={() => sideTab.value = 'nanosyntax'} data-testid="side-nanosyntax">Nanosyntax</button>}
             <button
               class="icon-btn small side-close"
               title="Close"
               aria-label="Close the panel"
               onClick={() => {
-                selection.value = null;
-                sideTab.value = 'edit';
+                rightPanelOpen.value = false;
               }}
             >
               <IClose size={14} />
             </button>
           </div>
-          <div class="side-body">{sideTab.value === 'edit' ? <Inspector /> : <SettingsPanel />}</div>
+          <div class="side-body">{sideTab.value === 'edit' ? <Inspector /> : sideTab.value === 'appearance' ? <SettingsPanel /> : <NanosyntaxPanel />}</div>
         </aside>
       </main>
 
@@ -667,6 +677,7 @@ export function App() {
       </nav>
 
       {question.value && <OverrideQuestion />}
+      <TreeAssignmentDialogs />
       {modal.value === 'export' && <ExportDialog />}
       {modal.value === 'trees' && <MyTrees />}
       {modal.value === 'help' && <Help />}

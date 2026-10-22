@@ -1,6 +1,6 @@
 import { geomEnd, geomPath, layoutArrows } from './arrows';
 import type { ArrowGeom } from './arrows';
-import { displayLabel, fontFor, layoutTree, NOTE_SCALE, noteSide, semDisplay } from './layout';
+import { displayLabel, fontFor, layoutTree, NOTE_SCALE, noteSide, semDisplay, spelloutDomains, spelloutPosition, spelloutRuns } from './layout';
 import type { Box, Layout, LNode } from './layout';
 import { runsWidth, SC_SCALE, SCRIPT_SCALE } from './measure';
 import type { Measure } from './measure';
@@ -28,8 +28,8 @@ export interface TextPiece {
 }
 
 export type Prim =
-  | { t: 'path'; d: string; stroke?: string; width?: number; dash?: number[]; fill?: string; role: 'edge' | 'triangle' | 'arrow' | 'arrowhead' | 'bracket' | 'deco'; node?: string; arrow?: number; join?: 'round' | 'miter' }
-  | { t: 'text'; pieces: TextPiece[]; color: string; font: FontId; role: 'label' | 'leaf' | 'feature' | 'gloss' | 'sem' | 'note' | 'arrowlabel'; node?: string; opacity?: number };
+  | { t: 'path'; d: string; stroke?: string; width?: number; dash?: number[]; fill?: string; role: 'edge' | 'triangle' | 'arrow' | 'arrowhead' | 'bracket' | 'deco' | 'spellout-domain'; node?: string; arrow?: number; join?: 'round' | 'miter' }
+  | { t: 'text'; pieces: TextPiece[]; color: string; font: FontId; role: 'label' | 'leaf' | 'feature' | 'gloss' | 'sem' | 'note' | 'spellout' | 'arrowlabel'; node?: string; opacity?: number };
 
 export interface NodeHit {
   key: string;
@@ -184,6 +184,15 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   const m = metricsFor(style);
   const arrowFs = metricsFor(style).fs * 0.8;
   const { geoms, box } = layoutArrows(layout, tree.arrows, (runs) => runsWidth(runs, { font: style.font, size: arrowFs, italic: true }, measure));
+  const domains = spelloutDomains(layout);
+  const domainByNode = new Map(domains.map((d) => [d.node, d.box]));
+  for (const domain of domains) {
+    box.x1 = Math.min(box.x1, domain.box.x1); box.x2 = Math.max(box.x2, domain.box.x2);
+    box.y1 = Math.min(box.y1, domain.box.y1); box.y2 = Math.max(box.y2, domain.box.y2);
+    const ln = layout.nodes.get(domain.node)!;
+    const expression = spelloutPosition(ln, style, measure, domain.box);
+    box.x1 = Math.min(box.x1, expression.x); box.x2 = Math.max(box.x2, expression.x + expression.width);
+  }
   const pad = style.padding;
   // a sheet larger than the tree: the tree in its middle
   const natW = box.x2 - box.x1 + 2 * pad;
@@ -222,6 +231,14 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     return r;
   };
 
+  // Domain outlines are cubic paths, shared by the canvas and every exact exporter.
+  for (const { node, box: b } of domains) {
+    const cx = X((b.x1 + b.x2) / 2), cy = Y((b.y1 + b.y2) / 2);
+    const rx = (b.x2 - b.x1) / 2, ry = (b.y2 - b.y1) / 2, k = .55228475;
+    const d = `M${f(cx + rx)} ${f(cy)}C${f(cx + rx)} ${f(cy + k * ry)} ${f(cx + k * rx)} ${f(cy + ry)} ${f(cx)} ${f(cy + ry)}C${f(cx - k * rx)} ${f(cy + ry)} ${f(cx - rx)} ${f(cy + k * ry)} ${f(cx - rx)} ${f(cy)}C${f(cx - rx)} ${f(cy - k * ry)} ${f(cx - k * rx)} ${f(cy - ry)} ${f(cx)} ${f(cy - ry)}C${f(cx + k * rx)} ${f(cy - ry)} ${f(cx + rx)} ${f(cy - k * ry)} ${f(cx + rx)} ${f(cy)}Z`;
+    prims.push({ t: 'path', d, stroke: colourOf(node), width: style.lineWidth, role: 'spellout-domain', node: node.key });
+  }
+
   // edges first (labels on top)
   for (const e of layout.edges) {
     const stroke = edgeColour(e.parent.node, e.child.node);
@@ -247,6 +264,17 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     const color = colourOf(n);
     const left = X(ln.x) - b.labelW / 2;
     const base = Y(ln.y) + m.ascent;
+    const spell = spelloutRuns(n, style.leafItalic);
+    if (spell.length) {
+      const size = style.fontSize * NOTE_SCALE;
+      const { x } = spelloutPosition(ln, style, measure, domainByNode.get(n));
+      const drawn = drawRuns(spell, X(x), base, size, false, false, color, 'spellout', n.key);
+      if (n.spellout?.failed) {
+        const arrow = drawn.pieces.find((p) => p.text.includes('⇐') || p.text.includes('⇒') || p.text.includes('⇔'))!;
+        const cx = arrow.x + arrow.width / 2;
+        prims.push({ t: 'path', d: `M${f(cx - size * .18)} ${f(base - size * .04)}L${f(cx + size * .18)} ${f(base - size * .72)}`, stroke: color, width: Math.max(.8, style.lineWidth), role: 'deco', node: n.key });
+      }
+    }
     if (b.labelW > 0) {
       const { overlines } = drawRuns(label, left, base, font.size, !!font.italic, !!font.bold, color, n.kind === 'leaf' ? 'leaf' : 'label', n.key);
       for (const [a, z] of overlines) {

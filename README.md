@@ -47,6 +47,20 @@ NanoTrees is an interactive editor for syntactic trees, for papers, slides and t
 
 ## Bracket notation
 
+**Nanosyntax:** the orange top-bar button enables the mode and its last side-panel
+tab. L-trees use the ordinary canvas editor; assign their scope through a tree's
+context menu. The tab independently selects **Starke 2018 / Caha et al. 2025 movement**,
+**Late / Early AUX Closure**, and **AUX-only / Multiple Merge backtracking**, each
+followed by numbered explanations and source links. Build grouped derivations
+through **Derive** in an S-tree or L-tree context menu. Canvas settings share
+Appearance's confirmation before replacing a tree's own values. Independent workspaces
+are separate grouped sheets until merged. Only the current movement copy is shown;
+lexicalization steps omit lower copies and their arrows. Expressions use `;spell=`;
+phrasal spellout uses ⇒/⇐ and lexical correspondences use ⇔ (`\Leftrightarrow`). The general Examples
+menu contains three real-word canvases with their derivations already built.
+Disabling the mode hides its sheets without deleting them. Ordinary trees can also
+be grouped. See [the nanosyntax guide](docs/nanosyntax.md) for sources and limits.
+
 | Write | Meaning |
 |---|---|
 | `[TP [DP the cat] [VP sleeps]]` | node = `[Label daughters…]`; words become terminals |

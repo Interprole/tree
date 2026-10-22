@@ -97,6 +97,10 @@ function guard(n: DNode | null): n is DNode {
 export function renameNode(n: DNode, text: string) {
   if (!guard(n)) return;
   const s = n.src!;
+  if (n.kind === 'leaf' && s.kind === 'node' && doc.value) {
+    applyEdit(E.setExpression(source.value, doc.value, s, text));
+    return;
+  }
   applyEdit(s.kind === 'leaf' ? E.renameLeaf(s, text.trim() ? text : '∅') : E.renameNode(source.value, s, text));
 }
 
@@ -113,22 +117,10 @@ export function addChild(n: DNode | null = selectedNode()) {
   selectNewNode(applyTidy(e, e.select!.from, 1).select?.from);
 }
 
-/**
- * The expression (words, a morpheme) of a node: [NP student]. Changes its word, adds one, or
- * removes it (empty).
- */
+/** Set the expression of a terminal or a phrase, retaining its syntactic label. */
 export function setExpression(n: DNode | null, text: string) {
-  if (!guard(n) || n.src!.kind !== 'node') return;
-  const s = n.src as ANode;
-  const leaf = s.children.find((c): c is ALeaf => c.kind === 'leaf');
-  const t = text.trim();
-  if (leaf) {
-    applyEdit(t ? E.renameLeaf(leaf, t) : E.deleteElement(source.value, doc.value!, leaf));
-    return;
-  }
-  if (!t) return;
-  const at = s.featureSpan && s.featureSpan.from >= s.headerSpan.to ? s.featureSpan.to : s.headerSpan.to;
-  applyEdit({ changes: [{ from: at, to: at, insert: ' ' + E.escapeText(t) }] });
+  if (!guard(n) || n.src!.kind !== 'node' || !doc.value) return;
+  applyEdit(E.setExpression(source.value, doc.value, n.src as ANode, text));
 }
 
 export function addSister(n: DNode | null = selectedNode()) {
@@ -552,6 +544,11 @@ export function duplicateNode(n: DNode | null = selectedNode()) {
 }
 
 export function deleteNode(n: DNode | null = selectedNode()) {
+  if (n?.kind === 'leaf' && n.src?.kind === 'node' && n.src.opts?.spell !== undefined && doc.value && editable.value) {
+    applyEdit(E.setExpression(source.value, doc.value, n.src, ''));
+    selection.value = null;
+    return;
+  }
   if (!guard(n)) return;
   const d = doc.value!;
   // the parent becomes selected
@@ -792,7 +789,7 @@ export function restructure(n: DNode | null, shape: 'right' | 'left') {
 }
 
 /** Edge colour / width / length, spread of daughters, meaning colour of a node. */
-export function setOption(n: DNode | null, key: 'edge' | 'width' | 'len' | 'spread' | 'sem', value: string | null) {
+export function setOption(n: DNode | null, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'spell' | 'spellside' | 'spellfail', value: string | null) {
   const inst = (key === 'edge' || key === 'width' || key === 'len') && thisCopy(n, false);
   if (inst) return setPos(inst, { [key]: value ?? undefined });
   if (key === 'edge' || key === 'width' || key === 'len') void allCopies(n, key);

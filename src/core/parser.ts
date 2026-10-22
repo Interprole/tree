@@ -16,7 +16,7 @@ class Fail extends Error {
 
 const isWs = (c: string | undefined) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === ' ';
 const ID_RE = /[\p{L}\p{N}_\-.:]/u;
-const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch', 'link', 'to']);
+const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch', 'link', 'to', 'spell', 'spellside', 'spellfail']);
 const LABEL_RE = /^(left|right|above|below)?"((?:[^"\\]|\\.)*)"(?:@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?))?/;
 
 /** side"text"@dx,dy at the start of s */
@@ -185,6 +185,12 @@ class Parser {
     while (j < tokEnd) {
       const c = this.src[j];
       if (c === ';') {
+        const spell = /^;spell="((?:[^"\\]|\\.)*)"/.exec(this.src.slice(j, tokEnd));
+        if (spell) {
+          (node.opts ??= {}).spell = spell[1].replace(/\\(["\\])/g, '$1');
+          j += spell[0].length;
+          continue;
+        }
         const m = /^;([a-z]+)=(#?[^;\s[\]@#]+)/.exec(this.src.slice(j, tokEnd));
         if (!m || !NODE_OPTS.has(m[1])) this.fail(`Node options look like ;edge=red ;width=2 ;len=20 ;spread=10 ;sem=blue`, j, Math.min(tokEnd, j + (m ? m[0].length : 1)));
         if (m![1] === 'color') node.color = m![2];

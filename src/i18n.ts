@@ -96,7 +96,7 @@ const en = {
   typography: 'Typography',
   font: 'Font',
   fontSize: 'Size',
-  leafItalic: 'Italic terminals',
+  leafItalic: 'Italic expressions',
   nodeBold: 'Bold labels',
   copyStyle: 'Lower copies',
   copyGrey: 'Grey',

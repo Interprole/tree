@@ -35,6 +35,8 @@ export interface BuildOptions {
   headArrows: boolean;
   /** show null heads/specifiers (∅) */
   showEmpty: boolean;
+  /** Lexical entries use a bidirectional lexical correspondence arrow. */
+  lexicalTree?: boolean;
   semantics: SemanticsOptions;
 }
 
@@ -135,6 +137,13 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     if (o.spread && Number.isFinite(Number(o.spread))) d.spread = Number(o.spread);
     if (o.sem) d.semColor = o.sem;
     if (o.to) d.headTo = o.to;
+    if (o.spell || o.spellfail === 'yes') {
+      if (a.children.some((child) => child.kind !== 'leaf') || opts.lexicalTree || o.spellfail === 'yes') {
+        d.spellout = { runs: parseRich(o.spell ?? ''), side: o.spellside === 'left' || o.spellside === 'right' ? o.spellside : 'auto', failed: o.spellfail === 'yes', lexical: opts.lexicalTree };
+      } else {
+        d.children.push({ key: key + '.expression', kind: 'leaf', label: parseRich(o.spell), children: [], parents: [], src: a, indices: [] });
+      }
+    }
     if (a.notes) d.notes = a.notes.map((n, index) => ({ runs: parseRich(n.text), side: n.side, off: n.off, index }));
     if (a.color) d.color = a.color;
     if (a.branchColor) {
@@ -162,7 +171,10 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
         const child = mk(c, `${key}.${i}`);
         d.children.push(child);
         if (c.id) setOcc(a, child, { flag: c.pronounce });
-      } else if (c.kind === 'leaf') d.children.push(mkLeaf(c, `${key}.${i}`));
+      } else if (c.kind === 'leaf') {
+        if (o.spell !== undefined && c.text === o.spell) return;
+        d.children.push(mkLeaf(c, `${key}.${i}`));
+      }
       else {
         const child = mk(doc.ids.get(c.id)!, `${key}.${i}`);
         d.children.push(child);
