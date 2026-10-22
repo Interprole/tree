@@ -70,7 +70,7 @@ test('settings panel visibility and width keep the tree at the same screen posit
 test('Nanosyntax is the last side-panel tab', async ({ page }) => {
   await page.goto('./');
   await page.getByTestId('nanosyntax-toggle').click();
-  await expect(page.locator('.side-tabs [role="tab"]')).toHaveText(['Edit', 'Appearance', 'Nanosyntax']);
+  await expect(page.locator('.side-tabs [role="tab"]')).toHaveText(['Edit', 'Customize', 'Nanosyntax']);
 });
 
 test('the top Nanosyntax button opens and closes the panel repeatedly', async ({ page }) => {

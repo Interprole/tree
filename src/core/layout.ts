@@ -88,8 +88,8 @@ export interface Layout {
 
 export function fontFor(n: DNode, style: TreeStyle): FontSpec {
   return n.kind === 'leaf'
-    ? { font: style.font, size: style.fontSize, italic: style.leafItalic }
-    : { font: style.font, size: style.fontSize, bold: style.nodeBold };
+    ? { font: style.font, size: n.fontSize ?? style.fontSize, italic: style.leafItalic }
+    : { font: style.font, size: n.fontSize ?? style.fontSize, bold: style.nodeBold };
 }
 
 export function displayLabel(n: DNode, style: TreeStyle): Runs {
@@ -206,7 +206,7 @@ export function measureBlock(n: DNode, style: TreeStyle, measure: Measure): Bloc
   const label = displayLabel(n, style);
   const empty = plain(label).trim() === '';
   const labelW = empty ? 0 : runsWidth(label, fontFor(n, style), measure);
-  const labelH = empty && n.kind === 'phrase' ? 0 : m.lineH;
+  const labelH = empty && n.kind === 'phrase' ? 0 : m.lineH * ((n.fontSize ?? style.fontSize) / style.fontSize);
   let featureW = 0;
   let featureH = 0;
   if (n.features?.length) {

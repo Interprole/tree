@@ -62,6 +62,7 @@ export interface Scene {
   prims: Prim[];
   hits: NodeHit[];
   arrows: ArrowHit[];
+  edges: { parent: string; child: string; d: string }[];
   labels: LabelHit[];
   layout: Layout;
   /** translation applied to layout coordinates */
@@ -158,6 +159,7 @@ export function scaleStyle(style: TreeStyle, k: number): TreeStyle {
     siblingGap: style.siblingGap * k,
     padding: style.padding * k,
     lineWidth: style.lineWidth * k,
+    arrowWidth: style.arrowWidth * k,
     edgeGap: style.edgeGap * k,
   };
 }
@@ -205,18 +207,21 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   const Y = (y: number) => y + dy;
   const prims: Prim[] = [];
   const hits: NodeHit[] = [];
+  const edgeHits: Scene['edges'] = [];
+  const dashFor = (pattern: string) => pattern === 'dashed' ? [5,3.5] : pattern === 'dotted' ? [1.2,2.8] : undefined;
   const hand = style.handDrawn;
 
   const grayCopy = (n: DNode) => n.copy && style.copyStyle === 'gray';
   const colourOf = (n: DNode) => {
-    if (n.posColor) return n.posColor;
+    if (n.posColor&&n.posColor!=='default') return n.posColor;
     if (grayCopy(n)) return GRAY;
-    return n.color ?? (n.kind === 'leaf' ? style.leafColor : style.nodeColor);
+    return n.color&&n.color!=='default' ? n.color : (n.kind === 'leaf' ? style.leafColor : style.nodeColor);
   };
   /** ;edge= colours the edge above a node; a coloured branch colours the edges inside it, not the one above it */
   const edgeColour = (parent: DNode, child: DNode) => {
+    if(child.edgeColor==='default')return style.lineColor;
     // a coloured position of a chain: the edges inside it, not the one above it
-    if (child.posColor && parent.posColor === child.posColor) return child.posColor;
+    if (child.posColor&&child.posColor!=='default' && parent.posColor === child.posColor) return child.posColor;
     if (grayCopy(child)) return GRAY;
     if (child.edgeColor) return child.edgeColor;
     if (child.branchColor && parent.branchColor === child.branchColor) return child.branchColor;
@@ -243,15 +248,17 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   for (const e of layout.edges) {
     const stroke = edgeColour(e.parent.node, e.child.node);
     const ew = e.child.node.edgeWidth ?? style.lineWidth;
-    const dash = grayCopy(e.child.node) ? [3, 2.5] : undefined;
+    const dash = grayCopy(e.child.node) ? [3, 2.5] : dashFor(e.child.node.edgeLine ?? style.linePattern);
     if (e.kind === 'triangle') {
       const d = `M${f(X(e.x1))} ${f(Y(e.y1))}L${f(X(e.bx2!))} ${f(Y(e.y2))}L${f(X(e.bx1!))} ${f(Y(e.y2))}Z`;
-      prims.push({ t: 'path', d: hand ? linePath(X(e.x1), Y(e.y1), X(e.bx2!), Y(e.y2), true) + linePath(X(e.bx2!), Y(e.y2), X(e.bx1!), Y(e.y2), true) + linePath(X(e.bx1!), Y(e.y2), X(e.x1), Y(e.y1), true) : d, stroke, width: ew, role: 'triangle', node: e.child.node.key, join: 'round' });
+      prims.push({ t: 'path', d: hand ? linePath(X(e.x1), Y(e.y1), X(e.bx2!), Y(e.y2), true) + linePath(X(e.bx2!), Y(e.y2), X(e.bx1!), Y(e.y2), true) + linePath(X(e.bx1!), Y(e.y2), X(e.x1), Y(e.y1), true) : d, stroke, width: ew, dash, role: 'triangle', node: e.child.node.key, join: 'round' });
     } else if (e.pts) {
       prims.push({ t: 'path', d: smoothPath(e.pts.map(([x, y]) => [X(x), Y(y)])), stroke, width: ew, dash, role: 'edge', node: e.child.node.key });
     } else {
       prims.push({ t: 'path', d: linePath(X(e.x1), Y(e.y1), X(e.x2), Y(e.y2), hand), stroke, width: ew, dash, role: 'edge', node: e.child.node.key });
     }
+    const p = prims[prims.length-1];
+    if (p.t === 'path') edgeHits.push({parent:e.parent.node.key,child:e.child.node.key,d:p.d});
   }
 
   for (const ln of layout.list) drawNode(ln);
@@ -263,7 +270,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     const label = displayLabel(n, style);
     const color = colourOf(n);
     const left = X(ln.x) - b.labelW / 2;
-    const base = Y(ln.y) + m.ascent;
+    const base = Y(ln.y) + m.ascent * (font.size / style.fontSize);
     const spell = spelloutRuns(n, style.leafItalic);
     if (spell.length) {
       const size = style.fontSize * NOTE_SCALE;
@@ -310,7 +317,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
       const w = runsPieces(sem.runs, 0, 0, ss, false, false, measure, style.font).width;
       const { pieces } = runsPieces(sem.runs, X(ln.x) - w / 2, y + ss * 1.05, ss, false, false, measure, style.font);
       // the node's own colour (also from a coloured branch) wins over the meaning colours
-      const own = n.semColor ?? (n.color && !grayCopy(n) ? n.color : undefined);
+      const own = n.semColor==='default' ? undefined : n.semColor ?? (n.color&&n.color!=='default'&&!grayCopy(n)?n.color:n.branchColor);
       prims.push({ t: 'text', pieces, color: sem.kind === 'error' ? SEM_ERROR : own ?? (sem.kind === 'computed' ? style.semComputedColor : style.semColor), font: style.font, role: 'sem', node: n.key });
       y += b.semH;
     }
@@ -351,7 +358,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
           nx += note.off[0];
           ny += note.off[1];
         }
-        drawRuns(note.runs, nx, ny, ns, false, false, n.color ?? style.nodeColor, 'note', n.key, 0.92);
+        drawRuns(note.runs, nx, ny, ns, false, false, colourOf(n), 'note', n.key, 0.92);
         labelHits.push({ kind: 'note', owner: n.key, index: note.index, box: { x1: nx - 2, y1: ny - ns, x2: nx + w + 2, y2: ny + ns * 0.3 } });
       }
     }
@@ -372,8 +379,8 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     const hl = m.fs * 0.45;
     const map = (q: [number, number]): [number, number] => [X(q[0]), Y(q[1])];
     const d = geomPath(g, map);
-    const width = Math.max(0.8, style.lineWidth * 1.05);
-    const dash = a.line === 'dashed' ? [5, 3.5] : a.line === 'dotted' ? [1.2, 2.8] : undefined;
+    const width = a.width ?? style.arrowWidth;
+    const dash = dashFor(a.lineOwn || a.line !== 'solid' ? a.line : style.arrowPattern);
     prims.push({ t: 'path', d, stroke: color, width, dash, role: 'arrow', arrow: i });
     const head = ([tip, from]: [[number, number], [number, number]]) => {
       let vx = tip[0] - from[0];
@@ -408,6 +415,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     prims,
     hits,
     arrows: arrowHits,
+    edges: edgeHits,
     labels: labelHits,
     layout,
     dx,

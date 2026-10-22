@@ -1,5 +1,6 @@
 import type { AArrow, ALeaf, ANode, ArrowHead, ArrowLine, ArrowRoute, LabelSide } from './ast';
 import type { Runs } from './richtext';
+import type { Outline } from './outlines';
 
 /**
  * Display tree: what is actually laid out and drawn. Produced from the AST by
@@ -48,6 +49,9 @@ export interface DNode {
   /** per-node styling from ;edge= ;width= ;len= ;spread= ;sem= */
   edgeColor?: string;
   edgeWidth?: number;
+  edgeLine?: 'solid' | 'dashed' | 'dotted';
+  fontSize?: number;
+  outlines?: Outline[];
   edgeLen?: number;
   spread?: number;
   semColor?: string;
@@ -86,6 +90,8 @@ export interface DLabel {
 }
 
 export interface DArrow {
+  width?: number;
+  lineOwn?: boolean;
   from: DNode;
   to: DNode;
   head: ArrowHead;

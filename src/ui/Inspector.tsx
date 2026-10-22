@@ -141,7 +141,7 @@ export function NumField({ label, value, onCommit, placeholder, step = 1, min }:
       if (final) onCommit(null);
       return;
     }
-    if (Number.isFinite(Number(v))) onCommit(String(Number(v)));
+    if (Number.isFinite(Number(v))) onCommit(String(Math.max(min??-Infinity,Number(v))));
   };
   useEffect(() => {
     const el = ref.current!;
@@ -257,7 +257,6 @@ function Tool({ title, icon, text, onClick, disabled, active, danger }: { title:
 /* ------------------------------------------------------------ node */
 
 function NodePanel({ n }: { n: DNode }) {
-  const target = useSignal<'label' | 'edge' | 'branch' | 'meaning'>('label');
   const disabled = !n.src || !editable.value;
   const srcNode = n.src?.kind === 'node' ? n.src : n.parents[0]?.src?.kind === 'node' ? n.parents[0].src : null;
   const inChain = !!(n.chainRef || n.id);
@@ -269,8 +268,6 @@ function NodePanel({ n }: { n: DNode }) {
   const inst = A.instanceOf(n);
   const scopeThis = !!inst && A.copyScope.value === 'this';
   const own = scopeThis ? A.posStyle(A.positionAt(n))?.mods : undefined;
-  const instRef = inst ? A.chainRef(inst) : null;
-  const instMods = inst ? A.posStyle(inst.chainRef!)?.mods : undefined;
   /** this copy: what it has of its own, else what all share */
   const pick = <T,>(mine: T | undefined, shared: T): T => (scopeThis && A.positionAt(n) && mine !== undefined ? mine : shared);
   const focus = useSignal(0);
@@ -282,13 +279,7 @@ function NodePanel({ n }: { n: DNode }) {
       focus.value = f.id;
     }
   });
-  const labelValue = n.src ? (n.src.kind === 'leaf' ? n.src.text : n.src.label.replace(/~/g, ' ')) : plain(n.label);
-  const applyColor = (c: string | null) => {
-    if (target.value === 'label') A.setColor(n, c, false);
-    else if (target.value === 'branch') A.setColor(n, c, true);
-    else A.setOption(n, target.value === 'edge' ? 'edge' : 'sem', c);
-  };
-  const currentColor = scopeThis && (target.value === 'label' || target.value === 'branch') ? instMods?.color ?? instRef?.color : target.value === 'label' ? n.color : target.value === 'branch' ? n.branchColor : target.value === 'edge' ? n.edgeColor : n.semColor;
+  const labelValue = n.kind==='leaf'&&n.src?.kind==='node' ? n.src.opts?.spell??plain(n.label) : n.src ? (n.src.kind === 'leaf' ? n.src.text : n.src.label.replace(/~/g, ' ')) : plain(n.label);
   const kind = n.kind === 'leaf' ? 'Expression' : n.trace ? 'Trace' : n.copy ? 'Silent copy' : 'Node';
   return (
     <div class="insp-panel">
@@ -338,8 +329,10 @@ function NodePanel({ n }: { n: DNode }) {
         </div>
       )}
       <ToolRow>
-        <Tool title={t('addChild')} icon={<IChild />} text="Daughter" disabled={disabled} onClick={() => A.addChild(n)} />
-        <Tool title={t('addSister')} icon={<ISister />} text="Sister" disabled={disabled || !n.parents.length} onClick={() => A.addSister(n)} />
+        <Tool title={t('addChild')} icon={<IChild />} text="New daughter" disabled={disabled} onClick={() => A.addChild(n)} />
+        <Tool title={t('addSister')} icon={<ISister />} text="New sister" disabled={disabled || !n.parents.length} onClick={() => A.addSister(n)} />
+        <Tool title="Remerge a constituent as daughter" icon={<ICopyNode />} text="Remerged daughter" disabled={disabled} onClick={()=>A.startPick('daughter',n)}/>
+        <Tool title="Remerge a constituent as sister" icon={<ICopyNode />} text="Remerged sister" disabled={disabled||!n.parents.length} onClick={()=>A.startPick('sister',n)}/>
         <Tool title="Add a mother above (P)" icon={<IMother />} text="Mother" disabled={disabled} onClick={() => A.addMother(n)} />
         <Tool
           title={scopeThis ? 'Triangle over this copy only (the other copies stay as they are)' : t('triangle')}
@@ -367,14 +360,6 @@ function NodePanel({ n }: { n: DNode }) {
       )}
 
       <Group title="Movement">
-        <div class="row wrap">
-          <button class="btn small" disabled={disabled} onClick={() => A.startPick('daughter', n)} title="Then click a constituent: it becomes one more position of the same element (#id)">
-            <ICopyNode size={15} /> Re-merge as daughter…
-          </button>
-          <button class="btn small" disabled={disabled || !n.parents.length} onClick={() => A.startPick('sister', n)}>
-            as sister…
-          </button>
-        </div>
         {inChain && (
           <button class="btn small" onClick={() => A.togglePronounce(n)}>
             {overt ? 'Silence this position' : 'Pronounce this position'}
@@ -406,26 +391,6 @@ function NodePanel({ n }: { n: DNode }) {
         <LabelList
           key={'n' + n.key + scopeThis + (srcNode?.notes?.length ?? 0) + (own?.notes?.length ?? 0)}
           initial={(scopeThis && A.positionAt(n) ? own?.notes ?? [] : srcNode?.notes ?? []).map((x) => ({ text: x.text, side: x.side, off: x.off }))} placeholder="e.g. focus, [+wh], ✓" onApply={(l) => A.setNotes(n, l)} />
-      </Group>
-
-      <Group title="Colour">
-        <div class="seg small">
-          {(['label', 'edge', 'branch', 'meaning'] as const).map((k) => (
-            <button key={k} class={target.value === k ? 'on' : ''} onClick={() => (target.value = k)} title={{ label: 'The label', edge: 'The edge above the node', branch: 'Everything below (labels and edges)', meaning: 'The meaning formula' }[k]}>
-              {{ label: 'Label', edge: 'Edge', branch: 'Branch', meaning: 'Meaning' }[k]}
-            </button>
-          ))}
-        </div>
-        <ColorPicker value={currentColor} onPick={applyColor} />
-        {scopeThis && (target.value === 'label' || target.value === 'branch') && <p class="hint">This copy only, as a whole (with what it contains); the other copies keep their colours.</p>}
-      </Group>
-
-      <Group title="Spacing" hint="Width and length apply to the edge above this node; spread widens the gaps between its daughters (px).">
-        <div class="num-row">
-          <NumField label="Edge width" value={n.edgeWidth} placeholder="1" step={0.5} min={0} onCommit={(v) => A.setOption(n, 'width', v)} />
-          <NumField label="Extra length" value={n.edgeLen} placeholder="0" onCommit={(v) => A.setOption(n, 'len', v)} />
-          <NumField label="Spread daughters" value={n.spread} placeholder="0" onCommit={(v) => A.setOption(n, 'spread', v)} />
-        </div>
       </Group>
 
       <Group title="Copy and paste" hint="A pasted copy is a constituent of its own (its #ids are renamed), not one more position of the original">
@@ -538,22 +503,7 @@ function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
           )}
         </Group>
       )}
-      <Group title="Line">
-        <div class="seg small">
-          <button class={a.line === 'solid' ? 'on' : ''} onClick={() => up({ line: 'solid' })}>{t('arrowSolid')}</button>
-          <button class={a.line === 'dashed' ? 'on' : ''} onClick={() => up({ line: 'dashed' })}>{t('arrowDashed')}</button>
-          <button class={a.line === 'dotted' ? 'on' : ''} onClick={() => up({ line: 'dotted' })}>{t('arrowDotted')}</button>
-        </div>
-        <div class="row tight">
-          <div class="seg small">
-            <button class={a.head === 'end' ? 'on' : ''} onClick={() => up({ head: 'end' })} title="Head at the target">→</button>
-            <button class={a.head === 'start' ? 'on' : ''} onClick={() => up({ head: 'start' })} title="Head at the source">←</button>
-            <button class={a.head === 'both' ? 'on' : ''} onClick={() => up({ head: 'both' })} title="Both ends">↔</button>
-            <button class={a.head === 'none' ? 'on' : ''} onClick={() => up({ head: 'none' })} title="No head">—</button>
-          </div>
-          <button class="btn small" title="Swap source and target" onClick={() => A.reverseArrow(a)}>⇄ Reverse</button>
-        </div>
-      </Group>
+      <button class="btn small" title="Swap source and target" onClick={() => A.reverseArrow(a)}>⇄ Reverse</button>
       <Group title="Shape">
         <p class="hint">
           {nVia ? `${nVia} bend point${nVia > 1 ? 's' : ''}: drag a round handle to move it, double-click it to remove it.` : 'Drag the round handle to bend the arrow. Double-click the arrow to add bend points.'}
@@ -563,9 +513,6 @@ function ArrowPanel({ a, index }: { a: DArrow; index: number }) {
             ⟲ Automatic shape
           </button>
         </div>
-      </Group>
-      <Group title="Colour">
-        <ColorPicker value={a.color} onPick={(c) => up({ color: c ?? undefined })} />
       </Group>
       <Group title="Labels">
         <LabelList key={index + ':' + initial.length} initial={initial} placeholder={t('arrowLabel')} onApply={(l) => up({ labels: l.filter((x) => x.text.trim()).map((x) => ({ ...x, span: { from: 0, to: 0 } })) })} />

@@ -1,157 +1,127 @@
-# NanoTrees — syntax trees for linguists
+# NanoTrees
 
-**[→ Open NanoTrees](https://interprole.github.io/tree/)** · by Gleb Bubnov
+**[Open NanoTrees](https://interprole.github.io/tree/)** · by Gleb Bubnov
 
-NanoTrees is an interactive editor for syntactic trees, for papers, slides and teaching. Write a tree in bracket notation and it redraws as you type. You can also edit on the picture: every change on the canvas is written back into the text. Export to SVG, PNG, PDF or LaTeX (`forest`, `tikz-qtree`, TikZ).
+An interactive syntax-tree editor for linguists. Type bracket notation or edit the picture; canvas edits update the same code and undo history. Everything, including nanosyntactic derivation search, runs in the browser. Static hosting on GitHub Pages is sufficient; no application server or paid API is required.
 
-![NanoTrees: meanings computed with Functional Application, Predicate Conjunction and Event Identification](docs/screenshot.png)
+**[Complete editor guide and syntax reference](docs/guide.md)** · **[Nanosyntax: sources, algorithms and limits](docs/nanosyntax.md)**
 
-## Features
+The in-app **Guide** renders `docs/guide.md`, keeping the instructions and repository reference together.
 
-- **Bracket notation with live rendering.** Readable errors highlight their position, and the last valid tree stays on screen. Any Unicode works.
-- **Typography close to a typeset paper.** Computer Modern, Libertinus (Linux Libertine), EB Garamond, Times New Roman (Tinos where it is missing), Charis SIL, Noto, Roboto, a handwriting font, or any font installed on your computer (not in Safari). Real sub/superscripts, primes, small-caps glosses, feature stacks.
-- **Labelling modes:**
-  - *Manual*: as written.
-  - *X-bar*: shorthand gets X′ levels filled in.
-- **Movement chains.** A chain is one constituent in several positions (`[DP#wh what] … #wh`). It can be drawn three ways:
-  - **copies**: unpronounced copies regular, gray, struck through or ⟨in angle brackets⟩;
-  - **traces**: `t`;
-  - **multidominance**: one node, several mothers.
+![NanoTrees](docs/screenshot.png)
 
-  Several copies can be pronounced (`#wh!`), a copy can be pronounced with different words, with a gloss if you like (`#wh"whom"`, `#subj"zij | she"` for pronoun copying as in Wambeek Dutch), and a lower position can get its own meaning (`#wh$x : e$`, triggering Predicate Abstraction). Arrows for phrasal movement are drawn automatically and each can be edited; deleting one (keeping the movement) hides it. Movement indices are separate from the indices you type for binding.
-- **Head movement.** Written on the moved head (`[V#root;to=v sing]`). The source is struck out and the target becomes a complex head written as text: the labels (V+v, V+v+T, T+C) and the words (sing+-s) are joined with +. No extra edges are drawn. The arrow is drawn by itself and can be hidden (one by one, or all head-movement arrows) while the movement stays.
-- **Arrows.** An arrow drawn on the canvas is just an arrow; *Movement* in its panel turns it into a chain (two constituents of one category) or head movement (two heads). Every arrow is one smooth curve, as TikZ draws `to[out=…, in=…]`: it leaves and enters towards the centres of its nodes, never through the daughters of a node, and picks the sides that touch no label and cross nothing; bend points are added only when one curve cannot get through. Where it leaves and enters can be set by hand, and any number of bend points can be added.
-- **Compositional semantics.** Write meanings as `$λx. cat(x) : <e,t>$` (or `lambda x.`, `iota x.`, `exists`, `forall`; numbers and comparisons work; types can be any names). The meanings of the other nodes are computed bottom-up with Functional Application, Predicate Conjunction, Event Identification and Function Composition. Type errors are shown at the node; the rule used can be shown or hidden, and meaning colours are configurable.
-- **Several trees on one canvas.** Each tree has its own code, settings and place on the canvas (drag it by its name) and is exported on its own. Appearance settings apply to the tree you clicked or to all trees (click the empty canvas); where some trees, nodes or copies have values of their own, you are asked whether to replace them (or set it once: always replace / always keep). The sheet of a tree can be resized (drag its corner): the tree grows or shrinks with it, and exports have the same size. A tree can be copied as an independent copy or as a linked copy (its settings stay its own, e.g. copies in one and traces in the other). New trees start empty; *Clear canvas* is on the canvas toolbar.
-- **Canvas editing** in an edit panel beside the canvas, so nothing covers the tree:
-  - rename (the tree follows as you type), add daughters, sisters or a mother; copy, cut and paste a subtree as a copy of its own (Ctrl+C / X / V, Ctrl+D), also as a new tree or into an empty one; drag a branch by its root to move it, also into another tree (a branch that leaves its tree takes its copies with it written out in full, and what stays behind still makes sense); right-click menus for nodes, trees and the canvas; Shift + drag selects a branch;
-  - linked branches (`;link=…`): copies of a branch, in one tree or in several, that change together inside while everything around them stays free (shown with a dashed frame); the code is laid out with line breaks and indentation as you go (also *Format*, Shift+Alt+F);
-  - add an existing constituent again by clicking it (a new chain position);
-  - triangles that keep the structure in the code;
-  - features, meanings, notes next to a node (several, positioned automatically or by side, draggable);
-  - colours of the label, the edge above, the whole branch (edges, labels and meanings) or the meaning, from the palette or any colour; edge width and length, spread of the daughters (changed at once with ▲▼, the arrow keys or the wheel);
-  - arrows: line, head direction, reverse, colour, where it leaves and enters (below, above, left, right or the best way), several labels at chosen sides (draggable), bend points (double-click an arrow; drag the round handles); *Just an arrow* or *Movement*; deleting a movement arrow keeps the movement or undoes it;
-  - a head with only a word: arrows use the word by default, or the node (`from=node`, `to=node`);
-  - Markdown (`**bold**`, `*italic*`, `~~struck~~`) in labels, words, notes and arrow labels;
-  - changing the branching of a node with two daughters (left ↔ right swaps them: `[XP X [Z]]` ↔ `[XP [Z] X]`);
-  - click a note or an arrow label to rename or delete it, drag it to move it;
-  - c-command and dominance highlighting (keys C and D);
-  - undo and redo.
-- **Export and sharing:**
-  - SVG and PDF with embedded fonts, PNG up to 576 dpi;
-  - LaTeX code, tested by compiling it with `pdflatex`, `xelatex` and `lualatex`;
-  - save the canvas to disk (a `.nanotrees` file with all its trees; in Chrome and Edge Ctrl+S writes into the same file again, optionally on every change) and open it again;
-  - share links, autosave in the browser, a list of saved trees.
-- **Offline:** `npm run build:offline` makes `dist-offline/nanotrees.html`, the whole app in one file: open it by double-click, no internet needed.
-- **Interface:** resizable panes (drag the borders), the code panel folds away; an edit panel and an appearance panel on the right; every setting can be reset on its own; light and dark themes; mobile layout; a built-in guide (button *Guide*).
+## Editing workflow
 
-## Bracket notation
+1. Choose an example or write `[TP [DP the cat] [VP sleeps]]`. Examples replace the whole canvas; save your work first.
+2. Click a node or a white sheet to show its code. A caption/background selection hides the code. Invalid text highlights its error and retains the last valid picture.
+3. **Edit** changes content and structure: New daughter/sister, Remerged daughter/sister, Mother, Triangle, Arrow, Delete, Branching, movement pronunciation, features, meanings, notes and clipboard operations.
+4. **Customize** changes presentation at element, copy, tree or canvas scope. The far-right sliders button toggles the right panel. Panels open/close/resize without shifting the canvas; Fit explicitly recenters.
+5. Save the entire canvas to `.nanotrees`, keep a named browser snapshot, share a link, or export the selected tree.
 
-**Nanosyntax:** the orange top-bar button enables the mode and its last side-panel
-tab. L-trees use the ordinary canvas editor; assign their scope through a tree's
-context menu. The tab independently selects **Starke 2018 / Caha et al. 2025 movement**,
-**Late / Early AUX Closure**, and **AUX-only / Multiple Merge backtracking**, each
-followed by numbered explanations and source links. Build grouped derivations
-through **Derive** in an S-tree or L-tree context menu. Canvas settings share
-Appearance's confirmation before replacing a tree's own values. Independent workspaces
-are separate grouped sheets until merged. Only the current movement copy is shown;
-lexicalization steps omit lower copies and their arrows. Expressions use `;spell=`;
-phrasal spellout uses ⇒/⇐ and lexical correspondences use ⇔ (`\Leftrightarrow`). The general Examples
-menu contains three real-word canvases with their derivations already built.
-Disabling the mode hides its sheets without deleting them. Ordinary trees can also
-be grouped. See [the nanosyntax guide](docs/nanosyntax.md) for sources and limits.
+Manual mode draws the written hierarchy. X-bar mode can generate intermediate levels, head labels and specifiers. Movement chains support copies, traces and multidominance. Text supports Unicode, primes, subscripts/superscripts, inline bold/italic/strike, glosses, notes and feature stacks. Bundled and installed fonts are available; export embeds font data when available.
 
-| Write | Meaning |
-|---|---|
-| `[TP [DP the cat] [VP sleeps]]` | node = `[Label daughters…]`; words become terminals |
-| `[ [D the] [N cat]]` | empty label |
-| `**bold** *italic* ~~struck~~` | Markdown (escape with `\*`, `\~`) |
-| `T'` `DP_i` `X^0` `\phi` `\0` | prime, subscript, superscript, φ, ∅ |
-| `\Rightarrow` `\Leftrightarrow` `\varnothing` … | any standard LaTeX symbol command (exported back as the same command) |
-| `[V liest \| read.PRS.3SG]` | gloss line under the terminal (ALL-CAPS → small caps) |
-| `[T{uφ, iT, EPP} will]` | feature stack |
-| `[DP ^the big cat]` / `[DP ^ [D the] [N cat]]` | triangle (over words / over a structure, which stays in the code) |
-| `[DP@red …]`, `[DP@@#06c …]` | colour a node / its whole branch |
-| `[DP;edge=red;width=2;len=20 …]` | colour / width / extra length of the edge above |
-| `[VP;spread=30;sem=blue …]` | wider gaps between daughters; meaning colour |
-| `[DP &"focus" &right"✓"@4,-2 …]` | notes next to the node (side, drag offset) |
-| `[DP#wh what] … #wh` | a chain: the same constituent in two positions |
-| `[DP;link=a …]` | a linked branch: every copy with the same `link` changes together inside |
-| `#wh!`, `[DP#wh? what]` | pronounce / silence a position |
-| `#wh"whom"`, `#wh"zij \| she"`, `#wh$x : e$` | a position with its own words (and gloss) / meaning |
-| `$λx_e.λe_s. agent(e)(x)$` | a meaning (optionally `: <type>`) |
-| `#a -> #b plain dashed "label" above"x"@5,0 @red` | an arrow (after the tree) with labels; `plain` = just an arrow (without it, an arrow between two heads is read as head movement, as in older files) |
-| `#wh/2 -> #wh/1 hide` | restyle or hide one automatic chain arrow |
-| `#wh/2: ^ @gray {uφ} &"x" $x : e$` | one copy on its own: triangle, colour, features, note, meaning (also edge=, width=, len=, "words") — written on the constituent it goes to every copy |
-| `#a -> #b out=below in=left` | where the arrow leaves and enters (default: one smooth curve that touches nothing, as TikZ draws `to[out=…, in=…]`) |
-| `[V#v;to=t sing]` | head movement of V to the head #t (V is struck through, T shows V+T); the arrow is drawn by itself |
-| `#v -> #t hide` / `visible` | the arrow of a movement hidden / shown against the switch for that kind of arrows |
-| `#wh/2: open` · `#wh/2: @none` | this copy without the triangle / colour that all copies have |
-| `#a -> #b via=0,40;-20,60` | bend points (px from the middle of the two ends) |
-| `#a -> #b from=node to=node` | ends at the node instead of its word |
-| `% comment` | comment to the end of the line |
+## Drag, copy and group
 
-Example: head movement, together with a subject chain.
+Drag a branch by its top node. Visible orange positions determine the relation and order: left/right of a node means preceding/following sister; below it are **n+1 daughter gaps** for n daughters. No modifier is needed to choose daughter versus sister.
 
-```
-[TP [DP#subj she]
-    [T' [T#t -s]
-        [vP #subj
-            [v' [v#v;to=t ∅]
-                [VP [V#root;to=v sing] [DP songs]]]]]]
-```
+- **Shift-drag a node:** independent copy.
+- **Alt-drag a node:** linked copy; internal changes synchronize through `;link=group`.
+- **Shift-drag empty space:** select a branch by rectangle.
+- **Ctrl/Cmd+C / X / V:** copy/cut/paste; Shift+V pastes as sister, V without a node creates a tree. Ctrl/Cmd+D duplicates.
 
-![Head movement, dark theme](docs/screenshot-dark.png)
+Moving/copying works between trees and into an empty sheet. Root sisters and self-containing branches are rejected. Remerged daughter/sister creates another position of the same movement chain, which differs from an independent or linked clipboard copy.
+
+Drag a tree's caption to move it. Right-click → Add to a group lets you choose a group/tree or pick one on the canvas. A group header moves its members. Add a node appears only for an empty tree. C and D are no longer tool shortcuts. Selected panel text retains ordinary copy behavior.
+
+## Customize
+
+For a selected node, line or arrow, the scope row offers This element, All copies when applicable, All elements in this tree, and All trees. A blank tree/canvas selection offers This tree / All trees. Local scope displays the relevant element's controls; general scope displays settings in blocks.
+
+General changes use **Values of their own → Ask / Replace them / Keep them** when trees/elements/copies have private values. Replace clears the corresponding private override; Keep leaves it independent. The same policy governs nanosyntax rules. Other properties are preserved; an explicit `default` colour marker can retain inheritance for one property while leaving other branch colours intact.
+
+Click a **tree line itself** to change its colour, width, pattern or extra length. These controls are separate from the node editor. Select an arrow to edit its colour, width, pattern and arrowheads in Customize; its movement meaning, endpoints, labels and geometry remain in Edit. Node controls include label size/colour, branch colour, spacing and meaning colour.
+
+Customize also contains typography, layout, labelling, movement, semantics and export-sheet dimensions. **Circle phrasal spellout domains** is immediately after Movement and before Semantics. **Italic expressions** italicizes expressions, not syntactic terminal labels.
+
+## Expressions and movement syntax
+
+| Code | Behavior |
+| --- | --- |
+| `[N cat]`, `[N;spell=cat]`, `[N;spell="cat"]` | Equivalent simple terminal expression cat beneath N. |
+| `[NumP;spell="fin" [Num]]` | Phrasal expression; Num remains a syntactic head. |
+| `;spellside=left` / `right` | Force the phrasal exponent's side; default chooses free space. |
+| `;spellfail=yes` | Failed phrasal expression, empty ∅ if unspecified, crossed spellout arrow. |
+| `[DP#wh what] … #wh` | One constituent in several chain positions. |
+| `#wh!`, `[DP#wh? what]` | Pronounce / silence a position. |
+| `#wh"whom"`, `#wh$x : e$` | Position-specific pronunciation / meaning. |
+| `#wh/2: ^ @gray edge=blue width=2` | Private style for position 2, on a line after the tree. |
+| `[V#v;to=t sing]` | Head movement to #t. |
+| `#v -> #t` | Equivalent head movement for appropriate head endpoints; `plain` instead makes a graphical arrow. |
+| `#a -> #b plain dashed width=2 "label" @red` | Graphical arrow with explicit styling. |
+| `#a -> #b out=below in=left from=node to=node` | Endpoint sides and head label anchors. |
+| `#a -> #b via=0,40;-20,60` | Bend points relative to the midpoint of the endpoints. |
+| `#wh/2 -> #wh/1 hide` / `visible` | Hide/show one movement arrow against the general switch. |
+| `;edge=red;width=2;edgeline=dashed;len=20` | Incoming syntactic line colour, width, pattern and extra length. |
+| `;wordedge=red;wordwidth=2;wordline=dotted` | Independent line to an expression. |
+| `@red`, `@@blue`, `;size=24`, `;wordsize=20;wordcolor=blue` | Label/branch colour and label/expression typography. |
+
+Phrasal spellout displays **tree ⇒ expression** on the right or **expression ⇐ tree** on the left. L-trees display **⇔**, exactly `\Leftrightarrow`. `[Num fin]` is a head with a word; `[NumP;spell="fin" [Num]]` is a phrasal lexical entry. The full guide covers glosses, features, notes, escaping, markup, arrow variants, pronunciation, semantics and all position options.
+
+## Nanosyntactic derivations
+
+1. Enable the top **Nanosyntax** button; it turns orange and the last panel tab appears.
+2. Build an S-tree with feature nodes, then visually build ordinary trees for lexical entries. Right-click an entry → **Use as an L-tree…** → Whole canvas, a named S-tree, or Pick an S-tree on the canvas.
+3. **New L-tree to this tree** adds an adjacent entry from an S-tree or lexical-group context menu. All L-trees remain visible editable trees using the same code, e.g. `[NumP;spell="fin" [Num]]`. Their menus can reassign scope or stop using them as lexical trees.
+4. Select rules in the Nanosyntax tab at tree/canvas scope. Each choice has its own numbered explanation and source links.
+5. Right-click an S-tree with entries or an L-tree → **Derive**. A global entry offers eligible owners by name. The action belongs to the context menu, not the settings tab.
+
+The three independent choices are:
+
+| Choice | Alternatives |
+| --- | --- |
+| Spellout-driven movement | Starke 2018: spec-to-spec then complement; Caha et al. 2025: closest labelled non-remnant evacuation, then successively larger containing constituents. |
+| AUX closure | Late: keep growing AUX while spellout succeeds; Early: close it as soon as it lexicalizes. |
+| Backtracking | Merge F in reopened AUX only, or in every reopened workspace independently (**Multiple Merge**). |
+
+Each Merge is followed by spellout. When direct matching fails, try the selected evacuation procedure, backtracking, then a new AUX as last resort. The Superset Principle matches the whole syntactic constituent to a constituent contained in an L-tree; the fewest unused lexical features wins, with declaration order resolving ties. Multiple Merge recursively applies the same procedure to each reopened workspace; at least one must lexicalize F.
+
+Independent workspaces appear as separate trees grouped per step until they combine; AUX merges as a left branch. The derivation is a group of snapshots. A lower copy and its arrow appear only on the operation moving that constituent; later lexicalization has no lower node or placeholder. The actual final successful step becomes Fully lexicalised, without an extra duplicate. Unmatched domains get ∅ and a crossed spellout arrow; the search continues where possible.
+
+The general Examples menu includes **English of sugar** (Starke 2018), **Mara wili-gamiñ → wilamiñ** (Kloudová 2020), and **Friulian fin-iʃ** (published 2025 chapter), with visible lexical entries and derivations already built. Examples use abbreviated lower lexical domains; phonological Mara contraction is not a syntactic operation.
+
+Turning Nanosyntax off hides L-trees, derivations and the tab without deleting them. Files/share links preserve all roles, scopes and groups. Rule changes require deriving again to create new snapshots. Search limits: 180 input nodes, 1,800 attempts, 700 trace steps; exhaustion is reported as incomplete. Pointers and language-specific licensing are not inferred.
+
+Sources: [Starke 2018](https://doi.org/10.1093/oso/9780190876746.003.0009), [Caha 2019, chapters 6–7](https://ling.auf.net/lingbuzz/004875), [published 2025 chapter 1](https://doi.org/10.1093/9780198947158.003.0001). **Chapter 7 of the 2025 volume also discusses Multiple Merge**, Early and Late Closure: [Demonie 2025](https://doi.org/10.1093/9780198947158.003.0007). The 2025 evacuation revision does not prescribe a universal closure policy. Caha's Multiple Merge uses Early Closure; Multiple Merge with Late Closure is an available explicit combination in the app. See [the detailed source guide](docs/nanosyntax.md).
 
 ## Semantics
 
-Types can be anything: `e`, `t`, `s` (events), `d`, `n`, any other name, and `<a,b>`. A variable without a type is `e` (x, y, z), `s` (e, e′) or `<e,t>` (P, Q); write `λx_e.` to be explicit. For a node with two daughters, the first rule that applies is used:
+Write `$λx. cat(x) : <e,t>$` on a node. Typed lambda calculus supports named types and function types, quantifiers, logic, arithmetic and comparisons. Missing meanings compute bottom-up, trying Functional Application, Predicate Conjunction, Event Identification and Function Composition. Variable meanings on lower chain positions enable Predicate Abstraction. Type failures are displayed at the node. Customize controls computation, types, rule labels and colours; Edit can retain a computed meaning in the source. See [the complete reference](docs/guide.md).
 
-| Rule | Applies to | Result |
-|---|---|---|
-| FA | ⟨a,b⟩ and a | ⟦β⟧(⟦γ⟧) |
-| PC | two predicates of the same type | λa₁…aₙ. β(a…) ∧ γ(a…) |
-| EI | ⟨e,⟨s,t⟩⟩ and ⟨s,t⟩ | λx.λe. β(x)(e) ∧ γ(e) |
-| FC | ⟨b,c⟩ and ⟨a,b⟩ | λx. β(γ(x)) |
+## Files and export
 
-A daughter without any meaning below it counts as vacuous. If a moved phrase is sister to a node containing its own lower position with a variable meaning (`#q$x : e$`), that node is first abstracted over the variable (Predicate Abstraction, shown as PA+FA). If no rule applies, the node shows the failing types.
+A `.nanotrees` file, My trees snapshot or share link preserves the entire canvas. Browser autosave is local to that browser. Ctrl/Cmd+S writes a connected file again where supported; Open or file drop restores a canvas.
 
-## LaTeX
+Export the selected tree as SVG, PNG, PDF, editable forest/tikz-qtree, or exact-layout TikZ. SVG/PNG/PDF/exact TikZ share scene geometry; editable LaTeX reflows according to its packages. Forest hosts multidominated nodes under one mother and adds extra edges; tikz-qtree repeats shared nodes. Bundled fonts work offline; installed-font embedding depends on browser permissions. Times New Roman export uses its metric-compatible twin Tinos.
 
-The `forest` export is plain bracket code. Arrows and extra multidominance branches are TikZ `\draw` commands after the tree. Meanings and features are added as extra lines in the node. The test suite compiles every example in every format with `pdflatex`, and checks `xelatex` and `lualatex` as well.
-
-Limitation: in `forest`, a multidominated node is written under one of its mothers; the other branches are drawn as straight lines. Use the *TikZ (exact layout)* export to reproduce the app's placement.
+`npm run build:offline` produces `dist-offline/nanotrees.html`: the application and bundled fonts in a single locally openable file.
 
 ## Development
 
 ```sh
 npm install
 npm run dev          # http://localhost:5173/tree/
-npm test             # unit tests (Vitest); LaTeX compilation runs when pdflatex + forest are installed
-npm run build && npm run e2e          # Playwright tests
-npm run build:offline                 # dist-offline/nanotrees.html: the whole app in one file, opens by double-click
-npm run screenshots  # screenshots of all examples → screenshots/out
+npm run typecheck
+npm test             # includes LaTeX compilation when the toolchain is installed
+npm run build
+npm run e2e          # Playwright, against the production preview
+npm run build:offline
+npm run screenshots
 ```
 
-```
-src/core/      no DOM, tested on its own
-  parser.ts    bracket notation → AST with source spans and errors
-  build.ts     AST → display tree: chains (copies/traces/MD), head movement, triangles, meanings
-  modes.ts     X-bar projection
-  semantics.ts typed λ-calculus, β-reduction, composition rules
-  layout.ts    tidy layout, multidominance placement and routing
-  arrows.ts    arrow curves (as TikZ to[out, in]) and bend points
-  links.ts     linked branches
-  standalone.ts a branch moved into another tree
-  scene.ts     drawing primitives → SVG, PNG, PDF
-  latex.ts     forest / tikz-qtree / TikZ export
-  edits.ts     canvas operations as minimal text edits
-  format.ts    line breaks and indentation of the code
-  analysis.ts  c-command and dominance
-```
+Core: `parser.ts` parses source spans; `build.ts` resolves display nodes, chains and meanings; `nanosyntax.ts` searches derivations; `layout.ts` and `arrows.ts` position geometry; `drop.ts` defines insertion gaps; `scene.ts` builds drawing primitives; `latex.ts` exports editable/exact LaTeX; `edits.ts` writes source changes. `overrides.ts` manages style inheritance; `docs/guide.md` supplies the in-app guide.
 
-CI runs the type check, unit tests, LaTeX compilation and Playwright on every push, and deploys `main` to GitHub Pages.
+CI checks types, tests, LaTeX and Playwright, and deploys main to GitHub Pages.
 
 ## License
 
-MIT © Gleb Bubnov. Bundled fonts (CMU Serif, Libertinus, EB Garamond, Tinos, Charis SIL, Noto, Roboto, Caveat, STIX Two Math, IBM Plex Mono) are under the SIL Open Font License.
+MIT © Gleb Bubnov. Bundled fonts use the SIL Open Font License.

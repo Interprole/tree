@@ -1,5 +1,6 @@
 import type { DNode, DTree } from './model';
 import type { Runs } from './richtext';
+import { outlineSource } from './outlines';
 
 /** Inline markup for runs (inverse of parseRich, as far as possible). */
 export function runsToMarkup(runs: Runs, label: boolean): string {
@@ -37,6 +38,22 @@ export function serialize(tree: DTree): string {
     if (n.spellout) head += `;spell=${JSON.stringify(runsToMarkup(n.spellout.runs, false))}${n.spellout.side === 'auto' ? '' : ';spellside=' + n.spellout.side}${n.spellout.failed ? ';spellfail=yes' : ''}`;
     const terminalExpression = !n.spellout && n.src?.kind === 'node' && n.src.opts?.spell !== undefined;
     if (terminalExpression && n.src?.kind === 'node') head += ';spell=' + JSON.stringify(n.src.opts!.spell);
+    if(n.color) head+='@'+n.color;
+    if(n.edgeColor)head+=';edge='+n.edgeColor;
+    if(n.edgeWidth!==undefined)head+=';width='+n.edgeWidth;
+    if(n.edgeLine)head+=';edgeline='+n.edgeLine;
+    if(n.edgeLen)head+=';len='+n.edgeLen;
+    if(n.spread)head+=';spread='+n.spread;
+    if(n.fontSize)head+=';size='+n.fontSize;
+    if(n.outlines?.length)head+=';outline='+JSON.stringify(outlineSource(n.outlines));
+    const word=n.children.find(c=>c.kind==='leaf');
+    if(word?.edgeColor)head+=';wordedge='+word.edgeColor;
+    if(word?.edgeWidth!==undefined)head+=';wordwidth='+word.edgeWidth;
+    if(word?.edgeLen)head+=';wordlen='+word.edgeLen;
+    if(word?.edgeLine)head+=';wordline='+word.edgeLine;
+    if(word?.fontSize)head+=';wordsize='+word.fontSize;
+    if(word?.color)head+=';wordcolor='+word.color;
+    if(word?.outlines?.length)head+=';wordoutline='+JSON.stringify(outlineSource(word.outlines));
     const parts: string[] = [];
     if (n.features?.length) parts.push(`{${n.features.map((f) => runsToMarkup(f, false)).join(', ')}}`);
     if (n.triangle) parts.push('^' + n.children.filter((c) => c.kind === 'leaf').map((c) => go(c, '')).join(' '));

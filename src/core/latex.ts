@@ -161,6 +161,7 @@ function labelTex(n: DNode, style: TreeStyle): string {
     else if (style.copyStyle === 'gray') t = `\\textcolor{gray}{${t}}`;
   }
   if (n.struck && !(n.copy && style.copyStyle === 'strike') && t) t = `\\tfstrike{${t}}`;
+  if(n.fontSize)t=`{\\fontsize{${px2pt(n.fontSize)}}{${px2pt(n.fontSize*1.2)}}\\selectfont ${t}}`;
   const lines = [t];
   if (n.features?.length) {
     const f = n.features.map((x) => texRuns(x)).join('\\\\ ');
@@ -191,10 +192,11 @@ function endAnchor(a: DArrow, which: 'from' | 'to', layout: Layout | undefined, 
 function arrowTikz(a: DArrow, names: Map<DNode, string>, level: number, colors: Colors, geom: ArrowGeom | undefined, layout: Layout | undefined): string {
   const opts: string[] = [];
   opts.push(a.head === 'both' ? '{Stealth}-{Stealth}' : a.head === 'start' ? '{Stealth}-' : a.head === 'none' ? '-' : '-{Stealth}');
-  if (a.line !== 'solid') opts.push(a.line);
+  const line=a.lineOwn||a.line!=='solid'?a.line:layout?.style.arrowPattern??'solid';
+  if (line !== 'solid') opts.push(line);
   const col = colors.name(a.color);
   if (col) opts.push(col);
-  opts.push('semithick');
+  opts.push(a.width!==undefined||layout?.style.arrowWidth!==undefined?`line width=${px2pt(a.width??layout!.style.arrowWidth)}pt`:'semithick');
   const label = a.labels
     .map((l) => {
       const side = l.side === 'auto' ? (a.route === 'under' ? 'below' : 'right') : l.side;
@@ -271,7 +273,7 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     const tc = colors.name(n.posColor ?? (n.copy && style.copyStyle === 'gray' ? undefined : n.color));
     if (tc) opts.push(`text=${tc}`);
     const ec = n.posColor && parent?.posColor === n.posColor ? colors.name(n.posColor) : n.edgeColor ? colors.name(n.edgeColor) : parent && parent.branchColor === n.branchColor ? colors.name(n.branchColor) : null;
-    const edgeOpts = [ec, n.edgeWidth !== undefined ? `line width=${px2pt(n.edgeWidth)}pt` : null].filter(Boolean);
+    const edgeOpts = [ec, n.edgeWidth !== undefined ? `line width=${px2pt(n.edgeWidth)}pt` : null,(n.edgeLine??style.linePattern)==='solid'?null:n.edgeLine??style.linePattern].filter(Boolean);
     if (edgeOpts.length && parent) opts.push(`edge={${edgeOpts.join(', ')}}`);
     if (n.edgeLen) opts.push(`l+=${px2pt(n.edgeLen)}pt`);
     if (n.spread) opts.push(`for children={s sep+=${px2pt(n.spread)}pt}`);

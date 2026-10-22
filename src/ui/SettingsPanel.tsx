@@ -237,7 +237,7 @@ function FontPicker() {
   );
 }
 
-export function SettingsPanel() {
+export function SettingsPanel({hideScope=false}:{hideScope?:boolean}) {
   const s = style.value;
   const b = build.value;
   const applyPreset = (p: PresetId) => {
@@ -246,7 +246,7 @@ export function SettingsPanel() {
   const anyStyleChanged = (Object.keys(defaultStyle) as (keyof TreeStyle)[]).some((k) => s[k] !== defaultStyle[k]);
   return (
     <div class="settings">
-      <div class="scope appearance-scope">
+      {!hideScope&&<div class="scope appearance-scope">
         <span class="end-lbl">Settings of</span>
         <div class="seg small grow">
           <button class={appearanceScope.value === 'tree' ? 'on' : ''} onClick={() => (appearanceScope.value = 'tree')} title="The tree being edited (click a tree)">
@@ -256,7 +256,7 @@ export function SettingsPanel() {
             All trees
           </button>
         </div>
-      </div>
+      </div>}
       <Section title={t('presets')}>
         <div class="presets">
           {(['paper', 'slides', 'board'] as PresetId[]).map((p) => (
@@ -273,7 +273,7 @@ export function SettingsPanel() {
             }}
           >
             <strong>{t('reset')}</strong>
-            <small>all appearance settings</small>
+            <small>all Customize settings</small>
           </button>
         </div>
       </Section>
@@ -291,6 +291,10 @@ export function SettingsPanel() {
         <ChainOptions />
       </Section>
 
+      <Section title="Expressions">
+        <Toggle label="Circle phrasal spellout domains" hint="Outline the constituent lexicalized by an expression, including a failed expression." checked={s.circlePhrasalSpellout} reset={rs('circlePhrasalSpellout')} onChange={(v) => setStyle({ circlePhrasalSpellout: v })} />
+      </Section>
+
       <Section title="Semantics">
         <Toggle label="Show meanings ($…$)" checked={b.semantics.show} reset={rb('semantics', 'show')} onChange={(v) => setBuild({ semantics: { show: v } })} />
         <Toggle label="Compute missing meanings (FA, PC, EI, FC)" checked={b.semantics.compute} reset={rb('semantics', 'compute')} onChange={(v) => setBuild({ semantics: { compute: v } })} />
@@ -302,18 +306,17 @@ export function SettingsPanel() {
         </div>
       </Section>
 
-      <Section title="Expressions">
-        <Toggle label="Circle phrasal spellout domains" hint="Outline the constituent lexicalized by an expression, including a failed expression." checked={s.circlePhrasalSpellout} reset={rs('circlePhrasalSpellout')} onChange={(v) => setStyle({ circlePhrasalSpellout: v })} />
-      </Section>
-
       <Section title={t('typography')}>
         <FontPicker />
         <Slider label={t('fontSize')} value={s.fontSize} min={9} max={40} unit="px" reset={rs('fontSize')} onInput={(v) => setStyle({ fontSize: v })} />
         <Toggle label={t('leafItalic')} checked={s.leafItalic} reset={rs('leafItalic')} onChange={(v) => setStyle({ leafItalic: v })} />
         <Toggle label={t('nodeBold')} checked={s.nodeBold} reset={rs('nodeBold')} onChange={(v) => setStyle({ nodeBold: v })} />
+          <ColorField label={t('leafColor')} value={s.leafColor} reset={rs('leafColor')} onChange={(v) => setStyle({ leafColor: v })} />
+          <ColorField label={t('nodeColor')} value={s.nodeColor} reset={rs('nodeColor')} onChange={(v) => setStyle({ nodeColor: v })} />
       </Section>
 
       <Section title={t('layout')}>
+          <ColorField label={t('background')} value={s.background === 'transparent' ? '#ffffff' : s.background} reset={rs('background')} onChange={(v) => setStyle({ background: v })} />
         <Slider label={t('levelGap')} value={s.levelGap} min={6} max={90} unit="px" reset={rs('levelGap')} onInput={(v) => setStyle({ levelGap: v })} />
         <Slider label={t('siblingGap')} value={s.siblingGap} min={4} max={80} unit="px" reset={rs('siblingGap')} onInput={(v) => setStyle({ siblingGap: v })} />
         <Slider label={t('padding')} value={s.padding} min={0} max={80} unit="px" reset={rs('padding')} onInput={(v) => setStyle({ padding: v })} />
@@ -325,16 +328,19 @@ export function SettingsPanel() {
         <Toggle label={t('leavesAtBottom')} checked={s.leavesAtBottom} reset={rs('leavesAtBottom')} onChange={(v) => setStyle({ leavesAtBottom: v })} />
       </Section>
 
-      <Section title={t('lines')}>
+      <Section title="Tree lines">
+        <Seg label="Line pattern" value={s.linePattern} onChange={v=>setStyle({linePattern:v})} options={[{v:'solid',label:'Solid'},{v:'dashed',label:'Dashed'},{v:'dotted',label:'Dotted'}]}/>
+
         <Slider label={t('lineWidth')} value={s.lineWidth} min={0.4} max={4} step={0.1} unit="px" reset={rs('lineWidth')} onInput={(v) => setStyle({ lineWidth: v })} />
         <div class="colors">
           <ColorField label={t('lineColor')} value={s.lineColor} reset={rs('lineColor')} onChange={(v) => setStyle({ lineColor: v })} />
-          <ColorField label={t('nodeColor')} value={s.nodeColor} reset={rs('nodeColor')} onChange={(v) => setStyle({ nodeColor: v })} />
-          <ColorField label={t('leafColor')} value={s.leafColor} reset={rs('leafColor')} onChange={(v) => setStyle({ leafColor: v })} />
-          <ColorField label={t('arrowColor')} value={s.arrowColor} reset={rs('arrowColor')} onChange={(v) => setStyle({ arrowColor: v })} />
-          <ColorField label={t('background')} value={s.background === 'transparent' ? '#ffffff' : s.background} reset={rs('background')} onChange={(v) => setStyle({ background: v })} />
         </div>
         <Toggle label={t('handDrawn')} checked={s.handDrawn} reset={rs('handDrawn')} onChange={(v) => setStyle({ handDrawn: v })} />
+      </Section>
+      <Section title="Arrows">
+          <ColorField label={t('arrowColor')} value={s.arrowColor} reset={rs('arrowColor')} onChange={(v) => setStyle({ arrowColor: v })} />
+        <Slider label="Arrow width" value={s.arrowWidth} min={0} max={5} step={.1} unit="px" reset={rs('arrowWidth')} onInput={v=>setStyle({arrowWidth:v})}/>
+        <Seg label="Arrow pattern" value={s.arrowPattern} onChange={v=>setStyle({arrowPattern:v})} options={[{v:'solid',label:'Solid'},{v:'dashed',label:'Dashed'},{v:'dotted',label:'Dotted'}]}/>
       </Section>
       <Section title="Values of their own">
         <Seg

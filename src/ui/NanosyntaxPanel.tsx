@@ -26,7 +26,7 @@ export function NanosyntaxPanel() {
         <button class={scope.value === 'canvas' ? 'on' : ''} onClick={() => scope.value = 'canvas'}>Whole canvas</button>
       </div>
       {own && <button class="btn small" onClick={() => setNanosyntaxOptions('tree', { algorithm: undefined, rules: undefined }, owner.id)}>Use canvas settings for this tree</button>}
-      {scope.value === 'canvas' && own && <p class="hint">This tree has its own settings. Canvas changes use Appearance’s Ask / Replace / Keep policy.</p>}
+      {scope.value === 'canvas' && own && <p class="hint">This tree has its own settings. Canvas changes use Customize’s Ask / Replace / Keep policy.</p>}
     </div>
     <section class="insp-group" data-testid="movement-rules">
       <label class="insp-field"><span>1. Spellout-driven movement</span><select aria-label="Spellout-driven movement" value={settings.movement} onChange={(event) => update({ movement: event.currentTarget.value as NSAlgorithmSettings['movement'] })}>

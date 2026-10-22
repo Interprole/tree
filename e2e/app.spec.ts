@@ -92,7 +92,8 @@ test('arrow tool adds an arrow line; selecting and restyling it', async ({ page 
   await nodes.filter({ has: page.locator('title', { hasText: /^what$/ }) }).click();
   await expect.poll(() => code(page)).toMatch(/#\w+ -> #\w+/);
   await expect(page.locator('.inspector h2', { hasText: 'Arrow' })).toBeVisible();
-  await page.locator('.inspector button', { hasText: 'Dashed' }).click();
+  await page.getByTestId('side-appearance').click();
+  await page.getByLabel('Line pattern',{exact:true}).selectOption('dashed');
   await expect.poll(() => code(page)).toContain('dashed');
   // drag a bend of the arrow down: the arrow takes over its bends as its own points
   const h = await page.locator('.bend-handle').first().boundingBox();
@@ -108,15 +109,11 @@ test('arrow tool adds an arrow line; selecting and restyling it', async ({ page 
   await expect.poll(() => code(page)).not.toContain('->');
 });
 
-test('c-command highlighting', async ({ page }) => {
-  await page.goto('./');
-  await setCode(page, '[S [NP John] [VP [V saw] [NP Mary]]]');
-  await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
-  // the C key (no button on the toolbar)
-  await page.locator('.canvas').focus();
-  await page.keyboard.press('c');
-  await page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^V$/ }) }).click();
-  await expect(page.locator('.rel-ccommand')).toHaveCount(2);
+test('c-command and dominance have no toolbar controls or C/D shortcuts',async({page})=>{
+  await page.goto('./');await setCode(page,'[S [NP John] [VP runs]]');
+  await page.locator('[data-node]').first().click();await page.keyboard.press('c');await page.keyboard.press('d');
+  await expect(page.locator('.canvas-tools')).not.toContainText(/C-command|Dominance|Relations/);
+  await expect(page.locator('.rel-ccommand,.rel-dominance')).toHaveCount(0);
 });
 
 test('share link restores tree and settings', async ({ page, context }) => {
@@ -186,7 +183,7 @@ test('add an existing constituent again by clicking it (a chain)', async ({ page
   await setCode(page, '[CP [DP what] [VP [V see]]]');
   await page.locator('.mode-switch button', { hasText: 'Manual' }).click();
   await page.locator('[data-node] title', { hasText: /^VP$/ }).locator('..').click();
-  await page.locator('.inspector button', { hasText: 'Re-merge as daughter' }).click();
+  await page.getByRole('button', { name: 'Remerge a constituent as daughter',exact:true }).click();
   await page.locator('[data-node] title', { hasText: /^DP$/ }).first().locator('..').click();
   await expect.poll(() => code(page)).toBe('[CP\n    [DP#dp what]\n    [VP [V see] #dp]]');
   // copies view: a gray copy and an arrow
@@ -223,7 +220,9 @@ test('arrow: colour, reverse, several labels, drag a label', async ({ page }) =>
   await page.mouse.click(mid.x, mid.y);
   const insp = page.locator('.inspector');
   await expect(insp.locator('h2', { hasText: 'Arrow' })).toBeVisible();
-  await insp.locator('.swatch[title="#1d4ed8"]').click();
+  await page.getByTestId('side-appearance').click();
+  await page.locator('.customize-panel .swatch[title="#1d4ed8"]').first().click();
+  await page.getByTestId('side-edit').click();
   await expect.poll(() => code(page)).toContain('@#1d4ed8');
   await insp.locator('button', { hasText: 'Reverse' }).click();
   await expect.poll(() => code(page)).toContain('#a -> #b');
@@ -263,19 +262,23 @@ test('node: notes, edge style, spacing at once, restructure', async ({ page }) =
   await insp.locator('.label-list button', { hasText: 'Apply' }).click();
   await expect.poll(() => code(page)).toContain('[VP [V saw] [DP him] &"focus"]');
   await node('VP').click();
-  await insp.locator('.seg button', { hasText: 'Edge' }).click();
-  await insp.locator('.swatch[title="#b91c1c"]').click();
+  const line=page.locator('[data-edge$="|n.1"]');
+  // Pick the actual incoming VP line, not its node.
+  const path=await line.evaluate(el=>{const p=el as SVGPathElement,q=p.getPointAtLength(p.getTotalLength()/2),m=p.getScreenCTM()!;return {x:m.a*q.x+m.c*q.y+m.e,y:m.b*q.x+m.d*q.y+m.f};});
+  await page.mouse.click(path.x,path.y);
+  const custom=page.locator('.customize-panel');
+  await custom.locator('.swatch[title="#b91c1c"]').click();
   await expect.poll(() => code(page)).toContain('[VP;edge=#b91c1c');
-  // number fields apply at once: typing, and the arrow keys
-  const width = insp.locator('.num-field', { hasText: 'Edge width' }).locator('input');
+  const width=custom.locator('.num-field',{hasText:'Line width'}).locator('input');
   await width.fill('3');
-  await expect.poll(() => code(page)).toContain(';width=3');
+  await expect.poll(()=>code(page)).toContain(';width=3');
   await width.press('ArrowUp');
-  await expect.poll(() => code(page)).toContain(';width=3.5');
-  const spread = insp.locator('.num-field', { hasText: 'Spread' }).locator('input');
-  await spread.focus();
-  await spread.press('ArrowUp');
-  await expect.poll(() => code(page)).toContain(';spread=1');
+  await expect.poll(()=>code(page)).toContain(';width=3.1');
+  await node('VP').click();
+  await page.getByTestId('side-appearance').click();
+  const spread=custom.locator('.num-field',{hasText:'Spread daughters'}).locator('input');
+  await spread.focus();await spread.press('ArrowUp');
+  await expect.poll(()=>code(page)).toContain(';spread=1');
   await page.locator('.canvas').focus();
   await page.keyboard.press('Escape');
   await node('S').click();
@@ -291,14 +294,17 @@ test('custom colour, mother, layout of the code', async ({ page }) => {
   await setCode(page, '[S [NP John] [VP runs]]');
   const insp = page.locator('.inspector');
   await page.locator('[data-node] title', { hasText: /^VP$/ }).locator('..').click();
-  await insp.locator('.swatch.custom input').evaluate((el: HTMLInputElement) => {
+  await page.getByTestId('side-appearance').click();
+  const custom=page.locator('.customize-panel');
+  await custom.locator('.swatch.custom input').first().evaluate((el: HTMLInputElement) => {
     el.value = '#123456';
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   });
   await expect.poll(() => code(page)).toContain('[VP@#123456 runs]');
   // the colour is offered again
-  await expect(insp.locator('.swatch[title="#123456"]')).toHaveCount(1);
+  await expect(custom.locator('.swatch[title="#123456"]').first()).toBeVisible();
+  await page.getByTestId('side-edit').click();
   // a mother above VP, with the code laid out on lines
   await page.keyboard.press('p');
   await expect(insp.locator('input[aria-label="Label"]')).toBeFocused();
@@ -350,8 +356,10 @@ test('deleting a restyled chain arrow hides it instead of restoring the default'
   });
   const pt = await page.evaluate(() => (window as unknown as { __pt: { x: number; y: number } }).__pt);
   await page.mouse.click(pt.x, pt.y);
-  await page.locator('.inspector button', { hasText: 'Dashed' }).click();
+  await page.getByTestId('side-appearance').click();
+  await page.getByLabel('Line pattern',{exact:true}).selectOption('dashed');
   await expect.poll(() => code(page)).toContain('#wh/2 -> #wh/1 dashed');
+  await page.getByTestId('side-edit').click();
   await page.locator('.inspector button', { hasText: 'Delete arrow' }).click();
   await expect.poll(() => code(page)).toContain('#wh/2 -> #wh/1 hide');
   await expect(page.locator('.arrow-hit')).toHaveCount(0);
@@ -467,6 +475,7 @@ test('arrows are just arrows; movement: head movement written on the head, phras
   await expect(page.locator('.arrow-hit')).toHaveCount(1);
   // the switch hides movement arrows only
   await page.getByTestId('side-appearance').click();
+  await page.getByRole('button',{name:'All elements in this tree',exact:true}).click();
   await page.locator('.settings .toggle', { hasText: 'Arrows for head movement' }).click();
   await expect(page.locator('.arrow-hit')).toHaveCount(0);
   await expect(page.locator('.prims')).toContainText('sing+-s');
@@ -590,7 +599,9 @@ test('this copy or all copies: triangle, colour, features; shortcuts with anothe
   await expect.poll(() => code(page)).toContain('#wh/2: ^');
   await expect(page.locator('.prims text', { hasText: 'which book' })).toHaveCount(1);
   await dp(1).click();
-  await insp.locator('.swatch[title="#15803d"]').click();
+  await page.getByTestId('side-appearance').click();
+  await page.locator('.customize-panel .swatch[title="#15803d"]').first().click();
+  await page.getByTestId('side-edit').click();
   await expect.poll(() => code(page)).toContain('#wh/2: ^ @#15803d');
   // the pronounced copy on its own
   await dp(0).click();
@@ -600,14 +611,16 @@ test('this copy or all copies: triangle, colour, features; shortcuts with anothe
   // all copies: written on the constituent
   await dp(0).click();
   await insp.locator('.scope button', { hasText: 'All copies' }).click();
-  await insp.locator('.swatch[title="#1d4ed8"]').click();
+  await page.getByTestId('side-appearance').click();
+  await page.getByRole('button',{name:'All copies',exact:true}).click();
+  await page.locator('.customize-panel .swatch[title="#1d4ed8"]').first().click();
   await expect.poll(() => code(page)).toContain('[DP#wh@#1d4ed8');
   // the silent copy has its own colour: keep it
   await page.getByTestId('override-no').click();
   await expect.poll(() => code(page)).toContain('#wh/2: ^ @#15803d');
   // or replace it
   await page.waitForTimeout(1500);
-  await insp.locator('.swatch[title="#be185d"]').click();
+  await page.locator('.customize-panel .swatch[title="#be185d"]').first().click();
   await page.getByTestId('override-yes').click();
   await expect.poll(() => code(page)).not.toContain('@#15803d');
   // the A key with another layout adds a daughter
@@ -659,7 +672,7 @@ test('mouse: drag a branch by its root, select a branch with a rectangle', async
   const np = (await node('NP').boundingBox())!;
   await page.mouse.move(dp.x + dp.width / 2, dp.y + dp.height / 2);
   await page.mouse.down();
-  await page.mouse.move(np.x + np.width / 2, np.y + np.height / 2, { steps: 8 });
+  await page.mouse.move(np.x + np.width / 2 + 30, np.y + np.height + 18, { steps: 8 });
   await expect(page.locator('.drop-target')).toHaveCount(1);
   await page.mouse.up();
   await expect.poll(() => code(page)).toMatch(/\[NP\s+John\s+\[DP Mary\]\]/);
@@ -719,18 +732,18 @@ test('appearance for all trees: trees with their own value are asked about', asy
   // the empty canvas: settings of all trees
   await page.locator('.canvas').click({ position: { x: 10, y: 10 } });
   await page.getByTestId('side-appearance').click();
-  await expect(page.locator('.appearance-scope button.on')).toHaveText('All trees');
+  await expect(page.locator('.customize-scope button.on')).toHaveText('All trees');
   await page.locator('.settings .seg button', { hasText: '⟨Angle brackets⟩' }).click();
   await expect(page.getByTestId('override-no')).toBeVisible();
   await page.getByTestId('override-no').click();
   // tree 1 followed, tree 2 kept its own
   await selectTree(page, 0);
   await page.getByTestId('side-appearance').click();
-  await page.locator('.appearance-scope button').first().click();
+  await page.locator('.customize-scope button').first().click();
   await expect(page.locator('.settings .seg button.on', { hasText: '⟨Angle brackets⟩' })).toHaveCount(1);
   await selectTree(page, 1);
   await page.getByTestId('side-appearance').click();
-  await page.locator('.appearance-scope button').first().click();
+  await page.locator('.customize-scope button').first().click();
   await expect(page.locator('.settings .seg button.on', { hasText: 'Struck through' })).toHaveCount(1);
 });
 
@@ -763,12 +776,14 @@ test('empty trees: the sheet stays, a first node by right click, a branch dragge
   await expect(page.locator('.inspector input[aria-label="Label"]')).toBeFocused();
 });
 
-test('a selected copy stays selected while it is edited; a click on the canvas opens Appearance', async ({ page }) => {
+test('a selected copy stays selected while it is edited; a click on the canvas opens Customize', async ({ page }) => {
   await page.goto('./');
   await setCode(page, '[CP [DP#wh what] [VP [V buy] #wh]]');
   const copy = page.locator('[data-node]').filter({ has: page.locator('title', { hasText: /^DP$/ }) }).nth(1);
   await copy.click();
-  await page.locator('.inspector .swatch[title="#15803d"]').click();
+  await page.getByTestId('side-appearance').click();
+  await page.locator('.customize-panel .swatch[title="#15803d"]').first().click();
+  await page.getByTestId('side-edit').click();
   await expect.poll(() => code(page)).toContain('#wh/2: @#15803d');
   await expect(page.locator('.inspector h2')).toHaveText('Silent copy');
   await page.locator('.inspector input[aria-label^="Features"]').fill('uφ');
@@ -776,7 +791,7 @@ test('a selected copy stays selected while it is edited; a click on the canvas o
   await expect(page.locator('.inspector h2')).toHaveText('Silent copy');
   await page.locator('.canvas').click({ position: { x: 8, y: 8 } });
   await expect(page.getByTestId('side-appearance')).toHaveClass(/on/);
-  await expect(page.locator('.appearance-scope button.on')).toHaveText('All trees');
+  await expect(page.locator('.customize-scope button.on')).toHaveText('All trees');
 });
 
 test('the sheet of a tree can be made larger by its corner, and back', async ({ page }) => {

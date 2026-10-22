@@ -12,6 +12,13 @@ import type { DArrow, DNode } from './core/model';
 import { t } from './i18n';
 import { activateTree, activeTree, addTree, arrowSource, otherScenes, build, doc, duplicateTree, editable, pick, requestLabelFocus, scene, selection, showToast, source, sources, tool, tree, trees } from './state';
 import { stripLinks } from './core/links';
+export interface Insertion { index:number }
+function insertionAt(s:ANode|ALeaf,mode:'daughter'|'sister',slot?:Insertion) {
+  if(mode==='sister') return slot?.index===0?s.kind==='leaf'?s.fullSpan.from:s.span.from:s.kind==='leaf'?s.fullSpan.to:s.span.to;
+  if(s.kind==='leaf') return s.fullSpan.to;
+  const child=slot?s.children[slot.index]:null;
+  return child?(child.kind==='leaf'?child.fullSpan.from:child.span.from):s.span.to-1;
+}
 
 /** Bridge to the code editor, so that canvas edits go through its undo history. */
 export interface EditorBridge {
@@ -289,7 +296,7 @@ export function clipFromText(text: string): TreeClip | null {
  * on the canvas. Ids defined in the piece get new names where they are taken, so the copy is a
  * constituent of its own, not one more position of the original.
  */
-export function paste(c: TreeClip | null = clip.value, target: DNode | null = selectedNode(), mode: 'daughter' | 'sister' = 'daughter', at?: { x: number; y: number }) {
+export function paste(c: TreeClip | null = clip.value, target: DNode | null = selectedNode(), mode: 'daughter' | 'sister' = 'daughter', at?: { x: number; y: number }, slot?:Insertion) {
   if (!c) {
     showToast('Nothing copied yet: select a node and press Ctrl+C.');
     return;
@@ -359,8 +366,8 @@ export function paste(c: TreeClip | null = clip.value, target: DNode | null = se
     up = 1;
     if (text.startsWith('[')) labelAt = s!.span.from + s!.text.length + 3;
   } else {
-    const at = mode === 'daughter' ? (s as ANode).span.to - 1 : s!.kind === 'leaf' ? s!.fullSpan.to : s!.span.to;
-    changes.push({ from: at, to: at, insert: ' ' + text });
+    const at = insertionAt(s!,mode,slot);
+    changes.push({ from: at, to: at, insert: ' ' + text + ' ' });
     anchor = at + 1;
     if (text.startsWith('[')) labelAt = at + 2;
   }
@@ -391,14 +398,14 @@ function currentBranch(group: string): string | null {
  * Move a branch by its root (drag and drop): as the last daughter of a node or as its next sister;
  * copy: a copy of its own goes there instead.
  */
-export function moveNode(n: DNode, target: DNode, mode: 'daughter' | 'sister', copy = false) {
+export function moveNode(n: DNode, target: DNode, mode: 'daughter' | 'sister', copy:boolean|'linked' = false, slot?:Insertion) {
   if (!editable.value) {
     showToast(t('editDisabled'));
     return;
   }
   if (copy) {
-    const c = copyNode(n);
-    if (c) paste(c, target, mode);
+    const c = copyNode(n,copy==='linked');
+    if (c) paste(c, nodeByKey(target.key)??target, mode, undefined,slot);
     return;
   }
   const d = doc.value;
@@ -420,9 +427,10 @@ export function moveNode(n: DNode, target: DNode, mode: 'daughter' | 'sister', c
     showToast('The root cannot have sisters.');
     return;
   }
-  const at = mode === 'daughter' && ts.kind === 'node' ? tSpan.to - 1 : tSpan.to;
+  const at = insertionAt(ts,mode,slot);
   const src = source.value;
   const edit = E.moveElement(src, span, at);
+  if(slot&&src[at]&&!/[\s\]]/.test(src[at]))edit.changes[1].insert+=' ';
   const isNode = src[span.from] === '[';
   // positions in the text after the move: the piece starts after the inserted space
   const anchor = E.mapPos(at, [edit.changes[0]]) + 1;
@@ -435,7 +443,7 @@ export function moveNode(n: DNode, target: DNode, mode: 'daughter' | 'sister', c
  * Move (or copy) a branch into another tree of the canvas: into an empty tree as its tree, or as
  * the last daughter / the next sister of one of its nodes (targetKey, a node of that tree).
  */
-export function moveToTree(n: DNode, treeId: string, targetKey: string | null, mode: 'daughter' | 'sister', copy = false) {
+export function moveToTree(n: DNode, treeId: string, targetKey: string | null, mode: 'daughter' | 'sister', copy:boolean|'linked' = false, slot?:Insertion) {
   if (!editable.value) {
     showToast(t('editDisabled'));
     return;
@@ -443,7 +451,7 @@ export function moveToTree(n: DNode, treeId: string, targetKey: string | null, m
   const entry = trees.value.find((e) => e.id === treeId);
   if (!entry || entry.id === activeTree.value.id) return;
   const prevClip = clip.value;
-  const c0 = copyNode(n, false, !copy);
+  const c0 = copyNode(n, copy==='linked', !copy);
   clip.value = prevClip;
   if (!c0) return;
   // in another tree the branch stands on its own
@@ -471,7 +479,7 @@ export function moveToTree(n: DNode, treeId: string, targetKey: string | null, m
   const target = targetKey ? otherTargetSrc(treeId, targetKey) : null;
   if (!r.doc.root || !target) {
     if (r.doc.root) {
-      showToast(`Drop it on a node of ${entry.name}: as its daughter, or with Shift as its sister.`);
+      showToast(`Drop beside a node for a sister, or below it for a daughter.`);
       return;
     }
     next = [piece, ...lines, text.trim()].filter(Boolean).join('\n');
@@ -481,9 +489,8 @@ export function moveToTree(n: DNode, treeId: string, targetKey: string | null, m
       showToast('The root cannot have sisters.');
       return;
     }
-    const tSpan = ts.kind === 'leaf' ? ts.fullSpan : ts.span;
-    const at = mode === 'daughter' && ts.kind === 'node' ? tSpan.to - 1 : tSpan.to;
-    const changes: E.TextChange[] = [{ from: at, to: at, insert: ' ' + piece }];
+    const at = insertionAt(ts,mode,slot);
+    const changes: E.TextChange[] = [{ from: at, to: at, insert: ' ' + piece + ' ' }];
     if (lines.length) {
       const end = text.replace(/\s+$/, '').length;
       changes.push({ from: end, to: text.length, insert: '\n' + lines.join('\n') + '\n' });
@@ -789,10 +796,13 @@ export function restructure(n: DNode | null, shape: 'right' | 'left') {
 }
 
 /** Edge colour / width / length, spread of daughters, meaning colour of a node. */
-export function setOption(n: DNode | null, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'spell' | 'spellside' | 'spellfail', value: string | null) {
-  const inst = (key === 'edge' || key === 'width' || key === 'len') && thisCopy(n, false);
+export function setOption(n: DNode | null, key: 'edge' | 'width' | 'edgeline' | 'size' | 'wordsize' | 'wordcolor' | 'outline' | 'wordoutline' | 'wordedge' | 'wordwidth' | 'wordlen' | 'wordline' | 'len' | 'spread' | 'sem' | 'spell' | 'spellside' | 'spellfail', value: string | null) {
+  if(n?.kind==='leaf') key=({edge:'wordedge',width:'wordwidth',len:'wordlen',edgeline:'wordline'} as const)[key as 'edge']??key;
+  const positionKey = ['wordedge','wordwidth','wordlen','wordline','edge', 'width', 'edgeline', 'size', 'wordsize', 'wordcolor', 'outline', 'wordoutline', 'len'].includes(key);
+  const wordPosition=n?.kind==='leaf'&&key.startsWith('word')&&n.parents[0]===instanceOf(n)?instanceOf(n):null;
+  const inst = positionKey && (copyScope.value==='this'&&wordPosition?wordPosition:thisCopy(n, false));
   if (inst) return setPos(inst, { [key]: value ?? undefined });
-  if (key === 'edge' || key === 'width' || key === 'len') void allCopies(n, key);
+  if (positionKey) void allCopies(n, key as keyof PosMods);
   if (!guard(n)) return;
   const s = nodeSrc(n);
   if (s) applyEdit(E.setOption(s, key, value));

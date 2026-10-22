@@ -13,7 +13,7 @@ const en = {
   shareCopied: 'Link copied to the clipboard',
   shareTooLong: 'Link copied (long — {n} characters)',
   myTrees: 'My trees',
-  settings: 'Appearance',
+  settings: 'Customize',
   help: 'Syntax',
   shortcuts: 'Keyboard shortcuts',
   theme: 'Theme',

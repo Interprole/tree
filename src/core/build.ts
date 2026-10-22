@@ -3,6 +3,7 @@ import { analyseLabel, applyXbar } from './modes';
 import type { XbarOptions } from './modes';
 import { collectNodes, relink } from './model';
 import type { DArrow, DNode, DSem, DTree } from './model';
+import { parseOutlines } from './outlines';
 import { baseText, cloneRuns, indicesOf, parseRich, plain } from './richtext';
 import type { Runs } from './richtext';
 import { abstractOver, compose, parseMeaning, SemError, showRuns, showTy, splitMeaning, toSource } from './semantics';
@@ -133,6 +134,9 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
     const o = a.opts ?? {};
     if (o.edge) d.edgeColor = o.edge;
     if (o.width && Number.isFinite(Number(o.width))) d.edgeWidth = Number(o.width);
+    if (o.edgeline === 'solid' || o.edgeline === 'dashed' || o.edgeline === 'dotted') d.edgeLine = o.edgeline;
+    if (o.size && Number.isFinite(+o.size) && +o.size > 0) d.fontSize = +o.size;
+    d.outlines = parseOutlines(o.outline);
     if (o.len && Number.isFinite(Number(o.len))) d.edgeLen = Number(o.len);
     if (o.spread && Number.isFinite(Number(o.spread))) d.spread = Number(o.spread);
     if (o.sem) d.semColor = o.sem;
@@ -198,6 +202,16 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
   };
 
   let root = mk(doc.root, 'n');
+  for (const parent of collectNodes(root)) if (parent.src?.kind === 'node') for (const child of parent.children) if (child.kind === 'leaf') {
+    const o = parent.src.opts ?? {};
+    if (o.wordsize && Number.isFinite(+o.wordsize) && +o.wordsize > 0) child.fontSize = +o.wordsize;
+    if (o.wordcolor) child.color = o.wordcolor;
+    if(o.wordedge)child.edgeColor=o.wordedge;
+    if(o.wordwidth!==undefined&&Number.isFinite(+o.wordwidth))child.edgeWidth=+o.wordwidth;
+    if(o.wordlen!==undefined&&Number.isFinite(+o.wordlen))child.edgeLen=+o.wordlen;
+    if(['solid','dashed','dotted'].includes(o.wordline))child.edgeLine=o.wordline as DNode['edgeLine'];
+    child.outlines = parseOutlines(o.wordoutline);
+  }
   relink(root);
   propagateStyles(root);
 
@@ -234,7 +248,7 @@ export function buildTree(doc: ADoc, opts: BuildOptions = defaultBuildOptions): 
   const legacy = new Set<DArrow>();
   doc.arrows.forEach((a, index) => {
     const labels = a.labels.map((l, i) => ({ runs: parseRich(l.text), side: l.side, off: l.off, index: i }));
-    const styled = (from: DNode, to: DNode, extra: Partial<DArrow> = {}): DArrow => ({ from, to, head: a.head, line: a.line, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], via: a.via, plain: a.plain, fromAt: a.fromAt, toAt: a.toAt, outSide: a.outSide, inSide: a.inSide, src: a, index, ...extra });
+    const styled = (from: DNode, to: DNode, extra: Partial<DArrow> = {}): DArrow => ({ from, to, head: a.head, line: a.line, lineOwn: a.lineOwn, width: a.width, route: a.route, labels, color: a.color, bend: a.bend ?? [0, 0], via: a.via, plain: a.plain, fromAt: a.fromAt, toAt: a.toAt, outSide: a.outSide, inSide: a.inSide, src: a, index, ...extra });
     // a link of a chain
     if (a.from === a.to && a.fromOcc && a.toOcc && !a.plain) {
       if (opts.chains === 'multidominance') return;
@@ -449,7 +463,7 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
       } else {
         // trace: the category with a "t"
         const t: DNode = { key: `${s.key}~t${i + 1}`, kind: 'leaf', label: [{ text: 't' }, ...indexRun], children: [], parents: [], indices: [], trace: true, synthetic: true };
-        inst = { key: `${s.key}~tp${i + 1}`, kind: 'phrase', label: cloneRuns(s.label), children: [t], parents: [], indices: [], src: s.src, trace: true, copyOf: s.key, color: s.color, branchColor: s.branchColor, notes: s.notes, edgeColor: s.edgeColor, edgeWidth: s.edgeWidth, edgeLen: s.edgeLen };
+        inst = { key: `${s.key}~tp${i + 1}`, kind: 'phrase', label: cloneRuns(s.label), children: [t], parents: [], indices: [], src: s.src, trace: true, copyOf: s.key, color: s.color, branchColor: s.branchColor, notes: s.notes, edgeColor: s.edgeColor, edgeWidth: s.edgeWidth, edgeLen: s.edgeLen, edgeLine:s.edgeLine, fontSize:s.fontSize, outlines:s.outlines };
       }
       // pronounced with other words: #wh!"whom"
       if (info.text !== undefined && overt[i]) {
@@ -510,6 +524,18 @@ function resolveChains(root: DNode, occFlags: Map<ANode, Map<DNode, OccInfo>>, o
       if (L?.edge) inst.edgeColor = L.edge;
       if (L?.width && Number.isFinite(Number(L.width))) inst.edgeWidth = Number(L.width);
       if (L?.len && Number.isFinite(Number(L.len))) inst.edgeLen = Number(L.len);
+      if (L?.edgeline === 'solid' || L?.edgeline === 'dashed' || L?.edgeline === 'dotted') inst.edgeLine = L.edgeline;
+      if (L?.size && Number.isFinite(+L.size)) inst.fontSize = +L.size;
+      if (L?.outline !== undefined) inst.outlines = parseOutlines(L.outline);
+      for (const child of inst.children) if (child.kind === 'leaf') {
+        if (L?.wordsize && Number.isFinite(+L.wordsize)) child.fontSize = +L.wordsize;
+        if (L?.wordcolor) { child.color = L.wordcolor; child.posColor=L.wordcolor; }
+        if(L?.wordedge)child.edgeColor=L.wordedge;
+        if(L?.wordwidth!==undefined&&Number.isFinite(+L.wordwidth))child.edgeWidth=+L.wordwidth;
+        if(L?.wordlen!==undefined&&Number.isFinite(+L.wordlen))child.edgeLen=+L.wordlen;
+        if(L?.wordline&&['solid','dashed','dotted'].includes(L.wordline))child.edgeLine=L.wordline as DNode['edgeLine'];
+        if (L?.wordoutline !== undefined) child.outlines = parseOutlines(L.wordoutline);
+      }
       inst.chainRef = { id: s.id!, occ: i + 1 };
       sl.parent.children[sl.index] = inst;
       chain.instances.push(inst);

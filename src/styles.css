@@ -2432,3 +2432,13 @@ body.resizing .splitter::after {
 .sheet-head { display: flex; align-items: center; gap: 4px; box-sizing: border-box; overflow: hidden; }
 .sheet-caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sheet-head .ltree-badge { flex: none; margin-left: 0; }
+
+/* Direct selection of outlines and tree edges. */
+.edge-hit {fill:none;stroke:transparent;stroke-width:12;pointer-events:stroke;cursor:pointer;}
+.edge-hit:hover {stroke:#e9a23b66;}
+.edge-hit.selected {stroke:#e9a23b88;stroke-width:8;}
+.drop-slot {fill:white;stroke:#ea8a23;stroke-width:2;pointer-events:none;}
+.drop-slot.on {fill:#ea8a23;stroke:#8f4800;}
+.customize-scope .seg {flex-wrap:wrap;}
+.customize-scope {padding:10px;}
+.canvas-tools select {max-width:95px;font-size:11px;}

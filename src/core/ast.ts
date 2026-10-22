@@ -79,6 +79,8 @@ export type ArrowLine = 'solid' | 'dashed' | 'dotted';
 export type ArrowRoute = 'under' | 'curve';
 
 export interface AArrow {
+  width?: number;
+  lineOwn?: boolean;
   from: string;
   to: string;
   /** a particular position of a chain: #wh/2 (1 = highest) */
@@ -110,6 +112,13 @@ export interface AArrow {
 
 /** What one position of a chain can have on its own (instead of all positions sharing it). */
 export interface PosMods {
+  edgeline?: string;
+  size?: string;
+  wordsize?: string;
+  wordcolor?: string;
+  outline?: string;
+  wordoutline?: string;
+  wordedge?:string; wordwidth?:string; wordlen?:string; wordline?:string;
   pronounce?: boolean;
   triangle?: boolean;
   /** colour of the whole position */

@@ -53,7 +53,7 @@ test('nanosyntax mode only removes its tab and sheets, while the settings button
   await page.goto('./');
   await enable(page);
   await expect(page.getByTestId('nanosyntax-toggle')).toHaveCSS('background-color', 'rgb(237, 139, 44)');
-  await expect(page.locator('.side-tabs [role="tab"]')).toHaveText(['Edit', 'Appearance', 'Nanosyntax']);
+  await expect(page.locator('.side-tabs [role="tab"]')).toHaveText(['Edit', 'Customize', 'Nanosyntax']);
   await page.getByTestId('nanosyntax-toggle').click();
   await expect(page.getByTestId('side-nanosyntax')).toHaveCount(0);
   await expect(page.locator('.side-pane')).toBeVisible();
@@ -166,7 +166,7 @@ test('three independent algorithm choices show numbered instructions, persist an
   expect((await canvas(page)).groups[2].sourceTree).toBe(owner.id);
 });
 
-test('nanosyntax canvas changes use Appearance Ask, Keep, Replace and remembered choices', async ({ page }) => {
+test('nanosyntax canvas changes use Customize Ask, Keep, Replace and remembered choices', async ({ page }) => {
   await page.goto('./');
   await enable(page);
   await page.getByLabel('Spellout-driven movement').selectOption('starke2018');
@@ -182,7 +182,7 @@ test('nanosyntax canvas changes use Appearance Ask, Keep, Replace and remembered
   await page.getByLabel('Auxiliary workspace closure').selectOption('late');
   await page.getByLabel('Auxiliary workspace closure').selectOption('early');
   await expect(page.getByRole('alertdialog', { name: 'Values of their own' })).toContainText('auxiliary workspace closure');
-  await page.getByRole('alertdialog').getByText("Don't ask again (change it in Appearance → Values of their own)", { exact: true }).click();
+  await page.getByRole('alertdialog').getByText("Don't ask again (change it in Customize → Values of their own)", { exact: true }).click();
   await page.getByTestId('override-yes').click();
   await page.getByRole('button', { name: 'This tree', exact: true }).click();
   await expect(page.getByLabel('Auxiliary workspace closure')).toHaveValue('early');

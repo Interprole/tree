@@ -16,7 +16,7 @@ class Fail extends Error {
 
 const isWs = (c: string | undefined) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === ' ';
 const ID_RE = /[\p{L}\p{N}_\-.:]/u;
-const NODE_OPTS = new Set(['edge', 'width', 'len', 'spread', 'sem', 'color', 'branch', 'link', 'to', 'spell', 'spellside', 'spellfail']);
+const NODE_OPTS = new Set(['edge', 'width', 'edgeline', 'len', 'spread', 'size', 'wordsize', 'wordcolor', 'outline', 'wordoutline', 'wordedge', 'wordwidth', 'wordlen', 'wordline', 'sem', 'color', 'branch', 'link', 'to', 'spell', 'spellside', 'spellfail']);
 const LABEL_RE = /^(left|right|above|below)?"((?:[^"\\]|\\.)*)"(?:@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?))?/;
 
 /** side"text"@dx,dy at the start of s */
@@ -185,14 +185,18 @@ class Parser {
     while (j < tokEnd) {
       const c = this.src[j];
       if (c === ';') {
-        const spell = /^;spell="((?:[^"\\]|\\.)*)"/.exec(this.src.slice(j, tokEnd));
+        const spell = /^;([a-z]+)="((?:[^"\\]|\\.)*)"/.exec(this.src.slice(j, tokEnd));
         if (spell) {
-          (node.opts ??= {}).spell = spell[1].replace(/\\(["\\])/g, '$1');
+          if (!NODE_OPTS.has(spell[1])) this.fail('Unknown node option ' + spell[1], j, j + spell[0].length);
+          const value=spell[2].replace(/\\(["\\])/g, '$1');
+          if(spell[1]==='color')node.color=value;
+          else if(spell[1]==='branch')node.branchColor=value;
+          else (node.opts ??= {})[spell[1]]=value;
           j += spell[0].length;
           continue;
         }
         const m = /^;([a-z]+)=(#?[^;\s[\]@#]+)/.exec(this.src.slice(j, tokEnd));
-        if (!m || !NODE_OPTS.has(m[1])) this.fail(`Node options look like ;edge=red ;width=2 ;len=20 ;spread=10 ;sem=blue`, j, Math.min(tokEnd, j + (m ? m[0].length : 1)));
+        if (!m || !NODE_OPTS.has(m[1])) this.fail(`Node options include ;spell="word" ;size=20 ;outline="s1 oval branch" ;edge=red ;width=2 ;edgeline=dashed ;len=20 ;spread=10 ;sem=blue`, j, Math.min(tokEnd, j + (m ? m[0].length : 1)));
         if (m![1] === 'color') node.color = m![2];
         else if (m![1] === 'branch') node.branchColor = m![2];
         else (node.opts ??= {})[m![1]] = m![2];
@@ -402,7 +406,10 @@ class Parser {
       } else if ((mm = /^@(#?[A-Za-z0-9]+)/.exec(rest))) {
         mods.color = mm[1];
         k += mm[0].length;
-      } else if ((mm = /^(edge|width|len)=(#?[^\s%]+)/.exec(rest))) {
+      } else if ((mm = /^(outline|wordoutline)="((?:[^"\\]|\\.)*)"/.exec(rest))) {
+        mods[mm[1] as 'outline'] = mm[2].replace(/\\(["\\])/g, '$1');
+        k += mm[0].length;
+      } else if ((mm = /^(edge|width|len|edgeline|size|wordsize|wordcolor|wordedge|wordwidth|wordlen|wordline)=(#?[^\s%]+)/.exec(rest))) {
         mods[mm[1] as 'edge' | 'width' | 'len'] = mm[2];
         k += mm[0].length;
       } else if (c === '{') {
@@ -487,7 +494,8 @@ class Parser {
       const tokFrom = off + t.index + t[0].length - tok.length;
       const lab = matchLabel(tok);
       if (lab && lab.length === tok.length) arrow.labels.push({ text: lab.text, side: lab.side, off: lab.off, span: { from: tokFrom, to: tokFrom + tok.length } });
-      else if (tok === 'dashed' || tok === 'dotted' || tok === 'solid') arrow.line = tok;
+      else if (tok === 'dashed' || tok === 'dotted' || tok === 'solid') { arrow.line = tok; arrow.lineOwn = true; }
+      else if (/^width=\d+(?:\.\d+)?$/.test(tok)) arrow.width = Number(tok.slice(6));
       else if (tok === 'under' || tok === 'curve') arrow.route = tok;
       else if (tok === 'hide') arrow.hidden = true;
       else if (tok === 'visible') arrow.visible = true;
@@ -515,7 +523,7 @@ class Parser {
         const nums = tok.slice(5).split(',').map(Number);
         if (nums.some((n) => !Number.isFinite(n))) this.fail('bend= expects numbers, e.g. bend=0,20', tokFrom, tokFrom + tok.length);
         arrow.bend = [nums.length > 1 ? nums[0] : 0, nums.length > 1 ? nums[1] : nums[0]];
-      } else this.fail(`Unknown arrow option "${tok}". Use dashed, dotted, plain, hide, visible, out=below|above|left|right, in=…, from=node, to=node, "label", @colour, bend=x,y or via=x,y;x,y`, tokFrom, tokFrom + tok.length);
+      } else this.fail(`Unknown arrow option "${tok}". Use solid, dashed, dotted, width=2, plain, hide, visible, out=below|above|left|right, in=…, from=node, to=node, "label", @colour, bend=x,y or via=x,y;x,y`, tokFrom, tokFrom + tok.length);
     }
     this.i = lineEnd;
     return arrow;

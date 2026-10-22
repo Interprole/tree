@@ -1,5 +1,7 @@
 # Nanosyntactic derivations
 
+For the complete editor workflow and syntax reference, see [the guide](guide.md).
+
 The top-bar **Nanosyntax** button enables the nanosyntax section and turns orange.
 Disabling it hides the section, L-trees and derivation sheets while preserving all
 of them in the canvas file. The ordinary right panel stays open. The far-right
@@ -16,7 +18,7 @@ A terminal expression is displayed below its label. A phrasal expression appears
 beside the constituent: **tree ⇒ expression** on the right, or
 **expression ⇐ tree** on the left. L-trees use **⇔** (`\Leftrightarrow`) to indicate
 a lexical correspondence. Failed phrasal expressions retain ∅ and a crossed arrow.
-The same rendering is used by SVG, PNG, PDF and LaTeX exports. Appearance contains
+The same rendering is used by SVG, PNG, PDF and LaTeX exports. Customize contains
 Italic expressions and Circle phrasal spellout domains.
 
 Every L-tree is an ordinary tree on the canvas with the ordinary bracket editor
@@ -35,7 +37,7 @@ L-trees. Tree-scoped entries stay with their owner when it moves.
 The Nanosyntax tab contains three independent algorithm choices. Each choice is
 followed immediately by numbered explanations and source links. Settings apply
 to this tree or the whole canvas. Canvas changes use the same **Values of their
-own** dialog and Ask / Replace / Keep preference as Appearance; replacing one
+own** dialog and Ask / Replace / Keep preference as Customize; replacing one
 rule leaves the tree's other overrides intact. Tree overrides can be reset to
 the canvas settings.
 
@@ -60,7 +62,7 @@ move their members together. Groups, lexical scope, sources and positions are
 saved in canvas files and share links.
 
 Code is shown only for a selected node or a selected white sheet. Selecting a
-caption or the canvas background hides it. Appearance settings are in the right
+caption or the canvas background hides it. Customize settings are in the right
 panel, rather than below the code.
 
 ## Independent algorithm choices

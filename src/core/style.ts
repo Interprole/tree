@@ -26,6 +26,9 @@ export interface TreeStyle {
   /** padding around the picture */
   padding: number;
   lineWidth: number;
+  linePattern: 'solid' | 'dashed' | 'dotted';
+  arrowWidth: number;
+  arrowPattern: 'solid' | 'dashed' | 'dotted';
   lineColor: string;
   /** non-terminal labels */
   nodeColor: string;
@@ -64,6 +67,9 @@ export const defaultStyle: TreeStyle = {
   siblingGap: 18,
   padding: 20,
   lineWidth: 1,
+  linePattern: 'solid',
+  arrowWidth: 1.05,
+  arrowPattern: 'solid',
   lineColor: '#1a1a1a',
   nodeColor: '#111111',
   leafColor: '#111111',

@@ -57,7 +57,7 @@ export function modifiers(n: Mods): string {
   const opts = Object.entries(n.opts ?? {})
     .filter(([, v]) => v !== undefined && v !== '')
     .sort(([a], [b]) => OPT_ORDER.indexOf(a) - OPT_ORDER.indexOf(b))
-    .map(([k, v]) => `;${k}=${k === 'spell' ? JSON.stringify(v) : v}`)
+    .map(([k, v]) => `;${k}=${k === 'spell' || k === 'outline' || k === 'wordoutline' ? JSON.stringify(v) : v}`)
     .join('');
   return (n.id ? '#' + n.id : '') + voice + (n.color ? '@' + n.color : '') + (n.branchColor ? '@@' + n.branchColor : '') + opts;
 }
@@ -72,7 +72,7 @@ function setModifiers(n: ANode, patch: Partial<Mods>): TextChange {
 }
 
 /** Set (or remove, with null) a node option: edge colour, edge width, length, spread, meaning colour. */
-export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'link' | 'to' | 'spell' | 'spellside' | 'spellfail', value: string | null): Edit {
+export function setOption(n: ANode, key: 'edge' | 'width' | 'len' | 'spread' | 'sem' | 'link' | 'to' | 'spell' | 'spellside' | 'spellfail' | 'edgeline' | 'size' | 'wordsize' | 'wordcolor' | 'outline' | 'wordoutline' | 'wordedge' | 'wordwidth' | 'wordlen' | 'wordline', value: string | null): Edit {
   const opts = { ...(n.opts ?? {}) };
   if (value === null || value === '') delete opts[key];
   else opts[key] = value;
@@ -331,7 +331,8 @@ export function arrowLine(a: Omit<AArrow, 'span'>): string {
   if (a.inSide) parts.push('in=' + a.inSide);
   if (a.fromAt === 'node') parts.push('from=node');
   if (a.toAt === 'node') parts.push('to=node');
-  if (a.line !== 'solid') parts.push(a.line);
+  if (a.line !== 'solid' || a.lineOwn) parts.push(a.line);
+  if (a.width !== undefined) parts.push('width=' + a.width);
   if (a.route !== 'under') parts.push(a.route);
   if (a.color) parts.push('@' + a.color);
   for (const l of a.labels ?? []) parts.push(labelToken(l));
@@ -387,6 +388,7 @@ export function posStyleLine(id: string, occ: number, m: PosMods): string | null
   if (m.edge) parts.push('edge=' + m.edge);
   if (m.width) parts.push('width=' + m.width);
   if (m.len) parts.push('len=' + m.len);
+  for (const key of ['wordedge','wordwidth','wordlen','wordline','edgeline', 'size', 'wordsize', 'wordcolor', 'outline', 'wordoutline'] as const) if (m[key] !== undefined) parts.push(key + '=' + (key.endsWith('outline') ? JSON.stringify(m[key]) : m[key]));
   if (m.features?.length) parts.push(`{${m.features.join(', ')}}`);
   for (const n of m.notes ?? []) if (n.text.trim()) parts.push('&' + labelToken(n));
   if (m.text !== undefined) parts.push(`"${m.text.replace(/"/g, "''")}"`);

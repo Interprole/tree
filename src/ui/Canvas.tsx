@@ -5,6 +5,9 @@ import { cCommandDomain, dominated } from '../core/analysis';
 import { plain } from '../core/richtext';
 import { insertVia, viaPoints } from '../core/arrows';
 import type { NodeHit, Scene } from '../core/scene';
+import { dropSlots } from '../core/drop';
+import type { DropSlot } from '../core/drop';
+import { customizeScope } from '../state';
 import { collectNodes } from '../core/model';
 import type { DNode } from '../core/model';
 import { primToSvg } from '../render/svg';
@@ -220,7 +223,7 @@ export function Canvas() {
 
   // ---------- pointer handling (pan, pinch, drags)
   const labelGhost = useSignal<null | { box: Box; dx: number; dy: number }>(null);
-  const nodeDrag = useSignal<null | { key: string; dx: number; dy: number; over: string | null; sister: boolean; copy: boolean; tree?: string | null; treeKey?: string | null }>(null);
+  const nodeDrag = useSignal<null | { key: string; dx: number; dy: number; over: string | null; sister: boolean; copy: boolean|'linked'; slot?:DropSlot; slots?:DropSlot[]; slotX?:number; slotY?:number; tree?: string | null; treeKey?: string | null }>(null);
   const marquee = useSignal<Box | null>(null);
   const ctx = useSignal<null | CtxAt>(null);
   const drag = useRef<null | (Drag & { sx: number; sy: number; moved: boolean })>(null);
@@ -311,7 +314,7 @@ export function Canvas() {
       }
     }
     // Shift + drag: a rectangle that selects a branch
-    if (e.shiftKey && !target.closest('[data-tree]')) {
+    if (e.shiftKey && !target.closest('[data-tree], [data-node], [data-edge]')) {
       const [x0, y0] = toLocal(e.clientX, e.clientY);
       drag.current = { ...base, kind: 'marquee', x0, y0 };
       return;
@@ -354,26 +357,32 @@ export function Canvas() {
     else if (d.kind === 'sheet') setStyle({ sheetWidth: Math.max(40, Math.round(d.w + dx / z)), sheetHeight: Math.max(40, Math.round(d.h + dy / z)) });
     else if (d.kind === 'label') labelGhost.value = { box: d.label.box, dx: dx / z, dy: dy / z };
     else if (d.kind === 'node') {
-      // where it would land: a node under the pointer, not inside the dragged branch
       const dragged = A.nodeByKey(d.key);
-      const under = document.elementFromPoint(e.clientX, e.clientY);
-      const el = under?.closest('[data-node]');
-      const over = el ? A.nodeByKey(el.getAttribute('data-node')) : null;
-      const inside = !!(over && dragged && collectNodes(dragged).includes(over));
-      // another tree: one of its nodes, or its empty sheet
-      const otherId = !el ? under?.closest('[data-tree]')?.getAttribute('data-tree') ?? null : null;
-      let otherKey: string | null = null;
-      if (otherId) {
-        const o = otherScenes.value.find((x) => x.entry.id === otherId);
-        if (o?.scene) {
-          const r = wrap.current!.getBoundingClientRect();
-          const vv = view.value;
-          const lx = (e.clientX - r.left - vv.x) / vv.zoom - o.entry.x;
-          const ly = (e.clientY - r.top - vv.y) / vv.zoom - o.entry.y;
-          otherKey = o.scene.hits.find((h) => lx >= h.box.x1 && lx <= h.box.x2 && ly >= h.box.y1 && ly <= h.box.y2)?.key ?? null;
+      const r=wrap.current!.getBoundingClientRect(), vv=view.value;
+      const wx=(e.clientX-r.left-vv.x)/z, wy=(e.clientY-r.top-vv.y)/z;
+      const excluded=new Set(dragged?collectNodes(dragged).map(n=>n.key):[]);
+      const sheets=[{entry:activeTree.value,scene:scene.value},...otherScenes.value];
+      let best: {slot:DropSlot;slots:DropSlot[];id:string;x:number;y:number;distance:number}|undefined;
+      for(const sheet of sheets) {
+        if(!sheet.scene) continue;
+        const lx=wx-sheet.entry.x,ly=wy-sheet.entry.y;
+        for(const hit of sheet.scene.hits) {
+          if(sheet.entry.id===activeId.value&&excluded.has(hit.key)) continue;
+          const slots=dropSlots(hit,sheet.scene);
+          // A point inside the label still offers the nearest insertion gap.
+          const onLabel=lx>=hit.box.x1&&lx<=hit.box.x2&&ly>=hit.box.y1&&ly<=hit.box.y2;
+          for(const slot of slots) {
+            const distance=Math.hypot(slot.x-lx,slot.y-ly);
+            if((distance*z<36||onLabel)&&(!best||distance<best.distance)) best={slot,slots,id:sheet.entry.id,x:sheet.entry.x,y:sheet.entry.y,distance};
+          }
         }
       }
-      nodeDrag.value = { key: d.key, dx: dx / z, dy: dy / z, over: over && !inside ? over.key : null, sister: e.shiftKey, copy: e.altKey, tree: otherId, treeKey: otherKey };
+      const under=document.elementFromPoint(e.clientX,e.clientY);
+      const emptyId=under?.closest('[data-tree]')?.getAttribute('data-tree');
+      const otherId=best&&best.id!==activeId.value?best.id:!best&&emptyId?emptyId:null;
+      nodeDrag.value={key:d.key,dx:dx/z,dy:dy/z,over:best&&best.id===activeId.value?best.slot.key:null,
+        sister:best?.slot.mode==='sister',copy:e.altKey?'linked':e.shiftKey,tree:otherId,treeKey:best?.slot.key,
+        slot:best?.slot,slots:best?.slots,slotX:best?.x,slotY:best?.y};
     } else if (d.kind === 'marquee') {
       const [x, y] = toLocal(e.clientX, e.clientY);
       marquee.value = { x1: Math.min(d.x0, x), y1: Math.min(d.y0, y), x2: Math.max(d.x0, x), y2: Math.max(d.y0, y) };
@@ -421,8 +430,8 @@ export function Canvas() {
       }
       const n = A.nodeByKey(d.key);
       const over = A.nodeByKey(nd?.over);
-      if (n && nd?.tree) A.moveToTree(n, nd.tree, nd.treeKey ?? null, nd.sister ? 'sister' : 'daughter', nd.copy);
-      else if (n && over && nd) A.moveNode(n, over, nd.sister ? 'sister' : 'daughter', nd.copy);
+      if (n && nd?.tree) A.moveToTree(n, nd.tree, nd.treeKey ?? null, nd.sister ? 'sister' : 'daughter', nd.copy, nd.slot);
+      else if (n && over && nd) A.moveNode(n, over, nd.sister ? 'sister' : 'daughter', nd.copy, nd.slot);
       return;
     }
     if (d.kind === 'marquee') {
@@ -455,7 +464,9 @@ export function Canvas() {
     }
     const nodeEl = target.closest('[data-node]');
     const arrowEl = target.closest('[data-arrow]');
-    if (nodeEl) clickNode(nodeEl.getAttribute('data-node')!);
+    const edgeEl = target.closest('[data-edge]');
+    if(edgeEl) { const [parent,child]=edgeEl.getAttribute('data-edge')!.split('|');selection.value={kind:'edge',parent,child};customizeScope.value='element'; A.copyScope.value='this';sideTab.value='appearance'; }
+    else if (nodeEl) clickNode(nodeEl.getAttribute('data-node')!);
     else if (arrowEl) { codeSelection.value = false; selection.value = { kind: 'arrow', index: Number(arrowEl.getAttribute('data-arrow')) }; }
     else {
       selection.value = null;
@@ -545,6 +556,7 @@ export function Canvas() {
       A.completePick(n);
       return;
     }
+    customizeScope.value='element'; A.copyScope.value='this';
     const tl = tool.value;
     if (tl === 'arrow') {
       A.arrowClick(n);
@@ -659,13 +671,7 @@ export function Canvas() {
     return h ? { x1: o.entry.x + h.box.x1 - 4, y1: o.entry.y + h.box.y1 - 4, x2: o.entry.x + h.box.x2 + 4, y2: o.entry.y + h.box.y2 + 4 } : null;
   })();
   const hint = nodeDrag.value
-    ? nodeDrag.value.tree
-      ? otherDrop
-        ? `Drop: ${nodeDrag.value.copy ? 'a copy' : 'the branch'} goes into the other tree${nodeDrag.value.treeKey ? (nodeDrag.value.sister ? ', as this node’s sister' : ', below this node') : ''}. Shift: as a sister · Alt: a copy`
-        : 'Drop it on a node of that tree (or on an empty tree)'
-      : nodeDrag.value.over
-      ? `Drop: ${nodeDrag.value.copy ? 'a copy' : 'the branch'} goes ${nodeDrag.value.sister ? 'right after this node (its sister)' : 'below this node (its last daughter)'}. Shift: as a sister · Alt: a copy`
-      : 'Drag onto a node: the branch becomes its last daughter (Shift: its sister, Alt: a copy)'
+    ? `Drop beside a node: sister · below: daughter. Shift: independent copy · Alt: linked copy`
     : pick.value
     ? `Click the constituent to add again as a ${pick.value.kind} (a new position of the same element). Esc to cancel.`
     : tool.value === 'arrow' ? (srcKey ? t('arrowPickTarget') : t('arrowPickSource')) : tool.value === 'ccommand' ? t('ccHint') : tool.value === 'dominance' ? t('domHint') : null;
@@ -714,6 +720,7 @@ export function Canvas() {
               {hover.value && hitByKey.get(hover.value) && tool.value !== 'select' && <rect {...box(hitByKey.get(hover.value)!, 3)} rx="4" class="hover-box" />}
               {srcKey && hitByKey.get(srcKey) && <rect {...box(hitByKey.get(srcKey)!, 4)} rx="5" class="arrow-source" />}
               <g class="prims" dangerouslySetInnerHTML={{ __html: primsHtml }} />
+              {sc.edges.map(h=><path d={h.d} data-edge={`${h.parent}|${h.child}`} class={`edge-hit ${sel?.kind==='edge'&&sel.parent===h.parent&&sel.child===h.child?'selected':''}`}><title>Click to customize this line</title></path>)}
               {sc.arrows.map((a) => (
                 <path key={'ah' + a.index} d={a.d} class={`arrow-hit ${selArrow?.index === a.index ? 'selected' : ''}`} data-arrow={a.index}>
                   <title>Click to select · double-click to add a bend point</title>
@@ -764,6 +771,7 @@ export function Canvas() {
                 ))}
             </g>
           )}
+          {nd?.slots?.map(slot=><g transform={`translate(${nd.slotX??0} ${nd.slotY??0})`}><circle class={`drop-slot ${slot===nd.slot?'on':''}`} cx={slot.x} cy={slot.y} r={6/v.zoom} data-drop-mode={slot.mode} data-drop-index={slot.index}/></g>)}
         </g>
       </svg>
       {treeGroupBounds().map((g) => {

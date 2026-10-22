@@ -23,7 +23,7 @@ import { loadCanvasExample } from '../nanosyntax';
 import { TreeAssignmentDialogs } from './TreeAssignmentDialogs';
 import { codeSelection, focusTreeRequest, nanosyntaxEnabled, rightPanelOpen, toggleNanosyntax, treeTargetPick, visibleTrees } from '../state';
 import { autoSaveFile, canWriteFiles, fileHandle, fileName, loadFile, openFromDisk, saveToDisk, unsaved } from '../files';
-import { SettingsPanel } from './SettingsPanel';
+import { CustomizePanel } from './CustomizePanel';
 
 function useTheme() {
   useSignalEffect(() => {
@@ -177,8 +177,6 @@ function useShortcuts() {
       if (key === '0' || key === 'f') return handled(), canvasApi.fit?.();
       if (key === 'v') return handled(), (tool.value = 'select');
       if (key === 'w') return handled(), (tool.value = 'arrow');
-      if (key === 'c') return handled(), ((tool.value = 'ccommand'), (relationOf.value = sel?.kind === 'node' ? sel.key : null));
-      if (key === 'd') return handled(), ((tool.value = 'dominance'), (relationOf.value = sel?.kind === 'node' ? sel.key : null));
       if (sel?.kind === 'arrow' && (key === 'Delete' || key === 'Backspace')) {
         const a = A.selectedArrow();
         return handled(), a && M.deleteArrow(a);
@@ -313,7 +311,7 @@ function OverrideQuestion() {
             <span class="track" aria-hidden="true">
               <span class="thumb" />
             </span>
-            <span>Don't ask again (change it in Appearance → Values of their own)</span>
+            <span>Don't ask again (change it in Customize → Values of their own)</span>
           </label>
           <div class="row">
             <button class="btn primary" onClick={() => q.answer(true, remember.value)} data-testid="override-yes">
@@ -512,7 +510,12 @@ export function App() {
   useShortcuts();
   // picking something on the tree brings the editing back
   useSignalEffect(() => {
-    if (selection.value) { sideTab.value = 'edit'; if (selection.value.kind === 'node') codeSelection.value = true; }
+    if (selection.value) {
+      const sel=selection.value;
+      if(sel.kind==='edge')sideTab.value='appearance';
+      else sideTab.value='edit';
+      if(sel.kind==='node')codeSelection.value=true;
+    }
   });
   /** on narrow screens the right panel is a sheet, shown only when it has something to show */
   const sideOpen = rightPanelOpen.value;
@@ -598,7 +601,7 @@ export function App() {
           </button>
           <button
             class={`icon-btn panel-toggle ${rightPanelOpen.value ? 'active' : ''}`}
-            title={`${t('settings')} (the right panel: Edit / Appearance)`}
+            title={`${t('settings')} (the right panel: Edit / Customize)`}
             aria-label={t('settings')}
             aria-pressed={rightPanelOpen.value}
             onClick={() => {
@@ -653,7 +656,7 @@ export function App() {
               <IClose size={14} />
             </button>
           </div>
-          <div class="side-body">{sideTab.value === 'edit' ? <Inspector /> : sideTab.value === 'appearance' ? <SettingsPanel /> : <NanosyntaxPanel />}</div>
+          <div class="side-body">{sideTab.value === 'edit' ? <Inspector /> : sideTab.value === 'appearance' ? <CustomizePanel /> : <NanosyntaxPanel />}</div>
         </aside>
       </main>
 

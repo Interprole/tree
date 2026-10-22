@@ -27,9 +27,11 @@ export const style = signal<TreeStyle>(defaultStyle);
 
 export type Theme = 'auto' | 'light' | 'dark';
 export type Tool = 'select' | 'arrow' | 'ccommand' | 'dominance';
+export const customizeScope = signal<'element' | 'copies' | 'tree' | 'canvas'>('element');
 export type Selection =
   | { kind: 'node'; key: string }
   | { kind: 'arrow'; index: number }
+  | { kind: 'edge'; parent: string; child: string }
   /** a note of a node or a label of an arrow */
   | { kind: 'label'; label: 'note' | 'arrow'; owner: string | number; index: number }
   | null;

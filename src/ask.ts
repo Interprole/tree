@@ -31,6 +31,8 @@ export const question = signal<null | { message: string; answer: (replace: boole
 /** a slider asks once while it is being dragged: answers stay for a moment per setting */
 const recent = new Map<string, { replace: boolean; at: number }>();
 const pending = new Map<string, Promise<boolean>>();
+const queue:(()=>void)[]=[];
+function showNext(){ if(!question.value) queue.shift()?.(); }
 
 /** Replace the values of their own (true) or keep them (false)? */
 export function askOverride(key: string, message: string): Promise<boolean> {
@@ -45,7 +47,7 @@ export function askOverride(key: string, message: string): Promise<boolean> {
   const waiting = pending.get(key);
   if (waiting) return waiting;
   const promise = new Promise<boolean>((resolve) => {
-    question.value = {
+    queue.push(()=>{ question.value = {
       message,
       answer: (replace, remember) => {
         question.value = null;
@@ -53,9 +55,11 @@ export function askOverride(key: string, message: string): Promise<boolean> {
         recent.set(key, { replace, at: performance.now() });
         if (remember) overridePolicy.value = replace ? 'replace' : 'keep';
         resolve(replace);
+        showNext();
       },
-    };
+    }; });
   });
   pending.set(key, promise);
+  showNext();
   return promise;
 }
