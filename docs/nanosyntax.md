@@ -42,7 +42,7 @@ rule leaves the tree's other overrides intact. Tree overrides can be reset to
 the canvas settings.
 
 To build a derivation, right-click an S-tree with L-trees or an L-tree and choose
-**Derive**. A local L-tree derives its owner; a canvas L-tree offers each eligible
+**Run spellout**. A local L-tree derives its owner; a canvas L-tree offers each eligible
 S-tree by name. This action is also available when right-clicking a node. **Add
 a node** appears only on an empty tree.
 

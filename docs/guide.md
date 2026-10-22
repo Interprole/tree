@@ -140,7 +140,7 @@ Select an arrow to reveal its handles. Drag handles to bend it; double-click the
 4. To make an entry directly beside an owner, right-click the S-tree or a group containing its L-trees → **New L-tree to this tree**. All lexical entries remain visible, editable trees. A tree-scoped entry moves with its owner.
 5. Fill in an entry such as `[NumP;spell="fin" [Num]]`. Right-click an L-tree to change its owner or stop using it as an L-tree.
 6. Choose the three rules below in the **Nanosyntax** tab. Each selector has its own numbered explanation and links. Settings apply to this tree or the whole canvas; changing a general rule asks about independent tree values using Customize's Ask / Replace / Keep policy.
-7. Right-click the S-tree with entries, or an L-tree → **Derive**. A canvas L-tree offers its eligible S-trees by name. The button belongs to the context menu.
+7. Right-click the S-tree with entries, or an L-tree → **Run spellout**. A canvas L-tree offers its eligible S-trees by name. The button belongs to the context menu.
 
 Matching requires the whole syntactic constituent to be identical to a constituent inside an L-tree: a lexical tree can be a superset of what it spells out. Among matches the entry with the fewest unused features wins; declaration order resolves ties, with local entries before canvas entries.
 
@@ -186,7 +186,7 @@ The general **Examples** menu has three canvases with S-tree, visible L-trees an
 | Mara **wili-gamiñ → wilamiñ**, “women” | Old movement + Early Closure + AUX only; Kloudová 2020, §5.3.1, pp. 65–69. This is the Kloudová example. |
 | Friulian **fin-iʃ**, 1SG | Revised evacuation + Early Closure + AUX only; published 2025 chapter 1, §1.6. |
 
-Lower lexical domains are abbreviated to matching minimal subtrees. Mara contraction is phonological and is not a syntactic operation. Changing rules does not rewrite already generated snapshots; use Derive to produce a derivation under the new rules. All eight combinations of the three independent choices can be selected and saved.
+Lower lexical domains are abbreviated to matching minimal subtrees. Mara contraction is phonological and is not a syntactic operation. Changing rules does not rewrite already generated snapshots; use Run spellout to produce a derivation under the new rules. All eight combinations of the three independent choices can be selected and saved.
 
 ## Semantics
 

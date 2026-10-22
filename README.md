@@ -73,7 +73,7 @@ Phrasal spellout displays **tree ⇒ expression** on the right or **expression �
 2. Build an S-tree with feature nodes, then visually build ordinary trees for lexical entries. Right-click an entry → **Use as an L-tree…** → Whole canvas, a named S-tree, or Pick an S-tree on the canvas.
 3. **New L-tree to this tree** adds an adjacent entry from an S-tree or lexical-group context menu. All L-trees remain visible editable trees using the same code, e.g. `[NumP;spell="fin" [Num]]`. Their menus can reassign scope or stop using them as lexical trees.
 4. Select rules in the Nanosyntax tab at tree/canvas scope. Each choice has its own numbered explanation and source links.
-5. Right-click an S-tree with entries or an L-tree → **Derive**. A global entry offers eligible owners by name. The action belongs to the context menu, not the settings tab.
+5. Right-click an S-tree with entries or an L-tree → **Run spellout**. A global entry offers eligible owners by name. The action belongs to the context menu, not the settings tab.
 
 The three independent choices are:
 

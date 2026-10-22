@@ -1017,8 +1017,8 @@ function DerivationItems({ id, run }: { id: string; run: (f: () => void) => () =
   const entry = trees.value.find((tree) => tree.id === id);
   if (!nanosyntaxEnabled.value || !entry) return null;
   const targets = derivationTargets(entry);
-  if (!targets.length) return entry.lexical ? <button role="menuitem" disabled title="Add a non-empty S-tree to derive first."><strong>Derive</strong></button> : null;
-  return <>{targets.map((owner) => <button key={owner.id} role="menuitem" data-testid="build-derivation" disabled={derivationBusy.value || !editable.value} onClick={run(() => void buildDerivation(owner))}><strong>{targets.length > 1 ? 'Derive · ' + owner.name : 'Derive'}</strong></button>)}</>;
+  if (!targets.length) return entry.lexical ? <button role="menuitem" disabled title="Add a non-empty S-tree to derive first."><strong>Run spellout</strong></button> : null;
+  return <>{targets.map((owner) => <button key={owner.id} role="menuitem" data-testid="build-derivation" disabled={derivationBusy.value || !editable.value} onClick={run(() => void buildDerivation(owner))}><strong>{targets.length > 1 ? 'Run spellout · ' + owner.name : 'Run spellout'}</strong></button>)}</>;
 }
 
 /** What can be done with a whole tree (right click on its sheet or its name). */
