@@ -19,6 +19,28 @@ test('daughter gaps are n+1 and sister slots are ordered',()=>{
   const sisters=dropSlots(sc.hits.find(h=>h.node.id==='a')??sc.hits[1],sc).filter(s=>s.mode==='sister');
   expect(sisters.map(s=>s.index)).toEqual([0,1]);
 });
+test('moving within the same mother omits the two gaps around the current position',()=>{
+  const t=tree(source.value),sc=buildScene(t,defaultStyle,approxMeasure);
+  const root=sc.hits.find(h=>h.node===t.root)!;
+  const [a,b,c]=t.root.children;
+  expect(dropSlots(root,sc,a).map(s=>s.index)).toEqual([2,3]);
+  expect(dropSlots(root,sc,b).map(s=>s.index)).toEqual([0,3]);
+  expect(dropSlots(root,sc,c).map(s=>s.index)).toEqual([0,1]);
+  // No move is supplied for a copy or an independent source tree.
+  expect(dropSlots(root,sc).map(s=>s.index)).toEqual([0,1,2,3]);
+  expect(dropSlots(root,sc,tree('[X]').root).map(s=>s.index)).toEqual([0,1,2,3]);
+});
+test('neighbouring sister targets omit the same unchanged positions',()=>{
+  const t=tree(source.value),sc=buildScene(t,defaultStyle,approxMeasure);
+  const [a,b,c]=t.root.children;
+  const before=sc.hits.find(h=>h.node===a)!,after=sc.hits.find(h=>h.node===c)!;
+  expect(dropSlots(before,sc,b).filter(s=>s.mode==='sister').map(s=>s.index)).toEqual([0]);
+  expect(dropSlots(after,sc,b).filter(s=>s.mode==='sister').map(s=>s.index)).toEqual([1]);
+});
+test('an only daughter has no alternative position under its current mother',()=>{
+  const t=tree('[S [A a]]'),sc=buildScene(t,defaultStyle,approxMeasure);
+  expect(dropSlots(sc.hits.find(h=>h.node===t.root)!,sc,t.root.children[0])).toEqual([]);
+});
 test('branch can move to first daughter and before a sister',()=>{
   moveNode(active.value!.root.children[2],active.value!.root,'daughter',false,{index:0});
   expect(active.value!.root.children.map(n=>n.src!.kind==='node'?n.src!.label:'')).toEqual(['C','A','B']);

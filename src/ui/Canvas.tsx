@@ -361,6 +361,7 @@ export function Canvas() {
       const r=wrap.current!.getBoundingClientRect(), vv=view.value;
       const wx=(e.clientX-r.left-vv.x)/z, wy=(e.clientY-r.top-vv.y)/z;
       const excluded=new Set(dragged?collectNodes(dragged).map(n=>n.key):[]);
+      const copy=e.altKey?'linked':e.shiftKey;
       const sheets=[{entry:activeTree.value,scene:scene.value},...otherScenes.value];
       let best: {slot:DropSlot;slots:DropSlot[];id:string;x:number;y:number;distance:number}|undefined;
       for(const sheet of sheets) {
@@ -368,7 +369,7 @@ export function Canvas() {
         const lx=wx-sheet.entry.x,ly=wy-sheet.entry.y;
         for(const hit of sheet.scene.hits) {
           if(sheet.entry.id===activeId.value&&excluded.has(hit.key)) continue;
-          const slots=dropSlots(hit,sheet.scene);
+          const slots=dropSlots(hit,sheet.scene,!copy&&sheet.entry.id===activeId.value?dragged??undefined:undefined);
           // A point inside the label still offers the nearest insertion gap.
           const onLabel=lx>=hit.box.x1&&lx<=hit.box.x2&&ly>=hit.box.y1&&ly<=hit.box.y2;
           for(const slot of slots) {
@@ -381,7 +382,7 @@ export function Canvas() {
       const emptyId=under?.closest('[data-tree]')?.getAttribute('data-tree');
       const otherId=best&&best.id!==activeId.value?best.id:!best&&emptyId?emptyId:null;
       nodeDrag.value={key:d.key,dx:dx/z,dy:dy/z,over:best&&best.id===activeId.value?best.slot.key:null,
-        sister:best?.slot.mode==='sister',copy:e.altKey?'linked':e.shiftKey,tree:otherId,treeKey:best?.slot.key,
+        sister:best?.slot.mode==='sister',copy,tree:otherId,treeKey:best?.slot.key,
         slot:best?.slot,slots:best?.slots,slotX:best?.x,slotY:best?.y};
     } else if (d.kind === 'marquee') {
       const [x, y] = toLocal(e.clientX, e.clientY);

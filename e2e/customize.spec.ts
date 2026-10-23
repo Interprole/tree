@@ -31,7 +31,7 @@ test('tree edges select independently, and general settings ask about private va
   await page.getByTestId('override-no').click();await expect.poll(()=>code(page)).toContain(';edge=#b91c1c');
   await page.getByTestId('side-edit').click();await node(page,'A').click();await expect(page.locator('.inspector')).not.toContainText('Edge width');
 });
-test('spatial drops show n+1 gaps; Shift copies and Alt links',async({page})=>{
+test('spatial drops skip unchanged positions; Shift and Alt keep copy gaps',async({page})=>{
   await setup(page);
   async function drag(label:string,index:number,modifier?:'Shift'|'Alt') {
     await page.getByRole('button',{name:'Fit to window',exact:true}).click();
@@ -39,8 +39,8 @@ test('spatial drops show n+1 gaps; Shift copies and Alt links',async({page})=>{
     if(modifier)await page.keyboard.down(modifier);
     await page.mouse.move(from.x+from.width/2,from.y+from.height/2);await page.mouse.down();
     await page.mouse.move(root.x+root.width/2,root.y+root.height/2,{steps:8});
-    const gaps=page.locator('.drop-slot[data-drop-mode="daughter"]');await expect(gaps).toHaveCount(index===0?4:index+1);
-    const slot=(await gaps.nth(index).boundingBox())!;await page.mouse.move(slot.x+slot.width/2,slot.y+slot.height/2,{steps:4});await page.mouse.up();
+    const gaps=page.locator('.drop-slot[data-drop-mode="daughter"]');await expect(gaps).toHaveCount(index===0?2:index+1);
+    const slot=(await page.locator(`.drop-slot[data-drop-mode="daughter"][data-drop-index="${index}"]`).boundingBox())!;await page.mouse.move(slot.x+slot.width/2,slot.y+slot.height/2,{steps:4});await page.mouse.up();
     if(modifier)await page.keyboard.up(modifier);
   }
   await drag('C',0);await expect.poll(()=>code(page)).toMatch(/\[S\s+\[C c\]\s+\[A a\]\s+\[B b\]\]/);

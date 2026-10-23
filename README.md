@@ -29,6 +29,8 @@ Drag a branch by its top node. Visible orange positions determine the relation a
 - **Shift-drag empty space:** select a branch by rectangle.
 - **Ctrl/Cmd+C / X / V:** copy/cut/paste; Shift+V pastes as sister, V without a node creates a tree. Ctrl/Cmd+D duplicates.
 
+Moving within the same mother omits the two gaps beside the branch's current position, since dropping there would leave it in place. Those gaps remain available when copying.
+
 Moving/copying works between trees and into an empty sheet. Root sisters and self-containing branches are rejected. Remerged daughter/sister creates another position of the same movement chain, which differs from an independent or linked clipboard copy.
 
 Drag a tree's caption to move it. Right-click → Add to a group lets you choose a group/tree or pick one on the canvas. A group header moves its members. Add a node appears only for an empty tree. C and D are no longer tool shortcuts. Selected panel text retains ordinary copy behavior.

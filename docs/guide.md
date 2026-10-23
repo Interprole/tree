@@ -56,6 +56,8 @@ Drag a branch by its top node. Orange insertion points show where it will go:
 3. Release at a point to move. Hold **Shift** to insert an independent copy; hold **Alt** to insert a linked copy. Alt takes precedence if both are held.
 4. You can also move/copy into another tree or an empty sheet. A root cannot acquire a sister; a branch cannot be moved inside itself.
 
+When moving within the same mother, the two gaps beside the branch's existing position are omitted: both would leave it in place. The equivalent sister positions on neighbouring branches are omitted too. Copying retains these positions.
+
 Shift-drag on empty space draws a selection rectangle. It selects the smallest branch enclosing the selection. Drag the background to pan. Ctrl+wheel or a pinch zooms. Bottom-toolbar buttons also zoom and fit.
 
 Ctrl/Cmd+C copies the selected branch, X cuts, V pastes as last daughter; Ctrl/Cmd+Shift+V pastes as next sister. With no node selected, paste creates a new tree. Ctrl/Cmd+D duplicates the branch. Independent copies receive fresh conflicting IDs and carry their internal arrows. Text selected in a panel retains ordinary text-copy behavior.
