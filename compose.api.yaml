@@ -1,0 +1,16 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    init: true
+    ports:
+      - "127.0.0.1:${PORT:-3000}:3000"
+    environment:
+      NANOTREES_API_KEY: ${NANOTREES_API_KEY:-}
+      NANOTREES_ALLOWED_ORIGINS: ${NANOTREES_ALLOWED_ORIGINS:-*}
+      NANOTREES_CONCURRENCY: ${NANOTREES_CONCURRENCY:-2}
+      NANOTREES_QUEUE_LIMIT: ${NANOTREES_QUEUE_LIMIT:-16}
+      NANOTREES_TIMEOUT_MS: ${NANOTREES_TIMEOUT_MS:-30000}
+    shm_size: "256mb"
+    restart: unless-stopped

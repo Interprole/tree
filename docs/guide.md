@@ -256,6 +256,14 @@ Drag the sheet corner to resize: the tree scales proportionally into the request
 
 Exports operate on the selected tree. Save/Share preserve the whole canvas. The offline build is one HTML file with the application and bundled fonts and runs locally without a server. Derivations run in the browser; no backend computation or external API is required.
 
+## HTTP API for external programs
+
+An optional separate HTTP service provides tree analysis and compositional meanings as JSON, exports as SVG/PNG/PDF/LaTeX, and nanosyntactic spellout from a supplied S-tree and lexicon. All eight rule configurations are available. Requests are independent and do not change a browser canvas.
+
+From a repository checkout with Node.js 22, run `npm ci`, `npx playwright install --with-deps chromium`, `npm run build:api`, then `npm run start:api`. The default local documentation is at `http://127.0.0.1:3000/docs`; the machine-readable specification is `/openapi.json`. Docker launch is `docker compose -f compose.api.yaml up --build -d`.
+
+Use `POST /v1/trees/analyze`, `POST /v1/trees/render`, or `POST /v1/nanosyntax/derive` with JSON. A partial spellout returns `complete=false`; inspect that field and warnings even when HTTP succeeds. The editor remains a standalone browser application; public API hosting is separate. See the [HTTP API guide with Python/curl examples and configuration](https://github.com/Interprole/tree/blob/main/docs/api.md).
+
 ## Keyboard reference
 
 | Key | Action |

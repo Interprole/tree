@@ -1,0 +1,12 @@
+.git
+.claude
+node_modules
+dist
+dist-api
+dist-offline
+test-results
+playwright-report
+coverage
+*.log
+.env
+.env.*

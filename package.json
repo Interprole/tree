@@ -12,7 +12,10 @@
     "typecheck": "tsc",
     "e2e": "playwright test",
     "screenshots": "playwright test --config=playwright.shots.config.ts",
-    "gen:fonts": "node scripts/gen-fonts.mjs"
+    "gen:fonts": "node scripts/gen-fonts.mjs",
+    "build:api": "vite build --config vite.api.config.ts && vite build --config vite.api-renderer.config.ts",
+    "start:api": "node dist-api/server.js",
+    "test:api": "npm run build:api && node --test scripts/api-smoke.mjs"
   },
   "repository": {
     "type": "git",
@@ -49,6 +52,7 @@
     "lz-string": "^1.5.0",
     "pako": "^3.0.2",
     "pdf-lib": "^1.17.1",
+    "playwright": "1.56.1",
     "preact": "^11.0.1"
   },
   "devDependencies": {

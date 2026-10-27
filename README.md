@@ -2,9 +2,9 @@
 
 **[Open NanoTrees](https://interprole.github.io/tree/)** · by Gleb Bubnov
 
-An interactive syntax-tree editor for linguists. Type bracket notation or edit the picture; canvas edits update the same code and undo history. Everything, including nanosyntactic derivation search, runs in the browser. Static hosting on GitHub Pages is sufficient; no application server or paid API is required.
+An interactive syntax-tree editor for linguists. Type bracket notation or edit the picture; canvas edits update the same code and undo history. The editor, including nanosyntactic derivation search, runs in the browser. Static hosting on GitHub Pages is sufficient. An optional separate HTTP service provides the same analysis, exports and spellout to external programs.
 
-**[Complete editor guide and syntax reference](docs/guide.md)** · **[Nanosyntax: sources, algorithms and limits](docs/nanosyntax.md)**
+**[Complete editor guide and syntax reference](docs/guide.md)** · **[Nanosyntax: sources, algorithms and limits](docs/nanosyntax.md)** · **[HTTP API: local launch, Docker and examples](docs/api.md)**
 
 The in-app **Guide** renders `docs/guide.md`, keeping the instructions and repository reference together.
 
@@ -107,6 +107,23 @@ Export the selected tree as SVG, PNG, PDF, editable forest/tikz-qtree, or exact-
 
 `npm run build:offline` produces `dist-offline/nanotrees.html`: the application and bundled fonts in a single locally openable file.
 
+## HTTP API
+
+Use the optional API from Python, scripts or other applications. It returns tree graphs and compositional meanings as JSON, SVG/PNG/PDF/LaTeX files, and nanosyntactic derivations with all eight spellout configurations. It runs separately from the website and does not modify browser canvases.
+
+With Node.js 22, from the repository root:
+
+```sh
+npm ci
+npx playwright install --with-deps chromium
+npm run build:api
+npm run start:api     # http://127.0.0.1:3000/docs
+```
+
+Or use Docker: `docker compose -f compose.api.yaml up --build -d`. Compose exposes the API on localhost port 3000. No public service is deployed by either command.
+
+Endpoints: `POST /v1/trees/analyze`, `POST /v1/trees/render`, `POST /v1/nanosyntax/derive`. `/openapi.json` describes the request schemas; `/v1/capabilities` lists defaults, fonts, limits and algorithm combinations. Set `NANOTREES_API_KEY` to require bearer authentication. See the [API guide](docs/api.md) for curl/Python examples, configuration, response fields and partial derivation handling.
+
 ## Development
 
 ```sh
@@ -118,11 +135,12 @@ npm run build
 npm run e2e          # Playwright, against the production preview
 npm run build:offline
 npm run screenshots
+npm run test:api     # real HTTP requests through Chromium; requires its installation
 ```
 
 Core: `parser.ts` parses source spans; `build.ts` resolves display nodes, chains and meanings; `nanosyntax.ts` searches derivations; `layout.ts` and `arrows.ts` position geometry; `drop.ts` defines insertion gaps; `scene.ts` builds drawing primitives; `latex.ts` exports editable/exact LaTeX; `edits.ts` writes source changes. `overrides.ts` manages style inheritance; `docs/guide.md` supplies the in-app guide.
 
-CI checks types, tests, LaTeX and Playwright, and deploys main to GitHub Pages.
+CI checks types, tests, LaTeX, Playwright and HTTP API integration, and deploys the frontend on main to GitHub Pages. The API is a separate build and is not deployed to Pages.
 
 ## License
 
