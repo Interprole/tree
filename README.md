@@ -41,11 +41,13 @@ For a selected node, line or arrow, the scope row offers This element, All copie
 
 General changes use **Values of their own → Ask / Replace them / Keep them** when trees/elements/copies have private values. Replace clears the corresponding private override; Keep leaves it independent. The same policy governs nanosyntax rules. Other properties are preserved; an explicit `default` colour marker can retain inheritance for one property while leaving other branch colours intact.
 
-Click a **tree line itself** to change its colour, width, pattern or extra length. These controls are separate from the node editor. Select an arrow to edit its colour, width, pattern and arrowheads in Customize; its movement meaning, endpoints, labels and geometry remain in Edit. Node controls include label size/colour, branch colour, spacing and meaning colour.
+**Lines to nodes** and **Lines to expressions** have independent colour, width, pattern and hand-drawn settings for a tree or all trees. Changing one type leaves the other and its private overrides intact. Click a **tree line itself** to customize it at This element / All copies scope, including extra length. Select an arrow to edit its colour, width, pattern and arrowheads in Customize; its movement meaning, endpoints, labels and geometry remain in Edit. Node controls include label size/colour, branch colour, spacing and meaning colour.
 
 Customize also contains typography, layout, labelling, movement, semantics and export-sheet dimensions. **Circle phrasal spellout domains** is immediately after Movement and before Semantics. **Italic expressions** italicizes expressions, not syntactic terminal labels.
 
 ## Expressions and movement syntax
+
+Text supports nested LaTeX commands such as `\textbf{bold}`, `\textit{italic}`, `\textsc{small caps}`, `\textup{upright}`, `\textnormal{normal}`, `\emph{emphasis}`, `\underline{under}`, `\overline{over}`, `\sout{struck}`, `\textsubscript{i}` and `\textsuperscript{2}`. They work in code and visual text fields, appear in completion, and retain their formatting in exports. See the guide for aliases and escaping in quoted spellout values.
 
 | Code | Behavior |
 | --- | --- |

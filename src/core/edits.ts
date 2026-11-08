@@ -1,5 +1,6 @@
 import type { AArrow, AChild, ADoc, ALabel, ALeaf, ANode, APosStyle, ARef, LabelSide, PosMods } from './ast';
 import { walkAst } from './parser';
+import { textCommandEnd } from './richtext';
 
 /**
  * Canvas operations expressed as minimal edits of the source text. The text stays the single
@@ -39,13 +40,26 @@ const LABEL_SPECIAL = /([[\]{}|#*@%\\"])/g;
 
 /** Escape a label typed on the canvas so that it parses back to itself (markup _ ^ ' is kept). */
 export function escapeLabel(s: string): string {
-  return s.trim().replace(LABEL_SPECIAL, '\\$1').replace(/\s+/g, '~');
+  return escapeOutsideCommands(s.trim(), text => text.replace(LABEL_SPECIAL, '\\$1').replace(/\s+/g, '~'));
 }
 
 export function escapeText(s: string): string {
-  let t = s.trim().replace(/([[\]{}|%\\"])/g, '\\$1').replace(/(^|\s)#/g, '$1\\#');
+  let t = escapeOutsideCommands(s.trim(), text => text.replace(/([[\]{}|%\\"])/g, '\\$1').replace(/(^|\s)#/g, '$1\\#'));
   if (t.startsWith('^')) t = '\\' + t;
   return t;
+}
+
+function escapeOutsideCommands(text: string, escape: (part: string) => string): string {
+  let out = '', start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '\\') continue;
+    const end = textCommandEnd(text, i);
+    if (end === null) { i++; continue; }
+    out += escape(text.slice(start, i)) + text.slice(i, end);
+    start = end;
+    i = end - 1;
+  }
+  return out + escape(text.slice(start));
 }
 
 type Mods = Pick<ANode, 'id' | 'color' | 'branchColor' | 'pronounce' | 'opts'>;

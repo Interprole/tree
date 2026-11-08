@@ -4,7 +4,7 @@ import { buildScene } from '../src/core/scene';
 import { approxMeasure } from '../src/core/measure';
 import { defaultStyle } from '../src/core/style';
 import { clearElementOverrides, applyStyle } from '../src/overrides';
-import { addTree, appearanceScope, restore, source, sources, tree as active, trees } from '../src/state';
+import { activeId, addTree, appearanceScope, canvasSettings, restore, snapshot, source, sources, style, tree as active, trees } from '../src/state';
 import { copyScope, moveNode, nodeByKey, setOption } from '../src/actions';
 import { overridePolicy } from '../src/ask';
 import { tree } from './helpers';
@@ -91,8 +91,62 @@ test('replacing one branch colour property preserves its other element colours',
   expect(labels.prims.filter(p=>p.t==='text'&&p.role==='label').every(p=>p.t==='text'&&p.color==='blue')).toBe(true);
   expect(labels.prims.filter(p=>p.t==='text'&&p.role==='leaf').every(p=>p.t==='text'&&p.color==='red')).toBe(true);
   const edges=render(clearElementOverrides(original,['lineColor']));
-  expect(edges.prims.filter(p=>p.t==='path'&&p.role==='edge').every(p=>p.t==='path'&&p.stroke==='orange')).toBe(true);
+  for(const e of edges.edges) {
+    const child=tree(clearElementOverrides(original,['lineColor'])).nodes.find(n=>n.key===e.child)!;
+    expect(edges.prims.find(p=>p.t==='path'&&p.role==='edge'&&p.node===child.key)).toMatchObject({stroke:child.kind==='leaf'?'red':'orange'});
+  }
   expect(edges.prims.filter(p=>p.t==='text'&&p.role==='label').every(p=>p.t==='text'&&p.color==='red')).toBe(true);
+});
+
+test.each([
+  ['lineColor','edge','wordedge'], ['lineWidth','width','wordwidth'], ['linePattern','edgeline','wordline'],
+  ['wordLineColor','wordedge','edge'], ['wordLineWidth','wordwidth','width'], ['wordLinePattern','wordline','edgeline'],
+])('%s replaces only its own class of private line settings', (key,removed,kept)=>{
+  const text='[S [A#a;edge=red;width=2;edgeline=dashed;wordedge=blue;wordwidth=3;wordline=dotted a] #a]\n#a/2: edge=green width=4 edgeline=dotted wordedge=purple wordwidth=5 wordline=dashed';
+  const next=clearElementOverrides(text,[key]);
+  expect(next).not.toMatch(new RegExp('(?:;|\\s)'+removed+'='));
+  expect(next).toMatch(new RegExp(';'+kept+'='));
+  expect(next).toMatch(new RegExp(' '+kept+'='));
+});
+
+test('node and expression lines render independent colour, width, pattern and hand drawing',()=>{
+  const t=tree('[S [N word]]');
+  const sc=buildScene(t,{...defaultStyle,lineColor:'red',lineWidth:2,linePattern:'dashed',handDrawn:true,
+    wordLineColor:'blue',wordLineWidth:3,wordLinePattern:'dotted',wordHandDrawn:false},approxMeasure);
+  const node=t.root.children[0],word=node.children[0];
+  const nodeLine=sc.prims.find(p=>p.t==='path'&&p.role==='edge'&&p.node===node.key);
+  const wordLine=sc.prims.find(p=>p.t==='path'&&p.role==='edge'&&p.node===word.key);
+  expect(nodeLine).toMatchObject({stroke:'red',width:2,dash:[5,3.5]});
+  expect(wordLine).toMatchObject({stroke:'blue',width:3,dash:[1.2,2.8]});
+  expect(nodeLine?.t==='path'&&nodeLine.d).toContain('Q');
+  expect(wordLine?.t==='path'&&wordLine.d).not.toContain('Q');
+});
+
+test('tree and canvas changes keep the other line class independent, including inactive trees',async()=>{
+  const first=activeId.value;
+  const second=addTree('[X;edge=red;wordedge=green;wordwidth=3 word]');
+  appearanceScope.value='tree';
+  applyStyle({lineColor:'blue',lineWidth:2});
+  await new Promise(r=>setTimeout(r,0));
+  expect(style.value).toMatchObject({lineColor:'blue',lineWidth:2,wordLineColor:defaultStyle.wordLineColor,wordLineWidth:1});
+  expect(source.value).toContain(';wordedge=green');
+  expect(trees.value.find(e=>e.id===first)!.style.lineColor).toBe(defaultStyle.lineColor);
+  appearanceScope.value='canvas';
+  applyStyle({wordLineColor:'purple',wordLineWidth:4});
+  await new Promise(r=>setTimeout(r,0));
+  expect(trees.value.find(e=>e.id===second)!.style).toMatchObject({lineColor:'blue',lineWidth:2,wordLineColor:'purple',wordLineWidth:4});
+  expect(canvasSettings.value.style.lineColor).toBe(defaultStyle.lineColor);
+  expect(source.value).not.toContain(';wordedge=green');
+});
+
+test('old saved shared lines migrate, while new independent defaults survive save/restore',()=>{
+  restore({s:'[N word]',st:{lineColor:'red',lineWidth:2,linePattern:'dashed',handDrawn:true}});
+  expect(style.value).toMatchObject({wordLineColor:'red',wordLineWidth:2,wordLinePattern:'dashed',wordHandDrawn:true});
+  restore({s:'[N word]'});
+  style.value={...style.value,lineColor:'blue',lineWidth:3,linePattern:'dotted',handDrawn:true};
+  const saved=snapshot(true);restore(saved);
+  expect(style.value).toMatchObject({lineColor:'blue',lineWidth:3,linePattern:'dotted',handDrawn:true,
+    wordLineColor:defaultStyle.wordLineColor,wordLineWidth:1,wordLinePattern:'solid',wordHandDrawn:false});
 });
 test('an expression of a chain position can have its own size',()=>{
   restore({s:'[S [DP#d;spell="word"] [VP #d]]'});copyScope.value='this';

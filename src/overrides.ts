@@ -24,7 +24,7 @@ export function clearElementOverrides(text:string,keys:string[]):string {
     const d=result.doc, changes:E.TextChange[]=[];
     const inherited=new Map<ANode,string|undefined>();
     const visit=(n:ANode,color?:string)=>{inherited.set(n,color);for(const c of n.children)if(c.kind==='node')visit(c,n.branchColor??color);};visit(d.root!);
-    const opts:Record<string,string[]>={lineColor:['edge','wordedge'],lineWidth:['width','wordwidth'],linePattern:['edgeline','wordline'],levelGap:['len','wordlen'],siblingGap:['spread'],fontSize:['size','wordsize'],leafColor:['wordcolor'],semColor:['sem'],semComputedColor:['sem']};
+    const opts:Record<string,string[]>={lineColor:['edge'],lineWidth:['width'],linePattern:['edgeline'],wordLineColor:['wordedge'],wordLineWidth:['wordwidth'],wordLinePattern:['wordline'],levelGap:['len','wordlen'],siblingGap:['spread'],fontSize:['size','wordsize'],leafColor:['wordcolor'],semColor:['sem'],semComputedColor:['sem']};
     const remove=opts[key]??[];
     const shapeKey=({shapeColor:'color',shapeWidth:'width',shapePattern:'line',shapePadding:'padding'} as const)[key as 'shapeColor'];
     const patchMods=(mods:Record<string,unknown>)=>{
@@ -44,8 +44,8 @@ export function clearElementOverrides(text:string,keys:string[]):string {
       if(key==='leafColor'&&branch&&n.children.some(c=>c.kind==='leaf'))after.wordcolor='default';
       if(key==='lineColor') {
         if(inherited.get(n))after.edge='default';
-        if(branch&&n.children.some(c=>c.kind==='leaf'))after.wordedge='default';
       }
+      if(key==='wordLineColor'&&branch&&n.children.some(c=>c.kind==='leaf'))after.wordedge='default';
       if((key==='semColor'||key==='semComputedColor')&&(n.color||branch))after.sem='default';
       if(color!==n.color||JSON.stringify(before)!==JSON.stringify(after)) changes.push({from:n.labelSpan.to,to:n.headerSpan.to,insert:E.modifiers({...n,color,opts:after})});
       if(key==='nodeColor'||key==='leafColor') for(const c of n.children) if(c.kind==='ref'&&c.color) changes.push(...E.setRefStyle(c,{color:null}).changes);

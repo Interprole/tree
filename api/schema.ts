@@ -34,8 +34,8 @@ for (const [key, value] of Object.entries(defaultStyle)) {
 }
 Object.assign(styleProperties, {
   font: choice(...Object.keys(FONT_FAMILIES)), fontSize: number(6, 96), padding: number(0, 160),
-  lineWidth: number(0, 20), arrowWidth: number(0, 20), sheetWidth: number(0, 8192), sheetHeight: number(0, 8192),
-  linePattern: choice('solid', 'dashed', 'dotted'), arrowPattern: choice('solid', 'dashed', 'dotted'), copyStyle: choice('regular', 'gray', 'strike', 'angle'),
+  lineWidth: number(0, 20), wordLineWidth: number(0, 20), arrowWidth: number(0, 20), sheetWidth: number(0, 8192), sheetHeight: number(0, 8192),
+  linePattern: choice('solid', 'dashed', 'dotted'), wordLinePattern: choice('solid', 'dashed', 'dotted'), arrowPattern: choice('solid', 'dashed', 'dotted'), copyStyle: choice('regular', 'gray', 'strike', 'angle'),
 });
 export const styleSchema = object(styleProperties);
 export const algorithmSchema: Schema = { anyOf: [

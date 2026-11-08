@@ -39,11 +39,17 @@ A bare expression and `;spell=` can have the same result: `[N cat]`, `[N;spell=c
 | `X^0`, `X^{max}` | Superscripts. |
 | `big~label` | A space within a node label. |
 | `**bold**`, `*italic*`, `~~struck~~` | Inline markup in labels, expressions, notes and arrow labels. |
+| `\textbf{bold}`, `\textit{italic}`, `\textsc{small caps}` | LaTeX text formatting; groups can contain spaces and nested commands. |
+| `\textup{upright}`, `\textmd{medium}`, `\textnormal{normal}` | Explicit upright/medium/normal font, overriding the general italic/bold settings in that group. |
+| `\emph{emphasis}`, `\underline{under}`, `\overline{over}`, `\sout{struck}` | Emphasis and text decorations. |
+| `\textsubscript{i}`, `\textsuperscript{2}` | Styled subscript/superscript groups, also written `_{i}` / `^{2}`. |
 | `\phi`, `\alpha`, `\0` | Supported LaTeX symbols, or type Unicode directly. Type a backslash in the editor for completion. |
 | `\Leftarrow`, `\Rightarrow`, `\Leftrightarrow` | ⇐, ⇒, ⇔. |
 | `\[`, `\#`, `\*`, `"a [b]"` | Escape reserved characters or quote literal text. |
 
 **Manual** draws the written hierarchy. **X-bar** processes shorthand and can add intermediate X′ nodes. Customize → Labelling controls X′ insertion, head labels, prime/overline, empty specifiers and word expansion. Generated nodes have no independent source to rename; edit their underlying written nodes or switch to Manual.
+
+LaTeX formatting works in the code and visual text fields. For example, `[\textbf{Long label} \textit{two \textsc{words}}]` has one label and one expression; its formatting braces are not feature blocks. `\textrm`, `\mathrm` and `\operatorname` select upright text; `\mathbf` / `\mathit` select bold / italic; `\text` and `\mbox` group text. Nested groups restore the surrounding style when they end. `\textit` forces italic even with Italic expressions enabled, whereas Markdown `*…*` toggles the surrounding italic style. A quoted literal such as `"\textbf{literal}"` keeps the command as text. In a quoted `;spell=` value, escape backslashes as usual: `[N;spell="\\textbf{cat}"]`. These are supported inline commands, not a general TeX document interpreter.
 
 ## Structural editing and dragging
 
@@ -217,9 +223,11 @@ Select an element and open **Customize**. Its scope row offers **This element**,
 
 **Values of their own** controls general changes meeting private values: **Ask**, **Replace them**, **Keep them**. Ask opens the existing replacement dialog. Replace clears the corresponding private values so they inherit the new setting; Keep leaves them independent. The `default` colour marker can be written by the editor to inherit that property while retaining the other colours of a branch. Other properties retain their own values. This applies to tree values against canvas defaults, source styles on nodes/expressions/lines/arrows, and position styles against shared chain settings. Inline markup remains content.
 
-Whole-tree blocks cover presets, labelling, Movement, Circle phrasal spellout domains immediately after Movement, Semantics, Typography, Layout, Tree lines and Arrows. Changed settings have individual reset buttons. Installed fonts can be selected by name; browser support varies. PNG/SVG/PDF embed available font data; Times New Roman export uses its metric-compatible free twin Tinos.
+Whole-tree blocks cover presets, labelling, Movement, Circle phrasal spellout domains immediately after Movement, Semantics, Typography, Layout, Lines to nodes, Lines to expressions and Arrows. Changed settings have individual reset buttons. Installed fonts can be selected by name; browser support varies. PNG/SVG/PDF embed available font data; Times New Roman export uses its metric-compatible free twin Tinos.
 
-Click a **tree line itself** to customize its colour, thickness, pattern and extra length. Those controls no longer live in the node editor. Select a node for its label colour/font size, branch colour, daughter spacing and meaning colour. Select an arrow for its own colour, width, pattern and arrowheads.
+**Lines to nodes** and **Lines to expressions** have independent colour, thickness, pattern and hand-drawn settings at tree and canvas scope. Changing one group does not alter the other or its private overrides. The same Ask / Replace / Keep policy applies within the chosen group. Older saved drawings retain their previous shared line appearance until you edit these settings separately.
+
+Click a **tree line itself** to customize its colour, thickness, pattern and extra length. The element panel says **Line to node** or **Line to expression**; This element / All copies affects that selected kind only. Those controls remain separate from the node editor. Select a node for its label colour/font size, branch colour, daughter spacing and meaning colour. Select an arrow for its own colour, width, pattern and arrowheads.
 
 | Source option | Purpose |
 | --- | --- |

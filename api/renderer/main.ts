@@ -40,7 +40,7 @@ async function execute(operation: Operation, request: PreparedRequest): Promise<
       return { ok: true, kind: 'json', data: { ...result, source: derivationDisplaySource(result.source, 'done'), algorithm: input.algorithm, steps: result.steps.map(step => ({ ...step, source: derivationDisplaySource(step.source, step.action), ...(step.workspaces ? { workspaces: step.workspaces.map(source => derivationDisplaySource(source, step.action)) } : {}) })) } };
     }
     const input = request as TreeRequest;
-    for (const key of ['lineColor', 'nodeColor', 'leafColor', 'arrowColor', 'semColor', 'semComputedColor', 'background'] as const) {
+    for (const key of ['lineColor', 'wordLineColor', 'nodeColor', 'leafColor', 'arrowColor', 'semColor', 'semComputedColor', 'background'] as const) {
       const color = input.style[key];
       if (!(key === 'background' && color === 'transparent') && !colorHex(color)) throw new ApiError(400, 'INVALID_REQUEST', `style.${key}: use a supported named colour or #RGB/#RRGGBB.`);
     }

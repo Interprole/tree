@@ -117,14 +117,15 @@ export function smoothPath(pts: [number, number][]): string {
 }
 
 /** Lay out rich runs starting at x (left) on baseline y. */
-export function runsPieces(runs: Runs, x: number, y: number, size: number, baseItalic: boolean, baseBold: boolean, measure: Measure, font: FontId): { pieces: TextPiece[]; overlines: [number, number][]; strikes: [number, number][]; width: number } {
+export function runsPieces(runs: Runs, x: number, y: number, size: number, baseItalic: boolean, baseBold: boolean, measure: Measure, font: FontId): { pieces: TextPiece[]; overlines: [number, number][]; strikes: [number, number][]; underlines: [number, number, number][]; width: number } {
   const pieces: TextPiece[] = [];
   const overlines: [number, number][] = [];
   const strikes: [number, number][] = [];
+  const underlines: [number, number, number][] = [];
   let cx = x;
   for (const r of runs) {
-    const italic = baseItalic !== !!r.i;
-    const bold = baseBold || !!r.b;
+    const italic = (r.italic ?? baseItalic) !== !!r.i;
+    const bold = (r.bold ?? baseBold) || !!r.b;
     let sz = size;
     let by = y;
     let text = r.text;
@@ -145,9 +146,10 @@ export function runsPieces(runs: Runs, x: number, y: number, size: number, baseI
     pieces.push({ x: cx, y: by, text: upper ? text : r.text, size: sz, italic, bold, upper, width: w });
     if (r.over) overlines.push([cx, cx + w]);
     if (r.s) strikes.push([cx, cx + w]);
+    if (r.u) underlines.push([cx, cx + w, by + sz * .14]);
     cx += w;
   }
-  return { pieces, overlines, strikes, width: cx - x };
+  return { pieces, overlines, strikes, underlines, width: cx - x };
 }
 
 /** The same look at another size: type, spacing and lines scaled together. */
@@ -159,6 +161,7 @@ export function scaleStyle(style: TreeStyle, k: number): TreeStyle {
     siblingGap: style.siblingGap * k,
     padding: style.padding * k,
     lineWidth: style.lineWidth * k,
+    wordLineWidth: style.wordLineWidth * k,
     arrowWidth: style.arrowWidth * k,
     edgeGap: style.edgeGap * k,
   };
@@ -209,7 +212,6 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   const hits: NodeHit[] = [];
   const edgeHits: Scene['edges'] = [];
   const dashFor = (pattern: string) => pattern === 'dashed' ? [5,3.5] : pattern === 'dotted' ? [1.2,2.8] : undefined;
-  const hand = style.handDrawn;
 
   const grayCopy = (n: DNode) => n.copy && style.copyStyle === 'gray';
   const colourOf = (n: DNode) => {
@@ -219,13 +221,14 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
   };
   /** ;edge= colours the edge above a node; a coloured branch colours the edges inside it, not the one above it */
   const edgeColour = (parent: DNode, child: DNode) => {
-    if(child.edgeColor==='default')return style.lineColor;
+    const fallback = child.kind === 'leaf' ? style.wordLineColor : style.lineColor;
+    if(child.edgeColor==='default')return fallback;
     // a coloured position of a chain: the edges inside it, not the one above it
     if (child.posColor&&child.posColor!=='default' && parent.posColor === child.posColor) return child.posColor;
     if (grayCopy(child)) return GRAY;
     if (child.edgeColor) return child.edgeColor;
     if (child.branchColor && parent.branchColor === child.branchColor) return child.branchColor;
-    return style.lineColor;
+    return fallback;
   };
   const labelHits: LabelHit[] = [];
   /** draw rich runs with their decorations (overline, strike-through) */
@@ -233,6 +236,11 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
     const r = runsPieces(runs, x, y, size, italic, bold, measure, style.font);
     prims.push({ t: 'text', pieces: r.pieces, color, font: style.font, role, node, opacity });
     for (const [a, z] of r.strikes) prims.push({ t: 'path', d: `M${f(a)} ${f(y - size * 0.3)}L${f(z)} ${f(y - size * 0.3)}`, stroke: color, width: Math.max(0.7, size * 0.06), role: 'deco', node });
+    for (const [a, z, uy] of r.underlines) prims.push({ t: 'path', d: `M${f(a)} ${f(uy)}L${f(z)} ${f(uy)}`, stroke: color, width: Math.max(.7, size * .055), role: 'deco', node });
+    for (const [a, z] of r.overlines) {
+      const oy = y - size * .78;
+      prims.push({ t: 'path', d: `M${f(a + .5)} ${f(oy)}L${f(z - .5)} ${f(oy)}`, stroke: color, width: Math.max(.7, size * .055), role: 'deco', node });
+    }
     return r;
   };
 
@@ -246,9 +254,11 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
 
   // edges first (labels on top)
   for (const e of layout.edges) {
+    const word = e.child.node.kind === 'leaf';
+    const hand = word ? style.wordHandDrawn : style.handDrawn;
     const stroke = edgeColour(e.parent.node, e.child.node);
-    const ew = e.child.node.edgeWidth ?? style.lineWidth;
-    const dash = grayCopy(e.child.node) ? [3, 2.5] : dashFor(e.child.node.edgeLine ?? style.linePattern);
+    const ew = e.child.node.edgeWidth ?? (word ? style.wordLineWidth : style.lineWidth);
+    const dash = grayCopy(e.child.node) ? [3, 2.5] : dashFor(e.child.node.edgeLine ?? (word ? style.wordLinePattern : style.linePattern));
     if (e.kind === 'triangle') {
       const d = `M${f(X(e.x1))} ${f(Y(e.y1))}L${f(X(e.bx2!))} ${f(Y(e.y2))}L${f(X(e.bx1!))} ${f(Y(e.y2))}Z`;
       prims.push({ t: 'path', d: hand ? linePath(X(e.x1), Y(e.y1), X(e.bx2!), Y(e.y2), true) + linePath(X(e.bx2!), Y(e.y2), X(e.bx1!), Y(e.y2), true) + linePath(X(e.bx1!), Y(e.y2), X(e.x1), Y(e.y1), true) : d, stroke, width: ew, dash, role: 'triangle', node: e.child.node.key, join: 'round' });
@@ -283,11 +293,7 @@ export function buildScene(tree: DTree, style: TreeStyle, measure: Measure, layo
       }
     }
     if (b.labelW > 0) {
-      const { overlines } = drawRuns(label, left, base, font.size, !!font.italic, !!font.bold, color, n.kind === 'leaf' ? 'leaf' : 'label', n.key);
-      for (const [a, z] of overlines) {
-        const oy = base - font.size * 0.78;
-        prims.push({ t: 'path', d: `M${f(a + 0.5)} ${f(oy)}L${f(z - 0.5)} ${f(oy)}`, stroke: color, width: Math.max(0.7, font.size * 0.055), role: 'deco', node: n.key });
-      }
+      drawRuns(label, left, base, font.size, !!font.italic, !!font.bold, color, n.kind === 'leaf' ? 'leaf' : 'label', n.key);
       if ((n.copy && style.copyStyle === 'strike') || n.struck) {
         const sy = base - font.size * 0.3;
         prims.push({ t: 'path', d: `M${f(left - 1)} ${f(sy)}L${f(left + b.labelW + 1)} ${f(sy)}`, stroke: color, width: Math.max(0.8, font.size * 0.06), role: 'deco', node: n.key });

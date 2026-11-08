@@ -64,20 +64,22 @@ export function texEscape(s: string): string {
   return out.replace(/\$\$/g, '');
 }
 
-function texRun(r: Run): string {
+function texRun(r: Run, baseItalic = false): string {
   let t = texEscape(r.sc ? r.text.toLowerCase() : r.text);
   if (r.sc) t = `\\textsc{${t}}`;
   if (r.b) t = `\\textbf{${t}}`;
-  if (r.i) t = `\\textit{${t}}`;
+  if (r.italic !== undefined || r.i) t = `\\${(r.italic ?? baseItalic) !== !!r.i ? 'textit' : 'textup'}{${t}}`;
+  if (r.bold !== undefined) t = `\\${r.bold || r.b ? 'textbf' : 'textmd'}{${t}}`;
   if (r.s) t = `\\tfstrike{${t}}`;
+  if (r.u) t = `\\underline{${t}}`;
   if (r.over) t = `$\\overline{\\mbox{${t}}}$`;
   if (r.sub) t = `\\textsubscript{${t}}`;
   if (r.sup) t = `\\textsuperscript{${t}}`;
   return t;
 }
 
-export function texRuns(runs: Runs): string {
-  return runs.map(texRun).join('');
+export function texRuns(runs: Runs, baseItalic = false): string {
+  return runs.map(r => texRun(r, baseItalic)).join('');
 }
 
 /** Match expression italics and upright (optionally crossed) arrows in editable exports. */
@@ -136,6 +138,19 @@ class Colors {
 
 const px2pt = (px: number) => Math.round(px * 0.75 * 100) / 100;
 
+function edgeOptions(n: DNode, parent: DNode, style: TreeStyle, colors: Colors): string[] {
+  const word = n.kind === 'leaf';
+  const fallback = word ? style.wordLineColor : style.lineColor;
+  const gray = n.copy && style.copyStyle === 'gray';
+  const color = n.edgeColor === 'default' ? fallback
+    : n.posColor && n.posColor !== 'default' && parent.posColor === n.posColor ? n.posColor
+    : gray ? 'gray' : n.edgeColor ?? (n.branchColor && parent.branchColor === n.branchColor ? n.branchColor : fallback);
+  const width = n.edgeWidth ?? (word ? style.wordLineWidth : style.lineWidth);
+  const pattern = n.edgeLine ?? (word ? style.wordLinePattern : style.linePattern);
+  return [colors.name(color), width !== 1 ? `line width=${px2pt(width)}pt` : null,
+    gray ? 'densely dashed' : pattern !== 'solid' ? pattern : null].filter((v): v is string => !!v);
+}
+
 function hasCyrillic(s: string) {
   return /[\u0400-\u04FF]/.test(s);
 }
@@ -152,7 +167,7 @@ export function preamble(body: string, colors: string, extra: string[] = []): st
 }
 
 function labelTex(n: DNode, style: TreeStyle): string {
-  let t = texRuns(n.label);
+  let t = texRuns(n.label, n.kind === 'leaf' && style.leafItalic);
   if (n.kind === 'leaf' && style.leafItalic && t) t = `\\textit{${t}}`;
   if (n.kind === 'phrase' && style.nodeBold && t) t = `\\textbf{${t}}`;
   if (n.copy && t) {
@@ -201,7 +216,7 @@ function arrowTikz(a: DArrow, names: Map<DNode, string>, level: number, colors: 
     .map((l) => {
       const side = l.side === 'auto' ? (a.route === 'under' ? 'below' : 'right') : l.side;
       const shift = l.off ? `, xshift=${px2pt(l.off[0])}pt, yshift=${px2pt(-l.off[1])}pt` : '';
-      return ` node[midway, ${side}${shift}, font=\\small\\itshape]{${texRuns(l.runs)}}`;
+      return ` node[midway, ${side}${shift}, font=\\small\\itshape]{${texRuns(l.runs, true)}}`;
     })
     .join('');
   const es = endAnchor(a, 'from', layout, geom);
@@ -272,8 +287,7 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
     if (parent?.triangle && n.kind === 'leaf') opts.push('roof');
     const tc = colors.name(n.posColor ?? (n.copy && style.copyStyle === 'gray' ? undefined : n.color));
     if (tc) opts.push(`text=${tc}`);
-    const ec = n.posColor && parent?.posColor === n.posColor ? colors.name(n.posColor) : n.edgeColor ? colors.name(n.edgeColor) : parent && parent.branchColor === n.branchColor ? colors.name(n.branchColor) : null;
-    const edgeOpts = [ec, n.edgeWidth !== undefined ? `line width=${px2pt(n.edgeWidth)}pt` : null,(n.edgeLine??style.linePattern)==='solid'?null:n.edgeLine??style.linePattern].filter(Boolean);
+    const edgeOpts = parent ? edgeOptions(n, parent, style, colors) : [];
     if (edgeOpts.length && parent) opts.push(`edge={${edgeOpts.join(', ')}}`);
     if (n.edgeLen) opts.push(`l+=${px2pt(n.edgeLen)}pt`);
     if (n.spread) opts.push(`for children={s sep+=${px2pt(n.spread)}pt}`);
@@ -284,7 +298,6 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
       opts.push(`label={[font=\\small${shift}]${side}:{${texRuns(note.runs)}}}`);
     }
     if (spelloutRuns(n).length) opts.push(`label={[font=\\small]${spelloutSide(n)}:{${spelloutTex(n, style)}}}`);
-    if (n.copy && style.copyStyle === 'gray' && parent) opts.push('edge={gray, densely dashed}');
     if (!plain(n.label).trim() && !n.features?.length && n.kind === 'phrase') opts.push('coordinate');
     const kids = n.children.filter((c) => c.parents.length < 2 || host.get(c) === n);
     const head = `[{${content}}${opts.length ? ', ' + opts.join(', ') : ''}`;
@@ -295,15 +308,15 @@ export function exportForest(tree: DTree, style: TreeStyle, layout: Layout | und
   const lsep = px2pt(Math.max(4, style.levelGap * 0.45));
   const ssep = px2pt(style.siblingGap);
   const treeOpts = [
-    `for tree={parent anchor=south, child anchor=north, l sep=${lsep}pt, s sep=${ssep}pt, inner sep=1.5pt${style.lineWidth !== 1 ? `, edge={line width=${px2pt(style.lineWidth)}pt}` : ''}}`,
+    `for tree={parent anchor=south, child anchor=north, l sep=${lsep}pt, s sep=${ssep}pt, inner sep=1.5pt}`,
   ];
   if (style.leavesAtBottom) treeOpts.push('where n children=0{tier=word}{}');
   const body = emit(tree.root, null, '');
   const tikz: string[] = circles.map((nodes) => circleTikz(nodes, names, style));
   if (tree.arrows.length) tikz.push('\\coordinate (tf-bottom) at (current bounding box.south);');
   for (const [p, n] of extra) {
-    const ec = colors.name(n.branchColor);
-    tikz.push(`\\draw${ec ? `[${ec}]` : ''} (${names.get(p)}.south) -- (${names.get(n)}.north);`);
+    const opts = edgeOptions(n, p, style, colors);
+    tikz.push(`\\draw${opts.length ? `[${opts.join(', ')}]` : ''} (${names.get(p)}.south) -- (${names.get(n)}.north);`);
   }
   tree.arrows.forEach((a, i) => tikz.push(arrowTikz(a, names, geoms[i]?.level ?? i, colors, geoms[i], layout)));
   const forest = ['\\begin{forest}', treeOpts.join(',\n'), body, ...tikz, '\\end{forest}'].join('\n');
@@ -337,7 +350,9 @@ export function exportQtree(tree: DTree, style: TreeStyle, layout: Layout | unde
   const seen = new Set<DNode>();
   const emit = (n: DNode, parent: DNode | null): string => {
     const content = labelTex(n, style).replace(/\\\\ /g, '\\\\');
-    const edge = parent?.triangle && n.kind === 'leaf' ? '\\edge[roof]; ' : '';
+    const opts = parent ? edgeOptions(n, parent, style, colors) : [];
+    if (parent?.triangle && n.kind === 'leaf') opts.unshift('roof');
+    const edge = opts.length ? `\\edge[${opts.join(', ')}]; ` : '';
     const nm = names.get(n);
     const lab = nm ? `\\node(${nm}){${content}};` : `{${content}}`;
     if (seen.has(n) || n.children.length === 0) {

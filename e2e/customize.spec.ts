@@ -22,14 +22,60 @@ async function pathPoint(locator:ReturnType<Page['locator']>) {
 }
 test('tree edges select independently, and general settings ask about private values',async({page})=>{
   await setup(page);const p=await pathPoint(page.locator('[data-edge]').first());await page.mouse.click(p.x,p.y);
-  await expect(page.locator('.customize-panel')).toContainText('Tree line');
+  await expect(page.locator('.customize-panel')).toContainText('Line to node');
   await page.locator('.customize-panel .swatch[title="#b91c1c"]').click();await expect.poll(()=>code(page)).toContain(';edge=#b91c1c');
   await page.getByRole('button',{name:'All elements in this tree',exact:true}).click();
-  const color=page.locator('.settings .color-field').filter({hasText:/^Lines/}).locator('input[type="color"]');
+  const color=page.locator('.panel-section').filter({has:page.getByRole('heading',{name:'Lines to nodes',exact:true})}).locator('input[type="color"]');
   await color.evaluate((el:HTMLInputElement)=>{el.value='#123456';el.dispatchEvent(new Event('input',{bubbles:true}));});
   await expect(page.getByRole('alertdialog')).toBeVisible();
   await page.getByTestId('override-no').click();await expect.poll(()=>code(page)).toContain(';edge=#b91c1c');
   await page.getByTestId('side-edit').click();await node(page,'A').click();await expect(page.locator('.inspector')).not.toContainText('Edge width');
+});
+
+test('node and expression line settings remain independent at tree and canvas scope',async({page})=>{
+  await setup(page,'[S [N cat] [V runs]]');
+  await page.getByTestId('side-appearance').click();
+  await page.getByRole('button',{name:'All elements in this tree',exact:true}).click();
+  const section=(name:string)=>page.locator('.panel-section').filter({has:page.getByRole('heading',{name,exact:true})});
+  const nodes=section('Lines to nodes'),words=section('Lines to expressions');
+  const setColor=async(name:string,color:string)=>section(name).locator('input[type="color"]').evaluate((el:HTMLInputElement,v)=>{el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));},color);
+  await setColor('Lines to nodes','#123456');
+  await expect(words.locator('input[type="color"]')).toHaveValue('#1a1a1a');
+  await setColor('Lines to expressions','#654321');
+  await expect(nodes.locator('input[type="color"]')).toHaveValue('#123456');
+  await words.getByRole('radio',{name:'Dotted',exact:true}).click();
+  await expect(nodes.getByRole('radio',{name:'Solid',exact:true})).toHaveClass(/on/);
+  await expect(page.locator('.active-sheet .prims path[stroke="#123456"]')).toHaveCount(2);
+  await expect(page.locator('.active-sheet .prims path[stroke="#654321"]')).toHaveCount(2);
+  await page.getByRole('button',{name:'All trees',exact:true}).click();
+  await setColor('Lines to expressions','#abcdef');
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  await page.getByTestId('override-yes').click();
+  await page.getByRole('button',{name:'All elements in this tree',exact:true}).click();
+  await expect(nodes.locator('input[type="color"]')).toHaveValue('#123456');
+  await expect(words.locator('input[type="color"]')).toHaveValue('#abcdef');
+  const wordKey=await node(page,'cat').getAttribute('data-node');
+  const edge=page.locator(`[data-edge$="|${wordKey}"]`),p=await pathPoint(edge);await page.mouse.click(p.x,p.y);
+  await expect(page.locator('.customize-panel')).toContainText('Line to expression');
+  await page.locator('.customize-panel .swatch[title="#b91c1c"]').click();
+  await expect.poll(()=>code(page)).toContain(';wordedge=#b91c1c');
+  await expect.poll(()=>code(page)).not.toContain(';edge=#b91c1c');
+});
+
+test('LaTeX commands render, remain editable and appear in code completion',async({page})=>{
+  await setup(page,String.raw`[\textbf{S} [N \textit{cat} \textup{plain}] [V \textsc{pst}]]`);
+  await expect(page.locator('.active-sheet .prims')).not.toContainText('textbf');
+  const root=page.locator('.active-sheet .prims tspan').filter({hasText:/^S$/});
+  await expect(root.locator('..')).toHaveAttribute('font-weight','700');
+  const cat=page.locator('.active-sheet .prims tspan').filter({hasText:/^cat$/});
+  const plain=page.locator('.active-sheet .prims tspan').filter({hasText:/^plain$/});
+  expect(await cat.evaluate(el=>getComputedStyle(el).fontStyle)).toBe('italic');
+  expect(await plain.evaluate(el=>getComputedStyle(el).fontStyle)).toBe('normal');
+  await expect(page.locator('.active-sheet .prims')).toContainText('PST');
+  const editor=page.locator('.cm-content');await editor.click();await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.insertText('\n% \\textb');
+  await page.keyboard.press('Control+Space');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('\\textbf');
 });
 test('spatial drops skip unchanged positions; Shift and Alt keep copy gaps',async({page})=>{
   await setup(page);

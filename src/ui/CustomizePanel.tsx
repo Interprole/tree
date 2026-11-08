@@ -36,10 +36,10 @@ export function CustomizePanel() {
         {n.kind!=='leaf'&&<Section title="Branch"><ColorPicker value={n.branchColor} onPick={c=>A.setColor(n,c,true)}/><NumField label="Spread daughters" value={n.spread} placeholder="0" onCommit={v=>A.setOption(n,'spread',v)}/></Section>}
         {n.sem&&<Section title="Meaning colour"><ColorPicker value={n.semColor} onPick={c=>A.setOption(n,'sem',c)}/></Section>}
       </>}
-      {n&&sel?.kind==='edge'&&<Section title="Tree line">
+      {n&&sel?.kind==='edge'&&<Section title={n.kind==='leaf'?'Line to expression':'Line to node'}>
         <ColorPicker value={n.edgeColor} onPick={c=>A.setOption(n,'edge',c)}/>
-        <NumField label="Line width" value={n.edgeWidth} placeholder={String(s.lineWidth)} min={0} step={.1} onCommit={v=>A.setOption(n,'width',v)}/>
-        <Pattern value={n.edgeLine??s.linePattern} onChange={v=>A.setOption(n,'edgeline',v)}/>
+        <NumField label="Line width" value={n.edgeWidth} placeholder={String(n.kind==='leaf'?s.wordLineWidth:s.lineWidth)} min={0} step={.1} onCommit={v=>A.setOption(n,'width',v)}/>
+        <Pattern value={n.edgeLine??(n.kind==='leaf'?s.wordLinePattern:s.linePattern)} onChange={v=>A.setOption(n,'edgeline',v)}/>
         <NumField label="Extra length" value={n.edgeLen} placeholder="0" onCommit={v=>A.setOption(n,'len',v)}/>
       </Section>}
       {arrow&&<Section title="Arrow">

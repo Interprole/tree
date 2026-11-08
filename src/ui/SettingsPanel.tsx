@@ -328,14 +328,20 @@ export function SettingsPanel({hideScope=false}:{hideScope?:boolean}) {
         <Toggle label={t('leavesAtBottom')} checked={s.leavesAtBottom} reset={rs('leavesAtBottom')} onChange={(v) => setStyle({ leavesAtBottom: v })} />
       </Section>
 
-      <Section title="Tree lines">
-        <Seg label="Line pattern" value={s.linePattern} onChange={v=>setStyle({linePattern:v})} options={[{v:'solid',label:'Solid'},{v:'dashed',label:'Dashed'},{v:'dotted',label:'Dotted'}]}/>
+      <Section title="Lines to nodes">
+        <Seg label="Line pattern" value={s.linePattern} reset={rs('linePattern')} onChange={v=>setStyle({linePattern:v})} options={[{v:'solid',label:'Solid'},{v:'dashed',label:'Dashed'},{v:'dotted',label:'Dotted'}]}/>
 
         <Slider label={t('lineWidth')} value={s.lineWidth} min={0.4} max={4} step={0.1} unit="px" reset={rs('lineWidth')} onInput={(v) => setStyle({ lineWidth: v })} />
         <div class="colors">
           <ColorField label={t('lineColor')} value={s.lineColor} reset={rs('lineColor')} onChange={(v) => setStyle({ lineColor: v })} />
         </div>
         <Toggle label={t('handDrawn')} checked={s.handDrawn} reset={rs('handDrawn')} onChange={(v) => setStyle({ handDrawn: v })} />
+      </Section>
+      <Section title="Lines to expressions">
+        <Seg label="Line pattern" value={s.wordLinePattern} reset={rs('wordLinePattern')} onChange={v=>setStyle({wordLinePattern:v})} options={[{v:'solid',label:'Solid'},{v:'dashed',label:'Dashed'},{v:'dotted',label:'Dotted'}]}/>
+        <Slider label={t('lineWidth')} value={s.wordLineWidth} min={0.4} max={4} step={0.1} unit="px" reset={rs('wordLineWidth')} onInput={v=>setStyle({wordLineWidth:v})}/>
+        <div class="colors"><ColorField label={t('lineColor')} value={s.wordLineColor} reset={rs('wordLineColor')} onChange={v=>setStyle({wordLineColor:v})}/></div>
+        <Toggle label={t('handDrawn')} checked={s.wordHandDrawn} reset={rs('wordHandDrawn')} onChange={v=>setStyle({wordHandDrawn:v})}/>
       </Section>
       <Section title="Arrows">
           <ColorField label={t('arrowColor')} value={s.arrowColor} reset={rs('arrowColor')} onChange={(v) => setStyle({ arrowColor: v })} />

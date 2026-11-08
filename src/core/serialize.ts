@@ -11,8 +11,13 @@ export function runsToMarkup(runs: Runs, label: boolean): string {
     if (r.b) t = `**${t}**`;
     if (r.i) t = `*${t}*`;
     if (r.s) t = `~~${t}~~`;
+    if (r.italic !== undefined) t = `\\${r.italic ? 'textit' : 'textup'}{${t}}`;
+    if (r.bold !== undefined) t = `\\${r.bold ? 'textbf' : 'textmd'}{${t}}`;
+    if (r.sc) t = `\\textsc{${t}}`;
+    if (r.u) t = `\\underline{${t}}`;
+    if (r.over) t = `\\overline{${t}}`;
     if (r.sub || r.sup) out += (r.sub ? '_' : '^') + (/^[\p{L}\p{N}]+$/u.test(t) ? t : `{${t}}`);
-    else out += r.sc ? t.toUpperCase() : t;
+    else out += t;
   }
   return out;
 }

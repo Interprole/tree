@@ -10,7 +10,7 @@ import type { CompletionContext } from '@codemirror/autocomplete';
 import { setDiagnostics } from '@codemirror/lint';
 import { tags } from '@lezer/highlight';
 import { formatCode, setEditorBridge } from '../actions';
-import { MACROS } from '../core/richtext';
+import { MACROS, TEXT_COMMANDS } from '../core/richtext';
 import { t } from '../i18n';
 import { activeTree, error, parsed, selection, source, tree } from '../state';
 
@@ -184,7 +184,10 @@ function macroCompletions(ctx: CompletionContext) {
   if (!word || (word.from === word.to && !ctx.explicit)) return null;
   return {
     from: word.from,
-    options: Object.entries(MACROS).filter(([k]) => /^[A-Za-z]/.test(k)).map(([k, v]) => ({ label: '\\' + k, detail: v, type: 'constant' })),
+    options: [
+      ...Object.entries(MACROS).filter(([k]) => /^[A-Za-z]/.test(k)).map(([k, v]) => ({ label: '\\' + k, detail: v, type: 'constant' })),
+      ...Object.entries(TEXT_COMMANDS).map(([k, v]) => ({ label: '\\' + k, detail: v + ' {text}', type: 'function' })),
+    ],
     validFor: /^\\[A-Za-z]*$/,
   };
 }

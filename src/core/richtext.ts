@@ -22,6 +22,10 @@ export interface Run {
   b?: boolean;
   i?: boolean;
   s?: boolean;
+  u?: boolean;
+  /** Explicit LaTeX font choices; Markdown i/b keep their relative behavior. */
+  italic?: boolean;
+  bold?: boolean;
 }
 
 export type Runs = Run[];
@@ -80,6 +84,36 @@ land: '∧', wedge: '∧', lor: '∨', vee: '∨', lnot: '¬', llbracket: '⟦',
 /** Characters that may be escaped with a backslash to be taken literally. */
 const ESCAPABLE = new Set('[]{}|#*@^_%\\<>"\'~ ,.-=:;()!/&$'.split(''));
 
+/** Braced inline commands, shared with the bracket parser and editor completion. */
+export const TEXT_COMMANDS: Record<string, string> = {
+  textbf: 'Bold', textit: 'Italic', textsc: 'Small caps', emph: 'Emphasis',
+  textup: 'Upright', textnormal: 'Normal font', textmd: 'Medium weight', textrm: 'Roman',
+  underline: 'Underline', overline: 'Overline', sout: 'Strike through',
+  textsubscript: 'Subscript', textsuperscript: 'Superscript',
+  text: 'Text group', mbox: 'Text group', mathrm: 'Upright', mathbf: 'Bold', mathit: 'Italic', operatorname: 'Upright operator',
+};
+
+export function textCommandAt(src: string, i: number): { name: string; group: number } | null {
+  const m = /^\\([A-Za-z]+)\s*\{/.exec(src.slice(i));
+  return m && Object.hasOwn(TEXT_COMMANDS, m[1]) ? { name: m[1], group: i + m[0].length - 1 } : null;
+}
+
+function groupEnd(src: string, start: number): number | null {
+  let depth = 0;
+  for (let i = start; i < src.length; i++) {
+    if (src[i] === '\\') { i++; continue; }
+    if (src[i] === '{') depth++;
+    if (src[i] === '}' && --depth === 0) return i + 1;
+  }
+  return null;
+}
+
+/** End of a complete formatting command, for visual edits preserving typed markup. */
+export function textCommandEnd(src: string, i: number): number | null {
+  const command = textCommandAt(src, i);
+  return command ? groupEnd(src, command.group) : null;
+}
+
 export interface RichOptions {
   /** convert ' to ′ (labels) */
   primes?: boolean;
@@ -90,12 +124,14 @@ export interface RichOptions {
 function push(runs: Runs, text: string, style: Omit<Run, 'text'> = {}) {
   if (!text) return;
   const last = runs[runs.length - 1];
-  const keys = ['sub', 'sup', 'sc', 'over', 'b', 'i', 's'] as const;
-  if (last && keys.every((k) => !!last[k] === !!style[k])) {
+  const keys = ['sub', 'sup', 'sc', 'over', 'b', 'i', 's', 'u'] as const;
+  if (last && keys.every((k) => !!last[k] === !!style[k]) && last.italic === style.italic && last.bold === style.bold) {
     last.text += text;
   } else {
     const r: Run = { text };
     for (const k of keys) if (style[k]) r[k] = true;
+    if (style.italic !== undefined) r.italic = style.italic;
+    if (style.bold !== undefined) r.bold = style.bold;
     runs.push(r);
   }
 }
@@ -110,7 +146,7 @@ function readScript(src: string, i: number): { text: string; end: number } {
       const c = src[j];
       if (c === '\\' && j + 1 < src.length) {
         const m = readMacro(src, j);
-        out += m.text;
+        out += src.slice(j, m.end);
         j = m.end;
         continue;
       }
@@ -171,13 +207,17 @@ function smallCapsSplit(runs: Runs, text: string, style: Omit<Run, 'text'>) {
 
 /** Parse inline markup into styled runs. */
 export function parseRich(src: string, opts: RichOptions = {}): Runs {
+  return parseStyled(src, opts, {}, 0);
+}
+
+function parseStyled(src: string, opts: RichOptions, inherited: Omit<Run, 'text'>, depth: number): Runs {
   const runs: Runs = [];
   let i = 0;
   let buf = '';
-  const cur: { b?: boolean; i?: boolean; s?: boolean } = {};
+  const cur: Omit<Run, 'text'> = { ...inherited };
   const flush = () => {
     if (!buf) return;
-    if (opts.smallCaps) smallCapsSplit(runs, buf, { ...cur });
+    if (opts.smallCaps && cur.sc !== false) smallCapsSplit(runs, buf, { ...cur });
     else push(runs, buf, { ...cur });
     buf = '';
   };
@@ -210,6 +250,29 @@ export function parseRich(src: string, opts: RichOptions = {}): Runs {
       continue;
     }
     if (c === '\\') {
+      const command = depth < 64 ? textCommandAt(src, i) : null;
+      const end = command ? groupEnd(src, command.group) : null;
+      if (command && end !== null) {
+        flush();
+        const next = { ...cur };
+        switch (command.name) {
+          case 'textbf': case 'mathbf': next.bold = true; next.b = false; break;
+          case 'textit': case 'mathit': next.italic = true; next.i = false; break;
+          case 'textsc': next.sc = true; break;
+          case 'emph': next.i = !next.i; break;
+          case 'textup': case 'textrm': case 'mathrm': case 'operatorname': next.italic = false; next.i = false; break;
+          case 'textmd': next.bold = false; next.b = false; break;
+          case 'textnormal': next.italic = false; next.bold = false; next.i = false; next.b = false; next.sc = false; break;
+          case 'underline': next.u = true; break;
+          case 'overline': next.over = true; break;
+          case 'sout': next.s = true; break;
+          case 'textsubscript': next.sub = true; next.sup = false; break;
+          case 'textsuperscript': next.sup = true; next.sub = false; break;
+        }
+        for (const run of parseStyled(src.slice(command.group + 1, end - 1), opts, next, depth + 1)) push(runs, run.text, run);
+        i = end;
+        continue;
+      }
       const m = readMacro(src, i);
       buf += m.text;
       i = m.end;
@@ -225,9 +288,8 @@ export function parseRich(src: string, opts: RichOptions = {}): Runs {
     } else if ((c === '_' || c === '^') && i + 1 < src.length) {
       flush();
       const s = readScript(src, i + 1);
-      const style = c === '_' ? { ...cur, sub: true } : { ...cur, sup: true };
-      // nested markup inside a script group (e.g. _{i'}) – keep it simple: macros resolved above
-      push(runs, opts.primes ? s.text.replace(/'/g, '′') : s.text, style);
+      const style = c === '_' ? { ...cur, sub: true, sup: false } : { ...cur, sup: true, sub: false };
+      for (const run of parseStyled(s.text, opts, style, depth + 1)) push(runs, run.text, run);
       i = s.end;
     } else if (c === "'" && opts.primes) {
       buf += '′';

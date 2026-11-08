@@ -11,7 +11,7 @@ import { formatDoc } from './core/format';
 import { applyChanges, escapeLabel, setExpression } from './core/edits';
 import { buildScene, buildSheetScene } from './core/scene';
 import type { Scene } from './core/scene';
-import { defaultStyle, fontCss } from './core/style';
+import { defaultStyle, fontCss, restoreStyle } from './core/style';
 import type { TreeStyle } from './core/style';
 import { examples } from './examples';
 import type { Example } from './examples';
@@ -814,6 +814,11 @@ function diffs(b: BuildOptions, st: TreeStyle): { b?: DeepPartial<BuildOptions>;
   const out: { b?: DeepPartial<BuildOptions>; st?: Partial<TreeStyle> } = {};
   const db = diff(b, defaultBuildOptions);
   const ds = diff(st, defaultStyle);
+  // Explicit expression defaults distinguish new independent settings from legacy shared ones.
+  if (st.lineColor !== defaultStyle.lineColor) ds.wordLineColor = st.wordLineColor;
+  if (st.lineWidth !== defaultStyle.lineWidth) ds.wordLineWidth = st.wordLineWidth;
+  if (st.linePattern !== defaultStyle.linePattern) ds.wordLinePattern = st.wordLinePattern;
+  if (st.handDrawn !== defaultStyle.handDrawn) ds.wordHandDrawn = st.wordHandDrawn;
   if (Object.keys(db).length) out.b = db as DeepPartial<BuildOptions>;
   if (Object.keys(ds).length) out.st = ds;
   return out;
@@ -894,7 +899,7 @@ export function restore(snap: Snapshot) {
     const algorithm = (savedAlgorithm as string) === 'caha2024' ? 'caha2025' : savedAlgorithm;
     nanosyntaxAlgorithm.value = algorithm;
     canvasNanosyntaxOptions.value = { algorithm, hideLowerCopies: w?.nanosyntax?.hideLowerCopies ?? false };
-    canvasSettings.value = { build: mergeBuild(defaultBuildOptions, w?.canvas?.b), style: { ...defaultStyle, ...(w?.canvas?.st ?? {}) } };
+    canvasSettings.value = { build: mergeBuild(defaultBuildOptions, w?.canvas?.b), style: restoreStyle(w?.canvas?.st) };
     if (w && w.trees?.length) {
       trees.value = w.trees.map((e) => ({
         id: e.id,
@@ -907,7 +912,7 @@ export function restore(snap: Snapshot) {
         x: e.x ?? 0,
         y: e.y ?? 0,
         build: mergeBuild(defaultBuildOptions, e.b),
-        style: { ...defaultStyle, ...(e.st ?? {}) },
+        style: restoreStyle(e.st),
       }));
       sources.value = { ...w.sources };
       for (const entry of trees.value) if (entry.derivation) {
@@ -921,7 +926,7 @@ export function restore(snap: Snapshot) {
       style.value = act.style;
     } else {
       const b = mergeBuild(defaultBuildOptions, snap.b);
-      const st = { ...defaultStyle, ...(snap.st ?? {}) };
+      const st = restoreStyle(snap.st);
       trees.value = [{ id: 't1', name: 'Tree 1', srcId: 's1', build: b, style: st, x: 0, y: 0 }];
       sources.value = { s1: snap.s ?? '' };
       activeId.value = 't1';

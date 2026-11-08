@@ -1,4 +1,5 @@
 import type { AArrow, ADoc, ALeaf, ANode, APosStyle, ARef, ArrowHead, LabelSide, ParseError, ParseResult, Span } from './ast';
+import { textCommandAt } from './richtext';
 
 /**
  * Bracket-notation parser.
@@ -23,7 +24,7 @@ const LABEL_RE = /^(left|right|above|below)?"((?:[^"\\]|\\.)*)"(?:@(-?\d+(?:\.\d
 export function matchLabel(s: string): { side: LabelSide; text: string; off?: [number, number]; length: number } | null {
   const m = LABEL_RE.exec(s);
   if (!m) return null;
-  return { side: (m[1] as LabelSide) ?? 'auto', text: m[2].replace(/\\(.)/g, '$1'), off: m[3] !== undefined ? [Number(m[3]), Number(m[4])] : undefined, length: m[0].length };
+  return { side: (m[1] as LabelSide) ?? 'auto', text: m[2].replace(/\\(["\\])/g, '$1'), off: m[3] !== undefined ? [Number(m[3]), Number(m[4])] : undefined, length: m[0].length };
 }
 
 export function lineCol(src: string, pos: number): { line: number; col: number } {
@@ -109,6 +110,13 @@ class Parser {
       const c = this.peek();
       if (c === '\\') {
         if (firstNonWs < 0) firstNonWs = this.i;
+        const command = textCommandAt(this.src, this.i);
+        if (command) {
+          this.i = command.group;
+          this.skipGroup();
+          lastNonWs = this.i - 1;
+          continue;
+        }
         this.i += 2;
         // macro name
         while (this.i < this.src.length && /[A-Za-z]/.test(this.src[this.i - 1]) && /[A-Za-z]/.test(this.peek())) this.i++;
@@ -159,6 +167,8 @@ class Parser {
         break;
       }
       if (c === '\\') {
+        const command = textCommandAt(this.src, this.i);
+        if (command) { this.i = command.group; this.skipGroup(); continue; }
         this.i += 2;
         while (this.i < this.src.length && /[A-Za-z]/.test(this.src[this.i - 1]) && /[A-Za-z]/.test(this.peek())) this.i++;
         continue;

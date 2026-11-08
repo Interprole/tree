@@ -27,6 +27,11 @@ export interface TreeStyle {
   padding: number;
   lineWidth: number;
   linePattern: 'solid' | 'dashed' | 'dotted';
+  /** Lines from nodes to their word/morpheme expressions. */
+  wordLineWidth: number;
+  wordLinePattern: 'solid' | 'dashed' | 'dotted';
+  wordLineColor: string;
+  wordHandDrawn: boolean;
   arrowWidth: number;
   arrowPattern: 'solid' | 'dashed' | 'dotted';
   lineColor: string;
@@ -68,6 +73,10 @@ export const defaultStyle: TreeStyle = {
   padding: 20,
   lineWidth: 1,
   linePattern: 'solid',
+  wordLineWidth: 1,
+  wordLinePattern: 'solid',
+  wordLineColor: '#1a1a1a',
+  wordHandDrawn: false,
   arrowWidth: 1.05,
   arrowPattern: 'solid',
   lineColor: '#1a1a1a',
@@ -90,6 +99,16 @@ export const defaultStyle: TreeStyle = {
 
 export type PresetId = 'paper' | 'slides' | 'board';
 
+/** Preserve the shared line appearance of older saved trees. */
+export function restoreStyle(saved: Partial<TreeStyle> = {}): TreeStyle {
+  return { ...defaultStyle, ...saved,
+    wordLineColor: saved.wordLineColor ?? saved.lineColor ?? defaultStyle.wordLineColor,
+    wordLineWidth: saved.wordLineWidth ?? saved.lineWidth ?? defaultStyle.wordLineWidth,
+    wordLinePattern: saved.wordLinePattern ?? saved.linePattern ?? defaultStyle.wordLinePattern,
+    wordHandDrawn: saved.wordHandDrawn ?? saved.handDrawn ?? defaultStyle.wordHandDrawn,
+  };
+}
+
 export const presets: Record<PresetId, Partial<TreeStyle>> = {
   /** black & white, LaTeX look */
   paper: {
@@ -99,6 +118,7 @@ export const presets: Record<PresetId, Partial<TreeStyle>> = {
     siblingGap: 18,
     lineWidth: 0.9,
     lineColor: '#000000',
+    wordLineWidth: 0.9, wordLineColor: '#000000', wordLinePattern: 'solid', wordHandDrawn: false,
     nodeColor: '#000000',
     leafColor: '#000000',
     leafItalic: true,
@@ -117,6 +137,7 @@ export const presets: Record<PresetId, Partial<TreeStyle>> = {
     siblingGap: 28,
     lineWidth: 2.2,
     lineColor: '#22303c',
+    wordLineWidth: 2.2, wordLineColor: '#22303c', wordLinePattern: 'solid', wordHandDrawn: false,
     nodeColor: '#0d3b66',
     leafColor: '#9a2617',
     leafItalic: false,
@@ -135,6 +156,7 @@ export const presets: Record<PresetId, Partial<TreeStyle>> = {
     siblingGap: 22,
     lineWidth: 1.8,
     lineColor: '#1e3a8a',
+    wordLineWidth: 1.8, wordLineColor: '#1e3a8a', wordLinePattern: 'solid', wordHandDrawn: true,
     nodeColor: '#1e3a8a',
     leafColor: '#166534',
     leafItalic: false,

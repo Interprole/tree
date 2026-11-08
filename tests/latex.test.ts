@@ -128,6 +128,8 @@ describe.skipIf(!HAVE_LATEX)('LaTeX output compiles with pdflatex', () => {
   cases.push({ name: 'bend-points-and-ends', src: '[TP [DP#s she] [T\' [T#t -s] [VP #s [V#v sing] [DP [D the] [NP song]]]]]\n#v -> #t plain to=node via=0,40;-20,70 "x"\n#s/2 -> #s/1 curve via=-30,-10' });
   cases.push({ name: 'latex-symbols', src: `[S [A ${Object.keys(LATEX_SYMBOLS).slice(0, 120).map((k) => '\\' + k).join(' ')}] [B ${Object.keys(LATEX_SYMBOLS).slice(120).map((k) => '\\' + k).join(' ')}]]` });
   cases.push({ name: 'special-chars', src: '[S [A 50\\% \\& \\$ x\\_y] [B "a [b]" ~ ‘q’ — …] [C ⟨x⟩ → α]]' });
+  cases.push({ name: 'latex-text-commands', src: String.raw`[\textbf{S} [N \textit{a} \textsc{nom} \underline{under} \overline{bar}] [V \textup{upright} \sout{gone} \textsubscript{\textbf{i}} \textsuperscript{2}]]` });
+  cases.push({ name: 'independent-line-styles', src: '[S [N word] [DP ^the cat]]', style: { lineColor:'blue',lineWidth:2,linePattern:'dashed',wordLineColor:'red',wordLineWidth:3,wordLinePattern:'dotted' } });
 
   cases.push({ name: 'circled-phrasal-expression', src: '[AccP;spell="-a" [Acc] [NomP [Nom] [N cat]]]', style: { circlePhrasalSpellout: true } });
   cases.push({ name: 'phrasal-failure', src: '[AccP;spellfail=yes;spellside=left [Acc] [NomP [Nom] [N cat]]]', style: { circlePhrasalSpellout: true } });

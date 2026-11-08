@@ -118,7 +118,7 @@ export function spelloutSide(n: DNode): 'left' | 'right' {
 
 export function spelloutRuns(n: DNode, italicExpressions = false): Runs {
   if (!n.spellout || n.copy) return [];
-  const expression = (n.spellout.failed ? [{ text: '∅' }] : n.spellout.runs).map((r) => ({ ...r, i: italicExpressions !== !!r.i }));
+  const expression = (n.spellout.failed ? [{ text: '∅' }] : n.spellout.runs).map((r) => ({ ...r, italic: (r.italic ?? italicExpressions) !== !!r.i, i: false }));
   // Arrows stay upright even when word/morpheme expressions are italicized.
   const arrow = n.spellout.lexical ? '⇔' : spelloutSide(n) === 'right' ? '⇒' : '⇐';
   return spelloutSide(n) === 'right' ? [{ text: ' ' + arrow + ' ' }, ...expression] : [...expression, { text: ' ' + arrow + ' ' }];
